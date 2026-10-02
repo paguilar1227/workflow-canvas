@@ -1,0 +1,16 @@
+services:
+  workflow-canvas:
+    build: .
+    image: workflow-canvas:latest
+    container_name: workflow-canvas
+    ports:
+      - "${WFC_BIND:-127.0.0.1}:${WFC_PORT:-8790}:8790"
+    environment:
+      WFC_ALLOWED_HOSTS: "${WFC_ALLOWED_HOSTS:-}"
+    volumes:
+      - workflow-canvas-data:/data
+    restart: unless-stopped
+
+volumes:
+  workflow-canvas-data:
+

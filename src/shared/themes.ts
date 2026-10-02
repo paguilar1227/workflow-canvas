@@ -1,0 +1,212 @@
+export interface ThemeDef {
+  id: string;
+  name: string;
+  mode: 'dark' | 'light';
+  description: string;
+  source: { label: string; url?: string; referoStyleId?: string };
+  background: 'dots' | 'lines' | 'cross';
+  gap: number;
+  /** Hand-drawn rendering (rough.js), as in Excalidraw. */
+  sketch?: boolean;
+  tokens: Record<string, string>;
+}
+
+const INTER = "'Inter Variable', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+const MANROPE = "'Manrope Variable', Manrope, " + INTER;
+const GROTESK = "'Space Grotesk Variable', 'Space Grotesk', " + INTER;
+const FRAUNCES = "'Fraunces Variable', Fraunces, Georgia, serif";
+const HAND = "'Patrick Hand', 'Comic Sans MS', 'Segoe Print', cursive";
+const JBMONO = "'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace";
+const GEISTMONO = "'Geist Mono Variable', 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace";
+
+export const THEMES: ThemeDef[] = [
+  {
+    id: 'lens-dark',
+    name: 'Lens Dark',
+    mode: 'dark',
+    description: 'Default. Matches the pr-lens mapping-web reference: GitHub-dark canvas, dotted grid, swimlane frames, badge-tagged cards.',
+    source: { label: 'pr-lens mapping-web-dark.svg (your reference)' },
+    background: 'dots', gap: 18,
+    tokens: {
+      '--font-ui': INTER, '--font-display': INTER, '--font-mono': JBMONO,
+      '--bg': '#0d1117', '--grid': 'rgba(110,118,129,.24)',
+      '--panel': '#151b23', '--panel-2': '#1c2129', '--panel-border': '#2a313c',
+      '--text': '#e6edf3', '--text-2': '#9198a1', '--text-3': '#6e7681',
+      '--accent': '#2f81f7', '--accent-text': '#ffffff', '--accent-soft': 'rgba(47,129,247,.16)',
+      '--node-bg': '#151b23', '--node-border': '#2d333b', '--node-icon-bg': '#21262d', '--node-title': '#e6edf3', '--node-sub': '#9198a1',
+      '--node-radius': '10px', '--node-shadow': 'none',
+      '--badge-bg': '#1c2129', '--badge-border': '#3d444d', '--badge-text': '#9198a1',
+      '--frame-bg': 'rgba(110,118,129,.07)', '--frame-border': 'rgba(110,118,129,.10)', '--frame-label': '#9198a1',
+      '--edge': '#6e7681', '--edge-label-bg': '#0d1117', '--edge-label-border': '#3d444d', '--edge-label-text': '#d1d7e0',
+      '--sticky-bg': '#3a3220', '--sticky-text': '#f2e6c4',
+      '--selection': '#2f81f7', '--ui-radius': '8px',
+      '--c-blue': '#2f81f7', '--c-green': '#3fb950', '--c-amber': '#d29922', '--c-red': '#f85149', '--c-purple': '#a371f7', '--c-pink': '#db61a2', '--c-teal': '#39c5cf', '--c-gray': '#6e7681',
+    },
+  },
+  {
+    id: 'warp-graphite',
+    name: 'Warp Graphite',
+    mode: 'dark',
+    description: 'Dark precision workbench: near-black achromatic layers, Geist Mono details, a single blue focus glow.',
+    source: { label: 'Refero style: Warp', url: 'https://warp.dev', referoStyleId: '3aff8b9c-ac69-4392-9862-c82e9db2dec7' },
+    background: 'lines', gap: 32,
+    tokens: {
+      '--font-ui': INTER, '--font-display': INTER, '--font-mono': GEISTMONO,
+      '--bg': '#121212', '--grid': 'rgba(250,250,250,.045)',
+      '--panel': '#1e1e1d', '--panel-2': '#262625', '--panel-border': '#2f2f2f',
+      '--text': '#fafafa', '--text-2': '#868684', '--text-3': '#5f5f5d',
+      '--accent': '#217eff', '--accent-text': '#ffffff', '--accent-soft': 'rgba(33,126,255,.16)',
+      '--node-bg': '#1e1e1d', '--node-border': '#2f2f2f', '--node-icon-bg': '#2f2f2f', '--node-title': '#ffffff', '--node-sub': '#868684',
+      '--node-radius': '8px', '--node-shadow': 'none',
+      '--badge-bg': 'rgba(255,255,255,.08)', '--badge-border': 'transparent', '--badge-text': '#bdbdbb',
+      '--frame-bg': 'rgba(255,255,255,.025)', '--frame-border': '#262625', '--frame-label': '#868684',
+      '--edge': '#6f839f', '--edge-label-bg': '#1e1e1d', '--edge-label-border': '#40403f', '--edge-label-text': '#fafafa',
+      '--sticky-bg': '#40403f', '--sticky-text': '#fafafa',
+      '--selection': '#217eff', '--ui-radius': '4px',
+      '--c-blue': '#217eff', '--c-green': '#2ecc71', '--c-amber': '#bd9f65', '--c-red': '#ff5f56', '--c-purple': '#9d7cff', '--c-pink': '#e07ab0', '--c-teal': '#4fc1c9', '--c-gray': '#6f839f',
+    },
+  },
+  {
+    id: 'paper-blueprint',
+    name: 'Paper Blueprint',
+    mode: 'light',
+    description: 'Warm parchment drafting table with a faint blueprint grid, charcoal ink, hairline borders.',
+    source: { label: 'Refero style: Paper', url: 'https://paper.design', referoStyleId: '948949c4-65e1-4f9a-a1ca-d4eadc2e3014' },
+    background: 'lines', gap: 24,
+    tokens: {
+      '--font-ui': INTER, '--font-display': INTER, '--font-mono': GEISTMONO,
+      '--bg': '#efefe4', '--grid': 'rgba(93,140,215,.16)',
+      '--panel': '#fcfcf9', '--panel-2': '#f3f3f4', '--panel-border': '#d7d7d6',
+      '--text': '#181818', '--text-2': '#6b6b6b', '--text-3': '#a8a8a8',
+      '--accent': '#181818', '--accent-text': '#ffffff', '--accent-soft': 'rgba(93,140,215,.14)',
+      '--node-bg': '#ffffff', '--node-border': '#d7d7d6', '--node-icon-bg': '#f3f3f4', '--node-title': '#181818', '--node-sub': '#6b6b6b',
+      '--node-radius': '6px', '--node-shadow': '0 1px 2px rgba(24,24,24,.06)',
+      '--badge-bg': '#fcfcf9', '--badge-border': '#d7d7d6', '--badge-text': '#6b6b6b',
+      '--frame-bg': 'rgba(252,252,249,.55)', '--frame-border': '#d7d7d6', '--frame-label': '#6b6b6b',
+      '--edge': '#8a8a84', '--edge-label-bg': '#fcfcf9', '--edge-label-border': '#d7d7d6', '--edge-label-text': '#222222',
+      '--sticky-bg': '#fff6c9', '--sticky-text': '#222222',
+      '--selection': '#5d8cd7', '--ui-radius': '6px',
+      '--c-blue': '#5d8cd7', '--c-green': '#4f8a5b', '--c-amber': '#b7832f', '--c-red': '#c4553f', '--c-purple': '#7c6bc4', '--c-pink': '#c0608f', '--c-teal': '#3f8f8f', '--c-gray': '#909090',
+    },
+  },
+  {
+    id: 'whimsical-studio',
+    name: 'Whimsical Studio',
+    mode: 'light',
+    description: 'Playful productivity studio: airy white, plush rounded corners, plum ink with violet-fuchsia highlights.',
+    source: { label: 'Refero style: Whimsical', url: 'https://whimsical.com', referoStyleId: '3e8e4b3b-1cda-4467-ba17-376ef446904a' },
+    background: 'dots', gap: 22,
+    tokens: {
+      '--font-ui': MANROPE, '--font-display': MANROPE, '--font-mono': JBMONO,
+      '--bg': '#f5f4f5', '--grid': 'rgba(37,8,53,.13)',
+      '--panel': '#ffffff', '--panel-2': '#f5f4f5', '--panel-border': '#ebe6ee',
+      '--text': '#250835', '--text-2': '#6a5b72', '--text-3': '#918499',
+      '--accent': '#250835', '--accent-text': '#ffffff', '--accent-soft': 'rgba(171,47,237,.12)',
+      '--node-bg': '#ffffff', '--node-border': '#ebe6ee', '--node-icon-bg': '#f3ecfb', '--node-title': '#250835', '--node-sub': '#6a5b72',
+      '--node-radius': '16px', '--node-shadow': '0 6px 20px rgba(37,8,53,.07)',
+      '--badge-bg': '#decaff', '--badge-border': 'transparent', '--badge-text': '#473054',
+      '--frame-bg': 'rgba(222,202,255,.22)', '--frame-border': 'rgba(171,47,237,.16)', '--frame-label': '#6a5b72',
+      '--edge': '#a99bb0', '--edge-label-bg': '#ffffff', '--edge-label-border': '#ebe6ee', '--edge-label-text': '#250835',
+      '--sticky-bg': '#fff1b8', '--sticky-text': '#250835',
+      '--selection': '#ab2fed', '--ui-radius': '12px',
+      '--c-blue': '#0283ec', '--c-green': '#1fa463', '--c-amber': '#e8a317', '--c-red': '#e5484d', '--c-purple': '#ab2fed', '--c-pink': '#d6409f', '--c-teal': '#12a5a5', '--c-gray': '#918499',
+    },
+  },
+  {
+    id: 'modal-terminal',
+    name: 'Modal Terminal',
+    mode: 'dark',
+    description: 'Command-center black with phosphor-green ink; neon green reserved for primary actions and focus.',
+    source: { label: 'Refero style: Modal', url: 'https://modal.com', referoStyleId: '3fade735-f566-47dd-a51e-8d38660fb06c' },
+    background: 'dots', gap: 20,
+    tokens: {
+      '--font-ui': INTER, '--font-display': GROTESK, '--font-mono': JBMONO,
+      '--bg': '#000000', '--grid': 'rgba(127,238,100,.13)',
+      '--panel': '#0c0f0e', '--panel-2': '#212525', '--panel-border': '#3e4a3c',
+      '--text': '#ddffdc', '--text-2': '#aed2a4', '--text-3': '#697368',
+      '--accent': '#7fee64', '--accent-text': '#000000', '--accent-soft': 'rgba(127,238,100,.12)',
+      '--node-bg': '#000000', '--node-border': '#485346', '--node-icon-bg': '#212525', '--node-title': '#ddffdc', '--node-sub': '#859984',
+      '--node-radius': '4px', '--node-shadow': 'none',
+      '--badge-bg': 'transparent', '--badge-border': '#859085', '--badge-text': '#ddffdc',
+      '--frame-bg': 'rgba(222,240,221,.03)', '--frame-border': '#3e4a3c', '--frame-label': '#859984',
+      '--edge': '#677d64', '--edge-label-bg': '#000000', '--edge-label-border': '#485346', '--edge-label-text': '#ddffdc',
+      '--sticky-bg': '#212525', '--sticky-text': '#ddffdc',
+      '--selection': '#7fee64', '--ui-radius': '4px',
+      '--c-blue': '#6cb6ff', '--c-green': '#7fee64', '--c-amber': '#f2c94c', '--c-red': '#ff6b6b', '--c-purple': '#c49bff', '--c-pink': '#ff8ad8', '--c-teal': '#5ce1e6', '--c-gray': '#697368',
+    },
+  },
+  {
+    id: 'nornorm-ink',
+    name: 'Nornorm Ink',
+    mode: 'light',
+    description: 'Architectural editorial: white space, crisp black ink borders, light-ash sections, one blue-violet focus edge.',
+    source: { label: 'Refero style: Nornorm', url: 'https://nornorm.com', referoStyleId: '30ad770d-4326-471c-af63-4d96cabed321' },
+    background: 'cross', gap: 40,
+    tokens: {
+      '--font-ui': INTER, '--font-display': FRAUNCES, '--font-mono': GEISTMONO,
+      '--bg': '#ffffff', '--grid': 'rgba(0,0,0,.16)',
+      '--panel': '#ffffff', '--panel-2': '#f1efe9', '--panel-border': '#e2e0da',
+      '--text': '#000000', '--text-2': '#6a6a6a', '--text-3': '#9a9a9a',
+      '--accent': '#000000', '--accent-text': '#ffffff', '--accent-soft': 'rgba(30,55,160,.10)',
+      '--node-bg': '#ffffff', '--node-border': '#000000', '--node-icon-bg': '#f1efe9', '--node-title': '#000000', '--node-sub': '#6a6a6a',
+      '--node-radius': '2px', '--node-shadow': 'none',
+      '--badge-bg': '#f1efe9', '--badge-border': 'transparent', '--badge-text': '#000000',
+      '--frame-bg': 'rgba(241,239,233,.7)', '--frame-border': 'transparent', '--frame-label': '#6a6a6a',
+      '--edge': '#000000', '--edge-label-bg': '#ffffff', '--edge-label-border': '#000000', '--edge-label-text': '#000000',
+      '--sticky-bg': '#f1efe9', '--sticky-text': '#000000',
+      '--selection': '#1e37a0', '--ui-radius': '2px',
+      '--c-blue': '#1e37a0', '--c-green': '#1f7a4d', '--c-amber': '#b8860b', '--c-red': '#c0392b', '--c-purple': '#5b3fb5', '--c-pink': '#b03a7a', '--c-teal': '#13787a', '--c-gray': '#6a6a6a',
+    },
+  },
+  {
+    id: 'hyperstudio-amber',
+    name: 'Hyperstudio Amber',
+    mode: 'dark',
+    description: 'Quiet terminal editorial: deep blacks, bright white type, amber reserved for tags and focus.',
+    source: { label: 'Refero style: Hyperstudio', url: 'https://hyperstudio.org', referoStyleId: '8c796b69-7c95-425b-b716-5544ff14b530' },
+    background: 'dots', gap: 24,
+    tokens: {
+      '--font-ui': GROTESK, '--font-display': GROTESK, '--font-mono': JBMONO,
+      '--bg': '#101010', '--grid': 'rgba(243,243,243,.09)',
+      '--panel': '#080808', '--panel-2': '#181818', '--panel-border': '#333333',
+      '--text': '#f3f3f3', '--text-2': '#949494', '--text-3': '#6a6a6a',
+      '--accent': '#ffffff', '--accent-text': '#101010', '--accent-soft': 'rgba(231,197,154,.12)',
+      '--node-bg': '#080808', '--node-border': '#333333', '--node-icon-bg': '#1c1c1c', '--node-title': '#f3f3f3', '--node-sub': '#949494',
+      '--node-radius': '6px', '--node-shadow': 'none',
+      '--badge-bg': 'rgba(231,197,154,.08)', '--badge-border': 'rgba(231,197,154,.28)', '--badge-text': '#e7c59a',
+      '--frame-bg': 'rgba(243,243,243,.025)', '--frame-border': '#262626', '--frame-label': '#949494',
+      '--edge': '#6b6b6b', '--edge-label-bg': '#101010', '--edge-label-border': '#333333', '--edge-label-text': '#f3f3f3',
+      '--sticky-bg': '#1c1c1c', '--sticky-text': '#e7c59a',
+      '--selection': '#e7c59a', '--ui-radius': '6px',
+      '--c-blue': '#8fb8ff', '--c-green': '#00ac5c', '--c-amber': '#e7c59a', '--c-red': '#ff6b5e', '--c-purple': '#b9a3ff', '--c-pink': '#f0a3c8', '--c-teal': '#7fd1c7', '--c-gray': '#949494',
+    },
+  },
+  {
+    id: 'excalidraw-sketch',
+    name: 'Excalidraw Sketch',
+    mode: 'light',
+    description: 'Hand-drawn whiteboard look borrowed from Excalidraw: rough.js strokes, hachure fills, handwritten labels, Excalidraw palette.',
+    source: { label: 'Excalidraw (MIT) · rough.js', url: 'https://github.com/excalidraw/excalidraw' },
+    background: 'dots', gap: 20, sketch: true,
+    tokens: {
+      '--font-ui': INTER, '--font-display': HAND, '--font-mono': JBMONO, '--font-node': HAND,
+      '--bg': '#ffffff', '--grid': 'rgba(30,30,30,.16)',
+      '--panel': '#ffffff', '--panel-2': '#f1f0ff', '--panel-border': '#e3e2fe',
+      '--text': '#1e1e1e', '--text-2': '#5c5c5c', '--text-3': '#9a9a9a',
+      '--accent': '#6965db', '--accent-text': '#ffffff', '--accent-soft': 'rgba(105,101,219,.14)',
+      '--node-bg': '#ffffff', '--node-border': '#1e1e1e', '--node-icon-bg': 'transparent', '--node-title': '#1e1e1e', '--node-sub': '#5c5c5c',
+      '--node-radius': '10px', '--node-shadow': 'none',
+      '--badge-bg': '#ffffff', '--badge-border': '#1e1e1e', '--badge-text': '#1e1e1e',
+      '--frame-bg': 'transparent', '--frame-border': '#bbbbbb', '--frame-label': '#5c5c5c',
+      '--edge': '#1e1e1e', '--edge-label-bg': '#ffffff', '--edge-label-border': 'transparent', '--edge-label-text': '#1e1e1e',
+      '--sticky-bg': '#ffec99', '--sticky-text': '#1e1e1e',
+      '--selection': '#6965db', '--ui-radius': '8px',
+      '--c-blue': '#1971c2', '--c-green': '#2f9e44', '--c-amber': '#f08c00', '--c-red': '#e03131', '--c-purple': '#9c36b5', '--c-pink': '#c2255c', '--c-teal': '#0c8599', '--c-gray': '#868e96',
+    },
+  },
+];
+
+export function getTheme(id: string | undefined): ThemeDef {
+  return THEMES.find((t) => t.id === id) ?? THEMES[0];
+}
+
