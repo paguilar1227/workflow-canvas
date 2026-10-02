@@ -76,7 +76,7 @@ test('an AI client works over the API safely and predictably', async ({ page, ap
     expect((await request.post('/api/tools/list_documents', { data: {}, headers: foreign })).status()).toBe(403);
     expect((await request.post('/mcp', { data: {}, headers: { ...foreign, accept: 'application/json, text/event-stream' } })).status()).toBe(403);
     const host = new URL(baseURL!).host;
-    const upgrade = 'GET /ws HTTP/1.1\r\nHost: ' + host + '\r\nOrigin: http://evil.example\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n';
+    const upgrade = 'GET /sync HTTP/1.1\r\nHost: ' + host + '\r\nOrigin: http://evil.example\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n';
     expect(await raw(baseURL!, upgrade)).toEqual(['HTTP/1.1 403 Forbidden']);
     const rebinding = 'GET /api/documents HTTP/1.1\r\nHost: evil.example\r\nConnection: close\r\n\r\n';
     expect((await raw(baseURL!, rebinding))[0]).toMatch(/^HTTP\/1\.1 403/);

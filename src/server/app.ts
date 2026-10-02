@@ -9,6 +9,7 @@ import { mountMcp, SERVER_INFO } from './mcp';
 import { THEMES } from '../shared/themes';
 import { exportMarkdown, exportMermaid } from '../shared/io';
 import { isTrustedRequest, UNTRUSTED_MESSAGE } from './guard';
+import { mountReadiness } from './readiness';
 
 export interface AppOptions { dataDir: string; webDir?: string; dev?: boolean }
 
@@ -21,7 +22,7 @@ export async function createApp(opts: AppOptions) {
   app.use((req, res, next) => { if (isTrustedRequest(req)) next(); else res.status(403).json({ ok: false, error: UNTRUSTED_MESSAGE }); });
   app.use(express.json({ limit: '25mb' }));
 
-  app.get('/health', (_req, res) => { res.json({ ok: true, ...SERVER_INFO, documents: store.list().length, connectedUIs: hub.uiCount }); });
+  app.get('/health', (_req, res) => { res.json({ ok: true, ...SERVER_INFO, documents: store.list().length, connectedUIs: hub.uiCount, ...(process.env.DEMO_DEPLOYMENT_ID ? { deploymentId: process.env.DEMO_DEPLOYMENT_ID, sourceSha: process.env.DEMO_DEPLOY_SOURCE_SHA } : {}) }); });
   app.get('/api/tools', (_req, res) => { res.json({ server: SERVER_INFO, tools: toolJsonSchemas(tools) }); });
   app.post('/api/tools/:name', async (req, res) => {
     try {
@@ -43,6 +44,7 @@ export async function createApp(opts: AppOptions) {
   app.get('/api/session', (_req, res) => { res.json({ session: { ...store.session, selections: store.selectionsView() }, connectedUIs: hub.uiCount }); });
   app.get('/api/themes', (_req, res) => { res.json(THEMES); });
   mountMcp(app, tools);
+  mountReadiness(app);
 
   const server = http.createServer(app);
   server.keepAliveTimeout = 0;

@@ -79,7 +79,7 @@ const ARCH_SEED: CommandInput[] = [
   { type: 'add_nodes', nodes: [
     { id: 'you', title: 'You, in the browser', subtitle: 'mouse · keyboard · menus', icon: '🧑', badge: 'Human', color: 'blue', frameId: 'lane-drivers', x: 24, y: 72 },
     { id: 'agent', title: 'AI agent', subtitle: 'Codex · Claude · any MCP', icon: '🤖', badge: 'AI', color: 'purple', frameId: 'lane-drivers', x: 24, y: 200 },
-    { id: 'ws', title: 'Live sync', subtitle: '/ws · ops + view control', icon: '⚡', badge: 'Realtime', frameId: 'lane-doors', x: 624, y: 72 },
+    { id: 'ws', title: 'Live sync', subtitle: '/sync · ops + view control', icon: '⚡', badge: 'Realtime', frameId: 'lane-doors', x: 624, y: 72 },
     { id: 'mcp', title: 'MCP server', subtitle: '/mcp · streamable HTTP', icon: '🧰', badge: '30+ tools', color: 'purple', frameId: 'lane-doors', x: 624, y: 200 },
     { id: 'rest', title: 'Tools REST API', subtitle: 'POST /api/tools/:name', icon: '🔌', badge: 'HTTP', frameId: 'lane-doors', x: 624, y: 328 },
     { id: 'normalize', title: 'Command normalizer', subtitle: 'ids · positions · defaults', icon: 'ƒ', badge: 'Shared', frameId: 'lane-core', x: 1224, y: 72 },

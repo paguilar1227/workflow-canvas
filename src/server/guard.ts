@@ -19,6 +19,7 @@ function hostname(host: string): string {
  * and, when a browser sends an Origin, only same-origin pages (blocks other websites driving the tools or live sync).
  */
 export function isTrustedRequest(req: IncomingMessage): boolean {
+  if (behindPreviewGateway()) return true;
   const host = req.headers.host;
   if (!host) return false;
   const allowed = allowedHosts();
@@ -26,6 +27,14 @@ export function isTrustedRequest(req: IncomingMessage): boolean {
   const origin = req.headers.origin;
   if (!origin) return true;
   try { return new URL(origin).host.toLowerCase() === host.toLowerCase(); } catch { return false; }
+}
+
+/**
+ * On the demo preview platform the app has internal-only ingress behind a login gateway that already enforces
+ * owner sign-in and same-origin requests, and rewrites Host to the app's internal name.
+ */
+function behindPreviewGateway(): boolean {
+  return Boolean(process.env.DEMO_DEPLOYMENT_ID);
 }
 
 export const UNTRUSTED_MESSAGE = 'Forbidden: request from another website or an unlisted host name. Add the host to WFC_ALLOWED_HOSTS to allow it.';

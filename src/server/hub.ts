@@ -33,10 +33,14 @@ export class Hub {
 
   attach(server: Server) {
     const wss = new WebSocketServer({ noServer: true });
+    const echo = new WebSocketServer({ noServer: true });
+    echo.on('connection', (ws) => ws.on('message', (data, isBinary) => ws.send(data, { binary: isBinary })));
     server.on('upgrade', (req, socket, head) => {
-      if ((req.url ?? '').split('?')[0] !== '/ws') return;
+      const route = (req.url ?? '').split('?')[0];
+      if (route !== '/sync' && route !== '/ws') return;
       if (!isTrustedRequest(req)) { socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); socket.destroy(); return; }
-      wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+      const target = route === '/sync' ? wss : echo;
+      target.handleUpgrade(req, socket, head, (ws) => target.emit('connection', ws, req));
     });
     wss.on('connection', (ws) => {
       const client: Client = { id: nanoid(8), ws, docId: null, connectedAt: Date.now(), lastActive: Date.now() };

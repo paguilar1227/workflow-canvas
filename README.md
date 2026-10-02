@@ -88,6 +88,10 @@ The server exposes the same command model the UI uses, so AI and human actions a
 
 Bulk drawing for AI: `create_diagram` adds nodes + edges and arranges them in one undoable step.
 
+## Preview deployment (demo-deploy)
+
+The app runs on the private demo-deploy preview platform (Azure Container Apps behind a Microsoft-login gateway). Its manifest, `demo-deploy.json`, holds environment resource IDs and is kept out of git. When `DEMO_DEPLOYMENT_ID` is set, the app trusts the gateway, which enforces sign-in and same-origin requests and reaches the app through internal-only ingress. In that mode `/health` reports the deployment ID and source SHA, `POST /db-marker` writes and reads a marker through the injected `DATABASE_URL`, and `/ws` echoes WebSocket frames for the platform's readiness probe. The app's own live sync uses `/sync`. Documents in a preview live in the container, so they reset when it restarts.
+
 ## Development
 
 ```bash

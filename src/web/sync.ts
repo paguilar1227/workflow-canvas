@@ -17,7 +17,7 @@ function send(msg: unknown) {
 }
 
 export function connect() {
-  const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+  const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/sync';
   ws = new WebSocket(url);
   ws.onopen = () => { retry = 0; set({ connected: true }); };
   ws.onclose = () => {
