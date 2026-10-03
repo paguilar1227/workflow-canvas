@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { MousePointer2, Hand, Square, Frame, StickyNote, Type, Spline, Minus, Plus, Maximize, ChevronUp, ChevronDown, X, Bot, PenLine, Eye, Minimize2 } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { MousePointer2, Hand, Square, Frame, StickyNote, Type, Spline, Minus, Plus, Maximize, ChevronUp, ChevronDown, X, Bot, PenLine, Eye, Minimize2, BoxSelect, Maximize2, Pencil, CornerDownRight, ListPlus, SlidersHorizontal, MoreHorizontal, Trash2, Tag } from 'lucide-react';
 import { useStore } from '@xyflow/react';
 import { useApp, set, get } from '../store';
 import * as actions from '../actions';
@@ -10,18 +10,24 @@ export function Toolbar() {
   const mode = useApp((s) => s.session.mode);
   const selCount = useApp((s) => s.selection.nodes.length);
   const placing = useApp((s) => s.placing?.kind);
+  const coarse = useApp((s) => s.coarse);
+  const areaSelect = useApp((s) => s.areaSelect);
   return (
     <div className="toolbar" role="toolbar" aria-label="Canvas tools" data-testid="toolbar">
-      <button className={'btn icon' + (mode === 'select' ? ' active' : '')} title="Select (V)" aria-label="Select tool" onClick={() => actions.setMode('select')}><MousePointer2 size={16} /></button>
-      <button className={'btn icon' + (mode === 'pan' ? ' active' : '')} title="Hand / pan (H)" aria-label="Hand tool" data-testid="tool-pan" onClick={() => actions.setMode('pan')}><Hand size={16} /></button>
+      <button className={'btn icon' + (mode === 'select' && !areaSelect ? ' active' : '')} title="Select (V)" aria-label="Select tool" onClick={() => actions.setMode('select')}><MousePointer2 size={16} /></button>
+      {coarse ? (
+        <button className={'btn icon' + (areaSelect ? ' active' : '')} title="Select an area (one finger otherwise pans)" aria-label="Area select tool" aria-pressed={areaSelect} data-testid="tool-area" onClick={actions.toggleAreaSelect}><BoxSelect size={16} /></button>
+      ) : (
+        <button className={'btn icon' + (mode === 'pan' ? ' active' : '')} title="Hand / pan (H)" aria-label="Hand tool" data-testid="tool-pan" onClick={() => actions.setMode('pan')}><Hand size={16} /></button>
+      )}
       <button className={'btn icon' + (mode === 'draw' ? ' active' : '')} title="Pen — freehand draw (P)" aria-label="Pen tool" data-testid="tool-pen" onClick={() => actions.setMode(mode === 'draw' ? 'select' : 'draw')}><PenLine size={16} /></button>
       <div className="sep" style={{ alignSelf: 'center' }} />
       <button className={'btn' + (placing === 'topic' ? ' active' : '')} title="Add topic (N) — click the canvas to place it, or it appears next to the selection" data-testid="add-topic" onClick={() => actions.insert('topic')}><Square size={15} />Topic</button>
       <button className={'btn' + (placing === 'frame' ? ' active' : '')} title="Add frame / lane (F) — wraps the selection, or click the canvas to place one" data-testid="add-frame" onClick={() => actions.insert('frame')}><Frame size={15} />Frame</button>
       <button className={'btn' + (placing === 'sticky' ? ' active' : '')} title="Add sticky note (S) — click the canvas to place it" data-testid="add-sticky" onClick={() => actions.insert('sticky')}><StickyNote size={15} />Sticky</button>
       <button className={'btn' + (placing === 'text' ? ' active' : '')} title="Add text (T) — click the canvas to place it" data-testid="add-text" onClick={() => actions.insert('text')}><Type size={15} />Text</button>
-      <div className="sep" style={{ alignSelf: 'center' }} />
-      <button className="btn" title="Connect selected nodes (C)" data-testid="connect" disabled={selCount < 2} onClick={actions.connectSelected}><Spline size={15} />Connect</button>
+      {coarse ? null : <div className="sep" style={{ alignSelf: 'center' }} />}
+      {coarse ? null : <button className="btn" title="Connect selected nodes (C)" data-testid="connect" disabled={selCount < 2} onClick={actions.connectSelected}><Spline size={15} />Connect</button>}
     </div>
   );
 }
@@ -31,10 +37,13 @@ const PLACE_LABEL: Record<string, string> = { topic: 'topic', frame: 'frame', st
 export function ModePill() {
   const s = useApp((st) => st.session);
   const placing = useApp((st) => st.placing);
-  if (placing && !s.viewMode) return <div className="mode-pill" data-testid="place-pill"><MousePointer2 size={14} />Click the canvas to place a {PLACE_LABEL[placing.kind] ?? placing.kind} · Enter = centre<button className="btn outline" onClick={actions.cancelPlacing}>Cancel (Esc)</button></div>;
-  if (s.viewMode) return <div className="mode-pill" data-testid="view-pill"><Eye size={14} />View mode — read-only<button className="btn outline" onClick={actions.toggleViewMode} data-testid="exit-view">Edit (Alt+R)</button></div>;
-  if (s.zenMode) return <div className="mode-pill" data-testid="zen-pill"><Minimize2 size={14} />Zen mode<button className="btn outline" onClick={actions.toggleZen} data-testid="exit-zen">Exit (Alt+Z)</button></div>;
-  if (s.mode === 'draw') return <div className="mode-pill" data-testid="pen-pill"><PenLine size={14} />Pen — drag to draw<button className="btn outline" onClick={() => actions.setMode('select')}>Done (Esc)</button></div>;
+  const touch = useApp((st) => st.compact || st.coarse);
+  const area = useApp((st) => st.areaSelect);
+  if (placing && !s.viewMode) return <div className="mode-pill" data-testid="place-pill"><MousePointer2 size={14} /><span className="pill-text">{touch ? 'Tap to place a ' + (PLACE_LABEL[placing.kind] ?? placing.kind) : <>Click the canvas to place a {PLACE_LABEL[placing.kind] ?? placing.kind} · Enter = centre</>}</span><button className="btn outline" onClick={actions.cancelPlacing}>{touch ? 'Cancel' : 'Cancel (Esc)'}</button></div>;
+  if (area && !s.viewMode) return <div className="mode-pill" data-testid="area-pill"><BoxSelect size={14} /><span className="pill-text">Drag across nodes to select them</span><button className="btn outline" onClick={actions.toggleAreaSelect}>Cancel</button></div>;
+  if (s.viewMode) return <div className="mode-pill" data-testid="view-pill"><Eye size={14} /><span className="pill-text">View mode — read-only</span><button className="btn outline" onClick={actions.toggleViewMode} data-testid="exit-view">{touch ? 'Edit' : 'Edit (Alt+R)'}</button></div>;
+  if (s.zenMode) return <div className="mode-pill" data-testid="zen-pill"><Minimize2 size={14} /><span className="pill-text">Zen mode</span><button className="btn outline" onClick={actions.toggleZen} data-testid="exit-zen">{touch ? 'Exit' : 'Exit (Alt+Z)'}</button></div>;
+  if (s.mode === 'draw') return <div className="mode-pill" data-testid="pen-pill"><PenLine size={14} /><span className="pill-text">Pen — drag to draw</span><button className="btn outline" onClick={() => actions.setMode('select')}>{touch ? 'Done' : 'Done (Esc)'}</button></div>;
   return null;
 }
 
@@ -105,6 +114,9 @@ export function Toast() {
 
 export function ContextMenu() {
   const menu = useApp((s) => s.menu);
+  const compact = useApp((s) => s.compact);
+  const coarse = useApp((s) => s.coarse);
+  const viewMode = useApp((s) => s.session.viewMode);
   if (!menu) return null;
   const close = () => set({ menu: null });
   const item = (label: string, fn: () => void, kbd?: string, testId?: string) => (
@@ -112,8 +124,18 @@ export function ContextMenu() {
   );
   const n = menu.nodeId ? get().doc?.nodes.find((x) => x.id === menu.nodeId) : undefined;
   const hasKids = n ? get().doc?.nodes.some((x) => x.parentId === n.id) : false;
+  if (viewMode) {
+    // Read-only: offer only what does not change the document.
+    return (
+      <div className={'ctx' + (compact ? ' sheet' : '')} style={compact ? undefined : { left: menu.x, top: menu.y }} data-testid="context-menu" onContextMenu={(e) => e.preventDefault()} onMouseLeave={coarse ? undefined : close}>
+        {n ? item('Copy', actions.copy, '⌘C', 'ctx-copy') : null}
+        {item('Select all', () => actions.select((get().doc?.nodes ?? []).map((x) => x.id)), '⌘A')}
+        {item('Fit to screen', actions.fitView, '⇧1')}
+      </div>
+    );
+  }
   return (
-    <div className="ctx" style={{ left: menu.x, top: menu.y }} data-testid="context-menu" onContextMenu={(e) => e.preventDefault()} onMouseLeave={close}>
+    <div className={'ctx' + (compact ? ' sheet' : '')} style={compact ? undefined : { left: menu.x, top: menu.y }} data-testid="context-menu" onContextMenu={(e) => e.preventDefault()} onMouseLeave={coarse ? undefined : close}>
       {n ? (
         <>
           {item('Edit text', () => set({ editingId: n.id }), 'F2', 'ctx-edit')}
@@ -156,8 +178,16 @@ export function ContextMenu() {
   );
 }
 
+const TOUCH_ROWS: [string, string][] = [
+  ['Pan / zoom', 'Drag empty canvas / pinch'], ['Box-select', 'Area tool, then drag'],
+  ['Select / move', 'Tap / drag a node'], ['Edit, add child or sibling, style, delete', 'Action bar above the toolbar'],
+  ['Context menu', 'Long-press'], ['Add a topic', 'Double-tap empty canvas, or Topic then tap'], ['Connect', 'Tap a dot on the selected node, then the target'],
+  ['Outline / inspector', '☰ and Style; close with × or tap outside'],
+];
+
 export function HelpModal() {
   const open = useApp((s) => s.helpOpen);
+  const touch = useApp((s) => s.compact || s.coarse);
   if (!open) return null;
   const rows: [string, string][] = [
     ['Add child topic', 'Tab'], ['Add sibling topic', 'Enter'], ['Edit selected', 'F2 / double-click'], ['Delete', 'Delete / ⌫'],
@@ -170,7 +200,8 @@ export function HelpModal() {
   return (
     <div className="modal-backdrop" onClick={() => set({ helpOpen: false })}>
       <div className="modal" onClick={(e) => e.stopPropagation()} data-testid="help-modal">
-        <h2>Keyboard & mouse</h2>
+        <h2>{touch ? 'Touch, keyboard & mouse' : 'Keyboard & mouse'}</h2>
+        {touch ? <><h3>Touch</h3><div className="shortcut-grid" data-testid="touch-help">{TOUCH_ROWS.map(([a, b]) => <div className="shortcut" key={a}><span>{a}</span><span className="kbd">{b}</span></div>)}</div><h3>Keyboard</h3></> : null}
         <p className="lead">XMind-style editing on an infinite canvas. Everything here is also available to AI agents as MCP tools.</p>
         <div className="shortcut-grid">{rows.map(([a, b]) => <div className="shortcut" key={a}><span>{a}</span><span className="kbd">{b}</span></div>)}</div>
         <div className="modal-actions"><button className="btn primary" onClick={() => set({ helpOpen: false })}>Got it</button></div>
@@ -234,7 +265,7 @@ export function ImportModal() {
         <p className="lead">Paste a Mermaid flowchart (subgraphs become frames), a Markdown outline (becomes a mind map), an Excalidraw scene (.excalidraw) or Workflow Canvas JSON — or load a file.</p>
         <div className="seg" style={{ marginBottom: 10 }}>
           {(['mermaid', 'markdown', 'excalidraw', 'json'] as const).map((f) => <button key={f} className={format === f ? 'on' : ''} data-testid={'import-format-' + f} onClick={() => pick(f)}>{f}</button>)}
-          <label className="btn outline" style={{ height: 26 }}>Load file…<input type="file" hidden accept=".mmd,.md,.markdown,.json,.txt,.excalidraw" data-testid="import-file" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; const t = await f.text(); if (/\.excalidraw$/i.test(f.name) || t.includes('"type": "excalidraw"') || t.includes('"type":"excalidraw"')) setFormat('excalidraw'); setText(t); }} /></label>
+          <label className="btn outline small" data-testid="import-load-file">Load file…<input type="file" hidden accept=".mmd,.md,.markdown,.json,.txt,.excalidraw" data-testid="import-file" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; const t = await f.text(); if (/\.excalidraw$/i.test(f.name) || t.includes('"type": "excalidraw"') || t.includes('"type":"excalidraw"')) setFormat('excalidraw'); setText(t); }} /></label>
         </div>
         <textarea className="import-text" data-testid="import-text" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.stopPropagation()} />
         {err ? <p style={{ color: 'var(--c-red)' }}>{err}</p> : null}
@@ -254,3 +285,54 @@ export function ImportModal() {
   );
 }
 
+
+/** Header on each side column: dismiss it from the column itself, and on phones expand it to the full width. */
+export function ColumnHeader({ panel, title }: { panel: 'outline' | 'inspector'; title: string }) {
+  const compact = useApp((s) => s.compact);
+  const full = useApp((s) => s.drawerFull);
+  return (
+    <div className="column-head">
+      <span className="column-title">{title}</span>
+      {compact ? (
+        <button className={'btn icon' + (full ? ' active' : '')} data-testid={'expand-' + panel} aria-label={(full ? 'Shrink ' : 'Expand ') + title} aria-pressed={full} title={full ? 'Shrink' : 'Expand to full width'} onClick={actions.toggleDrawerFull}>
+          {full ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+        </button>
+      ) : null}
+      <button className="btn icon" data-testid={'close-' + panel} aria-label={'Close ' + title} title="Close" onClick={() => actions.closePanel(panel)}><X size={16} /></button>
+    </div>
+  );
+}
+
+/** Touch replacement for the keyboard and right-click: what you can do with the current selection, one tap away. */
+export function SelectionBar() {
+  const touch = useApp((s) => s.compact || s.coarse);
+  const sel = useApp((s) => s.selection);
+  const doc = useApp((s) => s.doc);
+  const busy = useApp((s) => !!s.editingId || !!s.editingEdgeId || !!s.placing || s.areaSelect || !!s.drawer || s.searchOpen || s.session.mode !== 'select');
+  if (!touch || busy || !doc || (!sel.nodes.length && !sel.edges.length)) return null;
+  const one = sel.nodes.length === 1 ? doc.nodes.find((n) => n.id === sel.nodes[0]) : undefined;
+  const edgeOnly = !sel.nodes.length && sel.edges.length === 1 ? sel.edges[0] : undefined;
+  const b = (label: string, icon: ReactNode, fn: () => void, testId: string, danger = false) => (
+    <button className={'btn sel-btn' + (danger ? ' danger' : '')} data-testid={testId} aria-label={label} onClick={fn}>{icon}<span>{label}</span></button>
+  );
+  const more = (e: React.MouseEvent) => {
+    // The app root closes an open menu on any click; this click opens one, so it must not reach the root.
+    e.stopPropagation();
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const target = sel.nodes[0];
+    set({ menu: { x: r.left, y: r.top, flow: { x: 0, y: 0 }, nodeId: target, edgeId: target ? undefined : edgeOnly } });
+  };
+  return (
+    <div className="selection-bar" role="toolbar" aria-label="Selection actions" data-testid="selection-bar">
+      {one && one.kind !== 'drawing' ? b('Edit', <Pencil size={16} />, () => set({ editingId: one.id }), 'sel-edit') : null}
+      {edgeOnly ? b('Label', <Tag size={16} />, () => set({ editingEdgeId: edgeOnly }), 'sel-edge-label') : null}
+      {one?.kind === 'topic' ? b('Child', <CornerDownRight size={16} />, () => actions.addChild(one.id), 'sel-child') : null}
+      {one?.kind === 'topic' ? b('Sibling', <ListPlus size={16} />, () => actions.addSibling(one.id), 'sel-sibling') : null}
+      {sel.nodes.length > 1 ? b('Frame', <Frame size={16} />, actions.frameSelection, 'sel-frame') : null}
+      {sel.nodes.length > 1 ? b('Connect', <Spline size={16} />, actions.connectSelected, 'sel-connect') : null}
+      {b('Style', <SlidersHorizontal size={16} />, () => actions.openDrawer('inspector'), 'sel-style')}
+      <button className="btn sel-btn" data-testid="sel-more" aria-label="More actions" onClick={more}><MoreHorizontal size={16} /><span>More</span></button>
+      {b('Delete', <Trash2 size={16} />, actions.deleteSelection, 'sel-delete', true)}
+    </div>
+  );
+}

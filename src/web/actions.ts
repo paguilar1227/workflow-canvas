@@ -44,7 +44,7 @@ export function insert(kind: NodeKind, extra: Partial<CanvasNode> = {}) {
   const anchor = selected.find((n) => n.kind !== 'drawing') ?? selected[0];
   if (anchor) { spawnBeside(kind, anchor, extra); return; }
   if (s.session.mode !== 'select') setMode('select');
-  set({ placing: { kind, extra }, menu: null, openMenu: null });
+  set({ placing: { kind, extra }, areaSelect: false, menu: null, openMenu: null });
 }
 
 /** Place the armed element at a canvas point, or in free space at the view centre when no point is given. */
@@ -59,7 +59,8 @@ export function cancelPlacing() { set({ placing: null }); }
 
 function spawnBeside(kind: NodeKind, anchor: CanvasNode, extra: Partial<CanvasNode>) {
   const size = defaultSize(kind, kind === 'topic' ? (extra.shape ?? 'card') : undefined);
-  addNode(kind, { x: anchor.x + anchor.width + 48 + size.width / 2, y: anchor.y + anchor.height / 2 }, extra);
+  const id = addNode(kind, { x: anchor.x + anchor.width + 48 + size.width / 2, y: anchor.y + anchor.height / 2 }, extra);
+  if (id) revealSoon(id);
 }
 
 export function addChild(parentId?: string) {
@@ -215,8 +216,9 @@ export function setDocSettings(settings: { autoArrange?: boolean; treeLayout?: '
 export function renameDocument(title: string) { dispatch({ type: 'update_document', title }); }
 export function describeDocument(description: string) { dispatch({ type: 'update_document', description }); }
 
-export const undo = () => wsUndo();
-export const redo = () => wsRedo();
+/** View mode is read-only for every path, not just the keyboard. */
+export const undo = () => { if (get().session.viewMode) { toast('View mode is read-only'); return; } wsUndo(); };
+export const redo = () => { if (get().session.viewMode) { toast('View mode is read-only'); return; } wsRedo(); };
 
 export const zoomIn = () => flow()?.zoomIn({ duration: 200 });
 export const zoomOut = () => flow()?.zoomOut({ duration: 200 });
@@ -245,10 +247,31 @@ export function navigate(dir: 'left' | 'right' | 'up' | 'down') {
 
 export function setTheme(theme: string) { updateSession({ theme }); }
 export function togglePanel(panel: 'inspector' | 'outline' | 'minimap') {
+  if (get().compact && panel !== 'minimap') { set({ drawer: get().drawer === panel ? null : panel, drawerFull: false }); return; }
   const p = get().session.panels;
   updateSession({ panels: { ...p, [panel]: !p[panel] } });
 }
-export function setMode(mode: 'select' | 'pan' | 'draw') { updateSession({ mode }); }
+/** Dismiss a column from the column itself: closes the drawer on phones, hides the docked column elsewhere. */
+export function closePanel(panel: 'inspector' | 'outline') {
+  if (get().compact) { set({ drawer: null, drawerFull: false }); return; }
+  const p = get().session.panels;
+  if (p[panel]) updateSession({ panels: { ...p, [panel]: false } });
+}
+export function openDrawer(panel: 'inspector' | 'outline') {
+  if (panel === 'inspector' && get().session.viewMode) return;
+  if (get().compact) set({ drawer: panel, drawerFull: false, menu: null, openMenu: null });
+  else if (!get().session.panels[panel]) togglePanel(panel);
+}
+export function toggleDrawerFull() { set({ drawerFull: !get().drawerFull }); }
+/** After jumping somewhere from a drawer on a phone, get the drawer out of the way so the canvas is visible. */
+export function revealCanvas() { if (get().compact && get().drawer) set({ drawer: null, drawerFull: false }); }
+export function setMode(mode: 'select' | 'pan' | 'draw') { set({ areaSelect: false }); updateSession({ mode }); }
+/** Touch: arm (or disarm) one box-select drag; one finger otherwise pans. */
+export function toggleAreaSelect() {
+  const on = !get().areaSelect;
+  if (on && get().session.mode !== 'select') updateSession({ mode: 'select' });
+  set({ areaSelect: on, placing: null });
+}
 export function toggleZen() { updateSession({ zenMode: !get().session.zenMode }); }
 export function toggleViewMode() { const v = !get().session.viewMode; updateSession({ viewMode: v, mode: 'select' }); set({ editingId: null, editingEdgeId: null }); toast(v ? 'View mode: read-only (Alt+R to edit)' : 'Editing enabled'); }
 export async function copyPng() {

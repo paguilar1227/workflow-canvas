@@ -25,6 +25,15 @@ export interface AppState {
   placing: { kind: NodeKind; extra: Partial<CanvasNode> } | null;
   /** The .excalidraw file this tab autosaves the open document to. */
   file: { docId: string | null; name: string | null; state: 'none' | 'saving' | 'saved' | 'paused' | 'error' | 'unsupported'; savedAt?: number; error?: string };
+  /** Phone-width layout: columns become drawers over the canvas (per tab, not shared). */
+  compact: boolean;
+  /** Touch-first input (coarse pointer): selection action bar and long-press menus. */
+  coarse: boolean;
+  /** Which column drawer is open in the compact layout, and whether it is expanded to full width. */
+  drawer: 'outline' | 'inspector' | null;
+  drawerFull: boolean;
+  /** Touch: the next one-finger drag on empty canvas box-selects instead of panning (per tab). */
+  areaSelect: boolean;
   overlay: Record<string, { x?: number; y?: number; width?: number; height?: number }>;
   dropTargetId: string | null;
   activity: Activity[];
@@ -56,6 +65,11 @@ export const useApp = create<AppState>(() => ({
   editingEdgeId: null,
   placing: null,
   file: { docId: null, name: null, state: 'none' },
+  compact: false,
+  coarse: false,
+  drawer: null,
+  drawerFull: false,
+  areaSelect: false,
   overlay: {},
   dropTargetId: null,
   activity: [],

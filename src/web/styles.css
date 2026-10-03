@@ -14,12 +14,13 @@ input, textarea, select { font: inherit; color: var(--text); }
 /* ---------- top bar ---------- */
 .topbar {
   display: flex; align-items: center; gap: 8px; padding: 0 10px; border-bottom: 1px solid var(--panel-border);
-  background: var(--panel); position: relative; z-index: 20;
+  /* above the canvas chrome (pills, search, toasts, drawers) so its menus and sheets are never covered */
+  background: var(--panel); position: relative; z-index: 45;
 }
 .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; letter-spacing: -.01em; font-family: var(--font-display); white-space: nowrap; }
 .brand-mark { width: 22px; height: 22px; border-radius: 6px; background: var(--accent); color: var(--accent-text); display: grid; place-items: center; font-size: 12px; }
 .doc-title {
-  flex: 0 1 360px; min-width: 60px; max-width: 360px; background: transparent; border: 1px solid transparent; border-radius: var(--ui-radius);
+  flex: 0 1 360px; min-width: 60px; max-width: 360px; background: transparent; border: 1px solid transparent; border-radius: var(--ui-radius); text-overflow: ellipsis;
   padding: 5px 8px; font-weight: 600; color: var(--text);
 }
 .doc-title:hover { border-color: var(--panel-border); }
@@ -41,6 +42,7 @@ input, textarea, select { font: inherit; color: var(--text); }
 .btn.primary { background: var(--accent); color: var(--accent-text); }
 .btn.primary:hover:not(:disabled) { background: var(--accent); color: var(--accent-text); filter: brightness(1.08); }
 .btn.outline { border-color: var(--panel-border); }
+.btn.small { height: 26px; }
 .chip {
   display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 999px;
   border: 1px solid var(--panel-border); background: var(--panel-2); color: var(--text-2); cursor: pointer; font-size: 12px;
@@ -293,7 +295,8 @@ input, textarea, select { font: inherit; color: var(--text); }
 .react-flow__node:hover .wfc-text-node { border-color: var(--panel-border); }
 
 .wfc-handle.react-flow__handle { width: 10px; height: 10px; border-radius: 50%; background: var(--panel); border: 1.5px solid var(--selection); opacity: 0; transition: opacity .12s; }
-.react-flow__node:hover .wfc-handle, .react-flow__node.selected .wfc-handle, .connecting .wfc-handle { opacity: 1; }
+.wfc-handle.react-flow__handle { pointer-events: none; }
+.react-flow__node:hover .wfc-handle, .react-flow__node.selected .wfc-handle { opacity: 1; pointer-events: auto; }
 .react-flow__handle.connectingto, .react-flow__handle.valid { background: var(--selection); }
 
 /* ---------- edges ---------- */
@@ -352,3 +355,98 @@ input, textarea, select { font: inherit; color: var(--text); }
 .canvas-wrap[data-dock="raised"] .activity { bottom: calc(var(--dock-lift) + 48px); }
 .canvas-wrap[data-dock="raised"] { --minimap-lift: var(--dock-lift); }
 @media (prefers-reduced-motion: reduce) { .zoombar, .activity, .react-flow__minimap { transition: none; } }
+
+/* ---------- column header (dismiss on the column; expand on phones) ---------- */
+.column-head { display: flex; align-items: center; gap: 2px; padding: 4px 6px 4px 12px; min-height: 40px; border-bottom: 1px solid var(--panel-border); flex: none; }
+.column-title { flex: 1; min-width: 0; font-size: 10.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- selection action bar (touch) ---------- */
+.selection-bar {
+  position: absolute; left: 50%; bottom: var(--bar-lift, var(--dock-lift, 68px)); transform: translateX(-50%); z-index: 16; display: flex; gap: 2px; padding: 4px;
+  max-width: calc(100% - 16px); overflow-x: auto; scrollbar-width: none; background: var(--panel); border: 1px solid var(--panel-border);
+  border-radius: calc(var(--ui-radius) + 4px); box-shadow: 0 8px 24px rgba(0,0,0,.22); animation: barup .18s ease-out;
+}
+.selection-bar::-webkit-scrollbar { display: none; }
+.selection-bar .sel-btn { flex-direction: column; justify-content: center; gap: 2px; height: 52px; min-width: 52px; padding: 4px 6px; font-size: 10.5px; flex: none; }
+.selection-bar .sel-btn.danger { color: var(--c-red); }
+@keyframes barup { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* ---------- phone layout: drawers over the canvas ---------- */
+@supports (height: 100dvh) { .app { height: 100dvh; } }
+.app.compact .topbar { gap: 4px; padding: 0 4px; }
+.app.compact .doc-title { flex: 1 1 auto; max-width: none; min-width: 0; }
+.app.compact .save-btn { width: 44px; min-width: 44px; padding: 0; justify-content: center; }
+.app.compact .save-btn .menu-label-text { display: none; }
+.app.compact .menu { position: fixed; top: 52px; left: auto; right: 8px; width: min(420px, calc(100vw - 16px)); min-width: 0; max-height: calc(100dvh - 64px); overflow-y: auto; overscroll-behavior: contain; }
+.app.compact .menu.left { left: 8px; right: auto; }
+.app.compact .theme-grid { width: auto; }
+.app.compact .menu-item .kbd { display: none; }
+.app.compact .column-slot { position: absolute; top: 0; bottom: 0; z-index: 40; }
+.app.compact .column-slot.left { left: 0; }
+.app.compact .column-slot.right { right: 0; }
+.app.compact .column-slot > .panel { width: var(--slot-w); box-shadow: 0 0 32px rgba(0,0,0,.35); }
+.drawer-backdrop { position: absolute; inset: 0; z-index: 35; background: rgba(0,0,0,.42); opacity: 0; pointer-events: none; transition: opacity 220ms ease; }
+.drawer-backdrop.shown { opacity: 1; pointer-events: auto; }
+.app.compact .zoombar { top: 10px; right: 10px; left: auto; bottom: auto; flex-direction: column; }
+.app.compact .zoombar .pct { min-width: 0; width: 100%; font-size: 11px; }
+.app.compact .react-flow__minimap { display: none; }
+.app.compact .mode-pill { left: 10px; right: auto; transform: none; max-width: calc(100% - 76px); }
+.mode-pill .pill-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mode-pill > svg, .mode-pill > .btn { flex: none; }
+.app.compact .activity { top: 64px; bottom: auto; right: 66px; }
+.app.compact .toolbar { max-width: calc(100% - 16px); overflow-x: auto; scrollbar-width: none; }
+.app.compact .toolbar::-webkit-scrollbar { display: none; }
+.app.compact .toolbar .btn:not(.icon) { width: 44px; min-width: 44px; padding: 0; justify-content: center; gap: 0; font-size: 0; }
+.app.compact .searchbar { left: 8px; right: 66px; transform: none; }
+.app.compact .searchbar input { width: auto; flex: 1; min-width: 0; }
+.app.compact .toast { top: auto; bottom: calc(var(--dock-lift, 68px) + 72px); max-width: calc(100% - 24px); text-align: center; }
+.ctx.sheet { left: 8px; right: 8px; top: auto; bottom: 8px; min-width: 0; max-height: 70dvh; overflow-y: auto; overscroll-behavior: contain; border-radius: 14px; animation: slidein .18s ease-out; }
+.app.compact .modal { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); padding: 16px; }
+.app.compact .shortcut-grid { grid-template-columns: 1fr; }
+@media (prefers-reduced-motion: reduce) { .drawer-backdrop, .selection-bar, .ctx.sheet { transition: none; animation: none; } }
+
+/* ---------- touch: 44px targets (WCAG 2.5.5, Apple HIG); 16px inputs so iOS does not zoom on focus ---------- */
+@media (pointer: coarse) {
+  .btn, .btn.small { height: 44px; min-width: 44px; }
+  .btn.icon { width: 44px; }
+  .toolbar .btn { height: 44px; }
+  .toolbar .btn.icon { width: 44px; }
+  .zoombar .pct { min-height: 44px; min-width: 44px; }
+  .chip { height: 44px; }
+  .menu-item { min-height: 44px; }
+  .theme-option { min-height: 52px; }
+  .doc-item { min-height: 44px; }
+  .doc-item .doc-actions { display: flex; }
+  .doc-item .doc-actions button { width: 44px; height: 44px; display: grid; place-items: center; }
+  .outline-row { min-height: 44px; }
+  .outline-row .twisty { width: 44px; height: 44px; flex: none; }
+  .seg button { min-height: 44px; min-width: 44px; }
+  .swatch-btn { width: 44px; height: 44px; }
+  .switch, .switch.on { width: 52px; height: 44px; background: none; flex: none; }
+  .switch::before { content: ''; position: absolute; inset: 7px 0; border-radius: 999px; background: var(--panel-border); }
+  .switch.on::before { background: var(--selection); }
+  .switch::after { z-index: 1; top: 10px; left: 4px; width: 24px; height: 24px; }
+  .switch.on::after { left: 24px; }
+  input, textarea, select, .doc-title { font-size: 16px; }
+  .doc-title, .field input, .field select, .searchbar input { min-height: 44px; }
+  .wfc-handle.react-flow__handle { width: 16px; height: 16px; }
+  /* 44px touch targets that grow outward from the node edge, so the node body itself stays tappable at any zoom */
+  .wfc-handle.react-flow__handle::after { content: ''; position: absolute; }
+  .wfc-handle.react-flow__handle-top::after { inset: -28px -14px 0 -14px; }
+  .wfc-handle.react-flow__handle-bottom::after { inset: 0 -14px -28px -14px; }
+  .wfc-handle.react-flow__handle-left::after { inset: -14px 0 -14px -28px; }
+  .wfc-handle.react-flow__handle-right::after { inset: -14px -28px -14px 0; }
+  .react-flow__resize-control.handle { width: 10px; height: 10px; }
+  .wfc-collapse::after { content: ''; position: absolute; inset: -12px; border-radius: 999px; }
+  .react-flow__resize-control.handle::after { content: ''; position: absolute; inset: -17px; }
+  .react-flow { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  .multi-select .react-flow__resize-control, .multi-select .wfc-handle.react-flow__handle { display: none; }
+}
+
+
+/* top bar condensing, chosen by measured overflow (TopBar fit level) */
+.topbar.fit-1 .brand-text, .topbar.fit-1 .chip-label, .topbar.fit-1 .menu-label-text { display: none; }
+.topbar.fit-1 .chip { padding: 0 8px; }
+.topbar.fit-2 .doc-title { flex: 1 1 auto; max-width: none; min-width: 0; }
+.topbar.fit-2 .save-btn .menu-label-text { display: none; }
+.menu { max-height: calc(100dvh - 64px); overflow-y: auto; overscroll-behavior: contain; }

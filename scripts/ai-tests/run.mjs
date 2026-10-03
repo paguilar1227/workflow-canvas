@@ -139,7 +139,13 @@ function readPageState() {
     nodes[el.getAttribute('data-id')] = { x: r.x, y: r.y, w: r.width, h: r.height };
   }
   const vp = document.querySelector('.react-flow__viewport');
-  const zoom = vp ? new DOMMatrixReadOnly(getComputedStyle(vp).transform).a : null;
+  let zoom = vp ? new DOMMatrixReadOnly(getComputedStyle(vp).transform).a : null;
+  // Exact zoom from React Flow's store; the DOM serializes the transform to 6 significant digits.
+  const fiber = vp && Object.keys(vp).find((k) => k.startsWith('__reactFiber$'));
+  for (let f = fiber ? vp[fiber] : null; f; f = f.return) {
+    const t = f.memoizedProps?.value?.getState?.().transform;
+    if (Array.isArray(t)) { zoom = t[2]; break; }
+  }
   return {
     docId: s.docId, selection: s.selection, panels: s.session.panels, snapToGrid: s.session.snapToGrid, theme: s.session.theme,
     dataTheme: document.documentElement.dataset.theme, pane: pane && { x: pane.x, y: pane.y, w: pane.width, h: pane.height }, nodes, zoom,
@@ -322,7 +328,7 @@ async function runScenario(sc, { t0, readOnly, serverTools }) {
       if (it.type === 'mcp_tool_call') {
         const { textOut, json, images } = resultParts(it.result);
         const isErr = !!(it.error || it.result?.is_error || it.result?.isError || it.status === 'failed');
-        const call = { n: sc.calls.length + 1, turn: sc.turn, at: Math.round((Date.now() - t0) / 100) / 10, server: it.server, tool: it.tool, args: it.arguments, ok: !isErr, error: it.error?.message ?? (isErr ? clip(textOut, 400) : undefined), resultJson: json, resultText: textOut };
+        const call = { n: sc.calls.length + 1, turn: sc.turn, at: Math.round((Date.now() - t0) / 100) / 10, endedMs: Date.now(), server: it.server, tool: it.tool, args: it.arguments, ok: !isErr, error: it.error?.message ?? (isErr ? clip(textOut, 400) : undefined), resultJson: json, resultText: textOut };
         if (it.server === MCP_NAME) sc.calls.push(call);
         for (const img of images) {
           const file = 'ai-capture-' + String(++sc.aiImages).padStart(2, '0') + '.png';

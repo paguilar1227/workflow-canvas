@@ -6,11 +6,16 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 process.env.EVIDENCE_DIR ||= path.join(root, 'test-results', 'evidence');
 
 const viewport = { width: 1440, height: 900 };
+const { defaultBrowserType: _webkit, ...iPhone } = devices['iPhone 14'];
 
 /**
  * Human user-journey suite. Every test records a video and explicit screenshots.
  * Tests run one at a time: theme and panel visibility are server-global session settings
  * (theme is broadcast live to every open tab), so parallel journeys would leak into each other's evidence.
+ *
+ * Projects: `chromium` runs the desktop journeys (e2e/*.spec.ts) with mouse and keyboard; `phone` runs the same
+ * user stories the way a phone user does them (e2e/phone/*.spec.ts): iPhone 14 viewport, user agent and touch on
+ * Chromium, so CDP Input.dispatchTouchEvent can drive long-press, pinch and one-finger drags.
  */
 export default defineConfig({
   testDir: './e2e',
@@ -34,5 +39,12 @@ export default defineConfig({
     acceptDownloads: true,
     actionTimeout: 15_000,
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport, deviceScaleFactor: 1 } }],
+  projects: [
+    { name: 'chromium', testIgnore: /phone\//, use: { ...devices['Desktop Chrome'], viewport, deviceScaleFactor: 1 } },
+    {
+      name: 'phone',
+      testMatch: /phone\/.*\.spec\.ts/,
+      use: { ...iPhone, browserName: 'chromium', video: { mode: 'on', size: iPhone.viewport } },
+    },
+  ],
 });

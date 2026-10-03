@@ -1,40 +1,16 @@
 import { test, expect, type App, type Pt } from './support/journey';
 import { defaultSize } from '../src/shared/sizes';
+import { penStroke } from './support/pen';
 
 type Box = { x: number; y: number; width: number; height: number };
 const inside = (a: Box, b: Box) => a.x >= b.x && a.y >= b.y && a.x + a.width <= b.x + b.width && a.y + a.height <= b.y + b.height;
 const overlaps = (a: Box | null, b: Box | null) => !!a && !!b && a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
 
-/** Screen points along an SVG path, sampled at equal arc-length steps (same method as work/fixcheck/pen-fidelity.mjs). */
-const samplePath = (app: App, selector: string) => app.page.locator(selector).first().evaluate((el) => {
-  const path = el as unknown as SVGPathElement;
-  const L = path.getTotalLength();
-  const m = path.getScreenCTM()!;
-  const out: [number, number][] = [];
-  for (let k = 0; k <= 400; k++) { const pt = path.getPointAtLength((L * k) / 400); const sp = new DOMPoint(pt.x, pt.y).matrixTransform(m); out.push([sp.x, sp.y]); }
-  return out;
-});
-
-/** Draw the track with the pen and measure how far the saved drawing sits from the live stroke the person saw. */
-async function penStroke(app: App, track: Pt[]) {
-  const page = app.page;
-  if ((await app.state()).session.mode !== 'draw') await page.keyboard.press('p');
-  await expect(page.getByTestId('pen-layer')).toBeVisible();
-  const before = new Set((await app.doc()).nodes.map((n) => n.id));
-  await page.mouse.move(track[0].x, track[0].y);
-  await page.mouse.down();
-  for (const p of track.slice(1)) await page.mouse.move(p.x, p.y, { steps: 1 });
-  const live = await samplePath(app, '.pen-layer path');
-  await page.mouse.up();
-  await expect.poll(async () => (await app.doc()).nodes.filter((n) => n.kind === 'drawing' && !before.has(n.id)).length).toBe(1);
-  const id = (await app.doc()).nodes.find((n) => n.kind === 'drawing' && !before.has(n.id))!.id;
-  await expect(app.node(id).locator('path').first()).toBeVisible();
-  await app.page.waitForTimeout(300);
-  const final = await samplePath(app, '[data-testid="node-' + id + '"] path');
-  const shift = Math.max(...live.map((q, i) => Math.hypot(q[0] - final[i][0], q[1] - final[i][1])));
-  const seg = (q: number[], a: Pt, b: Pt) => { const dx = b.x - a.x, dy = b.y - a.y; const t = Math.max(0, Math.min(1, ((q[0] - a.x) * dx + (q[1] - a.y) * dy) / (dx * dx + dy * dy || 1))); return Math.hypot(q[0] - a.x - t * dx, q[1] - a.y - t * dy); };
-  const pointer = Math.max(...final.map((q) => Math.min(...track.slice(1).map((p, i) => seg(q, track[i], p)))));
-  return { id, shift: +shift.toFixed(2), pointer: +pointer.toFixed(2) };
+/** Draw with the mouse, switching to the pen with P first. */
+async function drawWithMouse(app: App, track: Pt[]) {
+  if ((await app.state()).session.mode !== 'draw') await app.page.keyboard.press('p');
+  const mouse = app.page.mouse;
+  return penStroke(app, track, { down: async (p) => { await mouse.move(p.x, p.y); await mouse.down(); }, move: (p) => mouse.move(p.x, p.y, { steps: 1 }), up: () => mouse.up() });
 }
 
 /** Click a column toggle and sample the column width on every animation frame until it has fully opened or been removed. */
@@ -148,7 +124,7 @@ test('place elements where I click, draw precisely, and keep the chrome tidy', a
     await page.keyboard.press('Escape');
     const cx = pane.x + pane.width * 0.5, cy = pane.y + pane.height * 0.78;
     const zigzag = Array.from({ length: 41 }, (_, i) => ({ x: cx - 200 + i * 10, y: cy + (i % 2 ? -60 : 60) }));
-    const z1 = await penStroke(app, zigzag);
+    const z1 = await drawWithMouse(app, zigzag);
     ev.note('zigzag at 100%: live→saved shift ' + z1.shift + 'px; saved stroke vs pointer path max ' + z1.pointer + 'px');
     expect(z1.shift, 'saved drawing overlays the live stroke at 100% (px)').toBeLessThanOrEqual(1);
     await ev.snap('zigzag-at-100');
@@ -158,7 +134,7 @@ test('place elements where I click, draw precisely, and keep the chrome tidy', a
     await expect.poll(async () => (await app.viewport()).zoom).toBe(2);
     const ox = pane.x + pane.width * 0.5, oy = pane.y + pane.height * 0.5;
     const circle = Array.from({ length: 73 }, (_, i) => ({ x: ox + 150 * Math.cos((i / 72) * 2 * Math.PI), y: oy + 150 * Math.sin((i / 72) * 2 * Math.PI) }));
-    const z2 = await penStroke(app, circle);
+    const z2 = await drawWithMouse(app, circle);
     ev.note('circle at 200%: live→saved shift ' + z2.shift + 'px; saved stroke vs pointer path max ' + z2.pointer + 'px');
     expect(z2.shift, 'saved drawing overlays the live stroke at 200% (px)').toBeLessThanOrEqual(1);
     await ev.snap('circle-at-200');

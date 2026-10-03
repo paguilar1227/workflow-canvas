@@ -3,6 +3,7 @@
 // Only scenario E changes the (global) theme, and only at its end.
 import fs from 'node:fs';
 import path from 'node:path';
+import { getInternalNodesBounds, getViewportForBounds } from '@xyflow/system';
 import { tsImport } from 'tsx/esm/api';
 
 const { documentFromExcalidraw } = await tsImport('../../src/shared/excalidraw.ts', import.meta.url);
@@ -19,10 +20,86 @@ const onScreen = (r, pane, tol = 1) => !!r && r.x >= pane.x - tol && r.y >= pane
 const okCalls = (c, tool) => c.calls.filter((x) => x.tool === tool && x.ok);
 const screenshotCheck = (c, check) => check('AI took a screenshot of the canvas to verify its work', okCalls(c, 'capture_screenshot').length > 0, { calls: okCalls(c, 'capture_screenshot').length });
 
+// Scenario C zoom check. Fit-all as the fit-view button does it (src/web/actions.ts fitView: padding 0.15, maxZoom 1.5) within the canvas
+// minZoom, using React Flow's own fit math on React Flow's own store values.
+const FIT_ALL = { padding: 0.15, maxZoom: 1.5 };
+/** Page function: record React Flow's exact viewport, canvas size and measured node boxes whenever the view or the canvas size changes. */
+export function installViewLog() {
+  const findStore = () => {
+    const el = document.querySelector('.react-flow__viewport');
+    const key = el && Object.keys(el).find((k) => k.startsWith('__reactFiber$'));
+    for (let f = key ? el[key] : null; f; f = f.return) {
+      const v = f.memoizedProps?.value;
+      if (typeof v?.getState === 'function' && Array.isArray(v.getState().transform)) return v;
+    }
+    return null;
+  };
+  const snap = (s) => ({ t: Date.now(), transform: [...s.transform], width: s.width, height: s.height, minZoom: s.minZoom,
+    nodes: [...s.nodeLookup.values()].map((n) => ({ id: n.id, x: n.internals.positionAbsolute.x, y: n.internals.positionAbsolute.y, w: n.measured?.width ?? 0, h: n.measured?.height ?? 0, hidden: !!n.hidden })) });
+  const store = findStore();
+  if (!store) return { installed: false };
+  const log = [snap(store.getState())];
+  store.subscribe((s, prev) => { if (s.transform !== prev.transform || s.width !== prev.width || s.height !== prev.height) log.push(snap(s)); });
+  window.__aiView = { read: () => ({ log, final: snap(store.getState()), sameStore: findStore() === store }) };
+  return { installed: true, zoom: log[0].transform[2], canvas: log[0].width + 'x' + log[0].height };
+}
+export const readViewLog = () => window.__aiView?.read() ?? null;
+export function fitAllZoom(s) {
+  const nodes = new Map(s.nodes.filter((n) => n.w && n.h && !n.hidden).map((n) => [n.id, { id: n.id, internals: { positionAbsolute: { x: n.x, y: n.y } }, measured: { width: n.w, height: n.h } }]));
+  return nodes.size ? getViewportForBounds(getInternalNodesBounds(nodes), s.width, s.height, s.minZoom, FIT_ALL.maxZoom, FIT_ALL.padding).zoom : null;
+}
+function canvasBox(s, id) {
+  const n = s.nodes.find((x) => x.id === id);
+  const [tx, ty, z] = s.transform;
+  return n && { x: n.x * z + tx, y: n.y * z + ty, w: n.w * z, h: n.h * z };
+}
+/**
+ * The view counts per AI call (the view when a call finished vs when the previous call finished), so a screenshot's temporary
+ * fit-and-restore or a panel toggle never counts as zooming. The AI's last zoom change must be closer than fit-all for the canvas size
+ * at that moment, still be the view when the AI finished, with both steps on screen. The fit-all model must equal the fit-view button.
+ */
+export function judgeZoomIn(view, calls, ids, fitButtonZoom) {
+  if (!view?.log?.length || !view.final) return { pass: false, detail: { error: 'no view log from the watched tab', view } };
+  const { log, final } = view;
+  let prev = log[0], zoomed = null;
+  for (const c of [...calls].sort((a, b) => a.endedMs - b.endedMs)) {
+    const s = log.findLast((x) => x.t <= c.endedMs) ?? log[0];
+    if (s.transform[2] !== prev.transform[2]) zoomed = { call: c.n + ' ' + c.tool, s };
+    prev = s;
+  }
+  const fitThen = zoomed && fitAllZoom(zoomed.s), fitEnd = fitAllZoom(final);
+  const shown = Object.fromEntries(ids.map((id) => [id, onScreen(canvasBox(final, id), { x: 0, y: 0, w: final.width, h: final.height })]));
+  const pass = !!zoomed && view.sameStore === true && zoomed.s.transform[2] > fitThen && final.transform[2] === zoomed.s.transform[2] &&
+    Object.values(shown).every(Boolean) && fitButtonZoom === fitEnd;
+  return {
+    pass,
+    detail: {
+      aiZoom: zoomed && { call: zoomed.call, zoom: zoomed.s.transform[2], canvas: zoomed.s.width + 'x' + zoomed.s.height, fitAllZoomForThatCanvas: fitThen },
+      whenAiFinished: { zoom: final.transform[2], canvas: final.width + 'x' + final.height, fitAllZoomForThatCanvas: fitEnd, onScreen: shown },
+      fitViewButton: { zoom: fitButtonZoom, matchesFitAllModel: fitButtonZoom === fitEnd },
+      viewChangesRecorded: log.length - 1, sameStore: view.sameStore,
+    },
+  };
+}
+
 const DOC_EDIT_TOOLS = ['add_nodes', 'update_nodes', 'delete_nodes', 'move_nodes', 'duplicate_nodes', 'reparent_node', 'set_collapsed', 'add_edges', 'update_edges', 'delete_edges',
   'create_diagram', 'auto_layout', 'align_nodes', 'distribute_nodes', 'fit_frame_to_contents', 'import_content', 'update_document', 'undo', 'redo'];
 // Same loop as the save_to_file race repro (work/repro-save-race.mjs) that confirmed the in-flight autosave fix.
 const SAVE_RACE = { edits: 20, pauseMs: 300 };
+// Scenario F: plain tabs (no file attached) on the same document during the AI's save turn (work/repro-multitab-save.mjs).
+const F_EXTRA_TABS = 2;
+const fExtraTabs = new Map();
+async function openPlainTab(page, docId) {
+  const tab = await page.context().newPage();
+  await tab.goto(new URL('/?doc=' + encodeURIComponent(docId) + '&pin=1', page.url()).href);
+  await tab.waitForFunction((id) => window.__wfc?.state().doc?.id === id && !!document.querySelector('.react-flow'), docId, { timeout: 30_000 });
+  return tab;
+}
+const tabFileState = (tab) => tab.evaluate(() => {
+  const s = window.__wfc.state();
+  return { doc: s.doc?.id ?? null, file: s.file.state, name: s.file.name, saveButton: document.querySelector('[data-testid="save-file"]')?.dataset.state ?? null };
+});
+const plainTabsOk = (tabs, docId) => Array.isArray(tabs) && tabs.length === F_EXTRA_TABS && tabs.every((t) => t.doc === docId && t.file === 'none' && t.name === null);
 
 /** Page init script: back the browser's save dialog with a real file in the origin-private file system (OPFS). */
 function opfsSavePicker() {
@@ -165,10 +242,18 @@ export const SCENARIOS = [
       await h.tool('set_ui', { documentId: docId, outline: true, minimap: true, snapToGrid: false });
       return { docId };
     },
-    prompt: (c) => 'My Workflow Canvas document ' + c.docId + ' has a simple review workflow. Please update it: rename "Do the work" to "Write draft" and "Revise" to "Edit draft". ' +
-      'Add a new decision diamond "Legal review needed?" after "Looks good?", connected from "Looks good?" with a dashed connector labeled "check legal". ' +
-      'Then select "Write draft" and "Edit draft" and zoom the view in on just those two. Hide the outline panel and the minimap, and turn on snap to grid. ' +
-      'Finally undo your last change and redo it so nothing is lost, and take a screenshot so I can check it.',
+    turns: [{
+      prompt: (c) => 'My Workflow Canvas document ' + c.docId + ' has a simple review workflow. Please update it: rename "Do the work" to "Write draft" and "Revise" to "Edit draft". ' +
+        'Add a new decision diamond "Legal review needed?" after "Looks good?", connected from "Looks good?" with a dashed connector labeled "check legal". ' +
+        'Then select "Write draft" and "Edit draft" and zoom the view in on just those two. Hide the outline panel and the minimap, and turn on snap to grid. ' +
+        'Finally undo your last change and redo it so nothing is lost, and take a screenshot so I can check it.',
+      async before(p) {
+        const r = await p.page.evaluate(installViewLog);
+        p.log('recording the view in the watched tab: ' + JSON.stringify(r));
+        return { viewLogInstalled: r.installed };
+      },
+    }],
+    async collect(p) { return { view: await p.page.evaluate(readViewLog) }; },
     verify(c, check) {
       const { doc, page, session } = c;
       const node = (id) => doc.nodes.find((n) => n.id === id);
@@ -186,8 +271,8 @@ export const SCENARIOS = [
       const same = (a) => JSON.stringify([...(a ?? [])].sort()) === JSON.stringify(want);
       const docSelection = session.selections?.[doc.id]?.nodes;
       check('"Write draft" and "Edit draft" are the selection (UI and the document\'s session selection)', same(page.selection.nodes) && same(docSelection), { want, ui: page.selection.nodes, session: docSelection ?? null, documentId: doc.id });
-      const both = want.every((id) => onScreen(page.nodes[id], page.pane));
-      check('view zoomed in on the two selected steps (both on screen, closer than fit-all)', both && page.zoom > c.fitZoom, { zoomWhenAiFinished: page.zoom, fitAllZoom: c.fitZoom, onScreen: both });
+      const zoom = judgeZoomIn(c.data.view, c.calls, want, c.fitZoom);
+      check('view zoomed in on the two selected steps (both on screen, closer than fit-all for the canvas size when the AI zoomed)', zoom.pass, zoom.detail);
       check('outline panel and minimap hidden in the UI', page.panels.outline === false && page.panels.minimap === false && !page.dom.outline && !page.dom.minimap, { panels: page.panels, dom: page.dom });
       check('snap to grid turned on', page.snapToGrid === true && session.snapToGrid === true, { ui: page.snapToGrid, session: session.snapToGrid });
       const ur = c.calls.filter((x) => x.tool === 'undo' || x.tool === 'redo');
@@ -287,7 +372,7 @@ export const SCENARIOS = [
     slug: 'F-save-to-attached-file',
     title: "Save to the person's .excalidraw file: no-file reason relayed, then AI edits land in the file the person attached",
     model: 'gpt-6-sol',
-    environmentNote: "The recorded tab's save dialog (showSaveFilePicker) is backed by a real file in the browser's origin-private file system via page.addInitScript, because a headless browser cannot show the OS dialog. The person's Save click, autosave and save_to_file then run the app's real File System Access code path; the harness reads that file back in the same tab and parses it with documentFromExcalidraw (src/shared/excalidraw.ts). After the AI turns the harness repeats the save_to_file race repro (" + SAVE_RACE.edits + ' x edit then immediate save_to_file) on the Start node notes.',
+    environmentNote: "The recorded tab's save dialog (showSaveFilePicker) is backed by a real file in the browser's origin-private file system via page.addInitScript, because a headless browser cannot show the OS dialog. The person's Save click, autosave and save_to_file then run the app's real File System Access code path; the harness reads that file back in the same tab and parses it with documentFromExcalidraw (src/shared/excalidraw.ts). After the AI turns the harness repeats the save_to_file race repro (" + SAVE_RACE.edits + ' x edit then immediate save_to_file) on the Start node notes. Just before the person presses Save, the harness opens ' + F_EXTRA_TABS + ' extra plain tabs on the same document (no save dialog override, so no file is ever attached to them); they stay open through the AI save turn and the race loop. They are opened before the Save click because the Playwright-bundled chromium-headless-shell kills the browser when a tab opened after the file was attached reads the stored OPFS file handle back from IndexedDB (harness limitation; Google Chrome is fine).',
     initScript: opfsSavePicker,
     async setup(h) {
       const r = await h.tool('create_document', { title: 'AI test F · Release checklist', template: 'workflow', open: false });
@@ -299,6 +384,11 @@ export const SCENARIOS = [
         async before(p) {
           const filesBeforeSave = (await opfsFiles(p.page)).map((f) => f.name);
           const stateBeforeSave = await saveState(p.page);
+          const tabs = [];
+          fExtraTabs.set(p.docId, tabs);
+          for (let i = 0; i < F_EXTRA_TABS; i++) tabs.push(await openPlainTab(p.page, p.docId));
+          await p.page.bringToFront();
+          p.log('opened ' + tabs.length + ' extra plain tabs on the document: ' + JSON.stringify(await Promise.all(tabs.map(tabFileState))));
           await p.caption('person presses Save and picks a file in the save dialog');
           await p.page.waitForTimeout(800);
           await p.page.locator('[data-testid="save-file"]').click();
@@ -308,7 +398,10 @@ export const SCENARIOS = [
           fs.writeFileSync(path.join(p.dir, 'attached-file.after-person-save.excalidraw'), file?.text ?? '');
           p.log('pressed Save (button ' + stateBeforeSave + ' -> saved) and picked "' + picked + '" (' + (file?.text.length ?? 0) + ' bytes written)');
           await p.caption('person pressed Save · autosaving to ' + picked);
-          return { filesBeforeSave, stateBeforeSave, stateAfterSave: await saveState(p.page), picked, baseline: parseFile(file) };
+          const stateAfterSave = await saveState(p.page);
+          const extraTabsBeforeAi = await Promise.all(tabs.map(tabFileState));
+          p.log('extra tabs after the Save click, before the AI turn: ' + JSON.stringify(extraTabsBeforeAi));
+          return { filesBeforeSave, stateBeforeSave, stateAfterSave, picked, baseline: parseFile(file), extraTabsBeforeAi };
         },
         prompt: (c) => 'I pressed Save in the browser and picked a file. Now update my Workflow Canvas document ' + c.docId + ': rename "Do the work" to "Write release notes", ' +
           'add a new step "Security sign-off" connected from "Write release notes" with a dashed connector labeled "before merge", and add a sticky note "Ship on Friday" next to "Done". ' +
@@ -320,8 +413,10 @@ export const SCENARIOS = [
       const picked = await pickedFile(p.page);
       const afterAi = (await opfsFiles(p.page)).find((f) => f.name === picked);
       const serverAtFileRead = await p.http('/api/documents/' + encodeURIComponent(p.docId));
+      const tabs = fExtraTabs.get(p.docId) ?? [];
+      const extraTabsAfterAi = await Promise.all(tabs.map(tabFileState));
       fs.writeFileSync(path.join(p.dir, 'attached-file.after-ai.excalidraw'), afterAi?.text ?? '');
-      p.log('after the AI turns the attached file "' + picked + '" has ' + (afterAi?.text.length ?? 0) + ' bytes');
+      p.log('after the AI turns the attached file "' + picked + '" has ' + (afterAi?.text.length ?? 0) + ' bytes; extra tabs ' + JSON.stringify(extraTabsAfterAi));
       await p.caption('harness: ' + SAVE_RACE.edits + ' x edit then immediate save_to_file');
       const results = [];
       const lastEdit = 'save-race edit ' + (SAVE_RACE.edits - 1);
@@ -336,8 +431,11 @@ export const SCENARIOS = [
       const raceFile = parseFile(afterRace);
       const fileStartNotes = raceFile.doc?.nodes.find((n) => n.id === 'start')?.notes ?? null;
       p.log('save race: ' + results.filter((r) => r?.ok === true).length + '/' + SAVE_RACE.edits + ' save_to_file ok; file Start notes = ' + JSON.stringify(fileStartNotes));
+      const extraTabsAfterRace = await Promise.all(tabs.map(tabFileState));
+      for (const tab of tabs) await tab.close().catch(() => {});
+      fExtraTabs.delete(p.docId);
       return {
-        attached: parseFile(afterAi), serverAtFileRead,
+        attached: parseFile(afterAi), serverAtFileRead, extraTabsAfterAi, extraTabsAfterRace,
         race: { ...SAVE_RACE, results, lastEdit, file: raceFile.name ?? null, parseError: raceFile.parseError, fileStartNotes },
         evidenceFiles: ['attached-file.after-person-save.excalidraw', 'attached-file.after-ai.excalidraw', 'attached-file.excalidraw'],
       };
@@ -375,10 +473,15 @@ export const SCENARIOS = [
         { picked: data.picked ?? null, savesAfterLastEdit: savesAfter.map((x) => ({ ok: x.resultJson?.ok, ui: x.resultJson?.ui })), sequence: t2.map((x) => x.tool + (x.ok ? '' : ' ✗')) });
       const m2 = c.finalMessages[1] ?? '';
       check('turn 2: AI told the person which file it saved to', !!data.picked && m2.includes(data.picked.replace(/\.excalidraw$/, '')), { file: data.picked ?? null, finalMessage: m2 });
+      const saves2 = t2.filter((x) => x.tool === 'save_to_file');
+      check('turn 2 with ' + F_EXTRA_TABS + ' extra plain tabs (no file) on the document: every AI save_to_file reported ok:true with the attached file name, and the file has the edits',
+        plainTabsOk(data.extraTabsBeforeAi, doc.id) && plainTabsOk(data.extraTabsAfterAi, doc.id) && saves2.length > 0 && saves2.every((x) => x.ok && x.resultJson?.ok === true && x.resultJson?.ui?.file === data.picked)
+          && savesAfter.length > 0 && a?.name === data.picked && fLanded(fEdits(a?.doc)),
+        { picked: data.picked ?? null, extraTabsBeforeAi: data.extraTabsBeforeAi ?? null, extraTabsAfterAi: data.extraTabsAfterAi ?? null, aiSaves: saves2.map((x) => ({ ok: x.resultJson?.ok, ui: x.resultJson?.ui })), file: a?.name ?? null, edits: fEdits(a?.doc) });
       const race = data.race;
       const bad = (race?.results ?? []).map((r, i) => ({ i, r })).filter(({ r }) => r?.ok !== true || r?.ui?.file !== data.picked);
       check('save race: every edit-then-immediate save_to_file returned ok:true and the file has the last edit', !!race && race.results.length === race.edits && bad.length === 0 && race.file === data.picked && race.fileStartNotes === race.lastEdit,
-        { edits: race?.edits, ok: race ? race.results.length - bad.length : 0, failures: bad.slice(0, 5), lastEdit: race?.lastEdit, fileStartNotes: race?.fileStartNotes, parseError: race?.parseError });
+        { edits: race?.edits, ok: race ? race.results.length - bad.length : 0, failures: bad.slice(0, 5), lastEdit: race?.lastEdit, fileStartNotes: race?.fileStartNotes, parseError: race?.parseError, extraTabsDuringRace: data.extraTabsAfterRace ?? null });
     },
   },
 ];

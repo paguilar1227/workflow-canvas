@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test as base, expect, type APIRequestContext, type Download, type Locator, type Page, type TestInfo } from '@playwright/test';
 import { EVIDENCE_DIR, slugOf } from './evidence';
+import { Phone } from './phone';
 
 export { expect };
 
@@ -23,11 +24,11 @@ export type Pt = { x: number; y: number };
 export type Box = { x: number; y: number; width: number; height: number };
 export type Template = 'blank' | 'mindmap' | 'architecture' | 'workflow';
 
-/** Screenshots and notes for one journey, written to EVIDENCE_DIR/<test-slug>/. */
+/** Screenshots and notes for one journey, written to EVIDENCE_DIR/<project>/<test-slug>/. */
 export class Evidence {
   readonly dir: string;
   private seq = 0;
-  constructor(private page: Page, private info: TestInfo) { this.dir = path.join(EVIDENCE_DIR, slugOf(info.title)); }
+  constructor(private page: Page, private info: TestInfo) { this.dir = path.join(EVIDENCE_DIR, info.project.name, slugOf(info.title)); }
   reset() { fs.rmSync(this.dir, { recursive: true, force: true }); fs.mkdirSync(this.dir, { recursive: true }); }
   proves(text: string) { this.info.annotations.push({ type: 'proves', description: text }); }
   note(text: string) { this.info.annotations.push({ type: 'note', description: text }); }
@@ -219,7 +220,7 @@ export class App {
   }
 }
 
-export const test = base.extend<{ app: App; ev: Evidence }>({
+export const test = base.extend<{ app: App; ev: Evidence; phone: Phone }>({
   app: async ({ page, request }, use) => {
     const app = new App(page, request);
     await app.resetSession();
@@ -230,5 +231,8 @@ export const test = base.extend<{ app: App; ev: Evidence }>({
     const ev = new Evidence(page, info);
     ev.reset();
     await use(ev);
+  },
+  phone: async ({ page, app, ev }, use) => {
+    await use(new Phone(page, app, ev));
   },
 });

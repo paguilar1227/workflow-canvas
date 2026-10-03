@@ -6,6 +6,7 @@ import { openDocument } from '../sync';
 import { childrenMap } from '../../shared/graph';
 import type { CanvasNode } from '../../shared/types';
 import { Menu, MenuItem } from './TopBar';
+import { ColumnHeader } from './Chrome';
 
 function OutlineNode({ n, depth, kids }: { n: CanvasNode; depth: number; kids: Map<string, CanvasNode[]> }) {
   const selected = useApp((s) => s.selection.nodes.includes(n.id));
@@ -17,7 +18,7 @@ function OutlineNode({ n, depth, kids }: { n: CanvasNode; depth: number; kids: M
         className={'outline-row' + (selected ? ' selected' : '')}
         style={{ paddingLeft: 4 + depth * 14 }}
         data-testid={'outline-' + n.id}
-        onClick={() => { actions.select([n.id]); actions.focusNodes([n.id]); }}
+        onClick={() => { actions.select([n.id]); actions.focusNodes([n.id]); actions.revealCanvas(); }}
         onDoubleClick={() => setEditing(true)}
       >
         {children.length ? (
@@ -49,20 +50,21 @@ export function LeftPanel() {
 
   return (
     <aside className="panel" data-testid="left-panel" onClick={() => set({ openMenu: null })}>
+      <ColumnHeader panel="outline" title="Documents & outline" />
       <div className="panel-section">
         <div className="panel-title">
           <span>Documents</span>
           <Menu id="new-doc" icon={<Plus size={14} />} align="left" testId="new-doc">
             <div className="menu-label">New from template</div>
-            <MenuItem testId="new-blank" onClick={() => actions.createDocument('Untitled canvas', 'blank')}>Blank canvas</MenuItem>
-            <MenuItem testId="new-mindmap" onClick={() => actions.createDocument('New mind map', 'mindmap')}>Mind map</MenuItem>
-            <MenuItem testId="new-architecture" onClick={() => actions.createDocument('New architecture', 'architecture')}>Architecture (lanes)</MenuItem>
-            <MenuItem testId="new-workflow" onClick={() => actions.createDocument('New workflow', 'workflow')}>Workflow</MenuItem>
+            <MenuItem testId="new-blank" onClick={() => { actions.createDocument('Untitled canvas', 'blank'); actions.revealCanvas(); }}>Blank canvas</MenuItem>
+            <MenuItem testId="new-mindmap" onClick={() => { actions.createDocument('New mind map', 'mindmap'); actions.revealCanvas(); }}>Mind map</MenuItem>
+            <MenuItem testId="new-architecture" onClick={() => { actions.createDocument('New architecture', 'architecture'); actions.revealCanvas(); }}>Architecture (lanes)</MenuItem>
+            <MenuItem testId="new-workflow" onClick={() => { actions.createDocument('New workflow', 'workflow'); actions.revealCanvas(); }}>Workflow</MenuItem>
           </Menu>
         </div>
         <div className="doc-list">
           {documents.map((d) => (
-            <div key={d.id} className={'doc-item' + (d.id === docId ? ' active' : '')} data-testid={'doc-' + d.id} onClick={() => d.id !== docId && openDocument(d.id)}>
+            <div key={d.id} className={'doc-item' + (d.id === docId ? ' active' : '')} data-testid={'doc-' + d.id} onClick={() => { if (d.id !== docId) openDocument(d.id); actions.revealCanvas(); }}>
               <FileText size={13} />
               <span className="name" title={d.title}>{d.title}</span>
               <span className="meta">{d.nodeCount}</span>
@@ -79,7 +81,7 @@ export function LeftPanel() {
         {!doc || !doc.nodes.length ? <div className="outline-empty">Empty canvas. Double-click the canvas or press N to add a topic.</div> : null}
         {frames.map((f) => (
           <div key={f.id}>
-            <div className="outline-row frame-row" onClick={() => { actions.select([f.id]); actions.focusNodes([f.id]); }} data-testid={'outline-' + f.id}>{f.title || 'Frame'}</div>
+            <div className="outline-row frame-row" onClick={() => { actions.select([f.id]); actions.focusNodes([f.id]); actions.revealCanvas(); }} data-testid={'outline-' + f.id}>{f.title || 'Frame'}</div>
             {roots.filter((n) => n.frameId === f.id).sort(byPos).map((n) => <OutlineNode key={n.id} n={n} depth={0} kids={kids} />)}
           </div>
         ))}

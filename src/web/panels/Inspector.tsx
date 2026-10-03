@@ -2,6 +2,7 @@ import { useEffect, useState, type KeyboardEvent } from 'react';
 import { AlignLeft, AlignCenterHorizontal, AlignRight, AlignStartVertical, AlignCenterVertical, AlignEndVertical, Columns3, Rows3, Frame, Link as LinkIcon, Trash2, Copy, ArrowLeftRight } from 'lucide-react';
 import { useApp } from '../store';
 import * as actions from '../actions';
+import { ColumnHeader } from './Chrome';
 import { COLOR_NAMES, NODE_SHAPES, NODE_STATUSES, EDGE_ROUTINGS, EDGE_STYLES, ARROW_MODES, type CanvasNode, type CanvasEdge, type ColorName } from '../../shared/types';
 
 function Text({ label, value, onCommit, multiline, mono, testId, placeholder }: { label: string; value?: string; onCommit: (v: string) => void; multiline?: boolean; mono?: boolean; testId?: string; placeholder?: string }) {
@@ -133,6 +134,7 @@ function EdgeInspector({ e }: { e: CanvasEdge }) {
 
 function DocInspector() {
   const doc = useApp((s) => s.doc);
+  const touch = useApp((s) => s.compact || s.coarse);
   if (!doc) return null;
   const frames = doc.nodes.filter((n) => n.kind === 'frame').length;
   return (
@@ -149,7 +151,9 @@ function DocInspector() {
       <div className="toggle-row"><span>Auto-arrange mind-map branches</span><button className={'switch' + (doc.settings.autoArrange ? ' on' : '')} aria-label="Toggle auto-arrange" onClick={() => actions.setDocSettings({ autoArrange: !doc.settings.autoArrange })} /></div>
       <SnapToggle />
       <p className="inspector-empty" style={{ marginTop: 14 }}>
-        <b>Tip:</b> select a topic and press <span className="kbd">Tab</span> for a child, <span className="kbd">Enter</span> for a sibling. Drag from a node's edge dot to connect. Double-click empty canvas to add a topic.
+        {touch
+          ? <><b>Tip:</b> tap a topic, then use <b>Child</b> and <b>Sibling</b> in the bar above the toolbar. Long-press for more; double-tap empty canvas to add a topic.</>
+          : <><b>Tip:</b> select a topic and press <span className="kbd">Tab</span> for a child, <span className="kbd">Enter</span> for a sibling. Drag from a node's edge dot to connect. Double-click empty canvas to add a topic.</>}
       </p>
     </div>
   );
@@ -167,6 +171,7 @@ export function Inspector() {
   const edge = selection.edges.length === 1 && !nodes.length ? doc?.edges.find((e) => e.id === selection.edges[0]) : undefined;
   return (
     <aside className="panel right" data-testid="inspector">
+      <ColumnHeader panel="inspector" title="Inspector" />
       <div className="panel-section grow">
         {nodes.length === 1 ? <NodeInspector key={nodes[0].id} n={nodes[0]} /> : nodes.length > 1 ? <MultiInspector ids={nodes.map((n) => n.id)} /> : edge ? <EdgeInspector key={edge.id} e={edge} /> : <DocInspector />}
       </div>

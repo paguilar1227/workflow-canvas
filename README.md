@@ -35,6 +35,22 @@ Press **?** in the app for the full shortcut list.
 
 Press **Save** (⌘S) to pick where to save the drawing in the Finder save dialog. From then on every change, including AI edits, is autosaved to that `.excalidraw` file. **File → Open** (⌘O) loads a `.excalidraw` file and keeps autosaving to it; **Save as** (⇧⌘S) picks a new file. Files are standard Excalidraw scenes, so they open in Excalidraw too; Workflow Canvas stores everything Excalidraw has no native field for (mind-map structure, collapse state, statuses, connector routing, document settings) in Excalidraw's `customData`, so reopening a saved file in Workflow Canvas is lossless. Saving to disk uses the browser's File System Access API (Chrome, Edge and other Chromium browsers); after a reload one click on **Resume autosave** re-grants access. In other browsers Save downloads a copy instead. Documents are also kept on the server as before.
 
+## Phones and tablets
+
+Whenever the screen is too narrow for both side columns and the toolbar (phones, portrait tablets, landscape phones, and desktop windows under about 1120px) the outline and inspector become drawers that slide over the canvas. Open the outline with ☰, the inspector with **Style** or **More → Inspector**; each drawer expands to full width or closes from its own header, and tapping outside closes it. Everything else in the top bar moves into one **More** sheet.
+
+Touch works like other mobile whiteboards:
+
+| Do this | Gesture |
+| --- | --- |
+| Pan / zoom | Drag empty canvas / pinch |
+| Select several nodes | **Area** tool, then drag |
+| Edit, add child or sibling, style, delete | Action bar shown while something is selected |
+| Context menu | Long-press (opens as a bottom sheet) |
+| Add a topic, sticky, text or frame | Toolbar button, then tap where it should go |
+
+On touch screens every control is at least 44×44px (WCAG 2.5.5, Apple HIG) and text fields use 16px type so iOS does not zoom when you type. Drawer state is per device; the AI's panel tools still control the docked columns on desktop. Mobile browsers have no File System Access API, so **Save** downloads a copy there.
+
 ## Themes
 
 Themes are token sets (CSS variables) swappable at runtime by humans or AI. Directions were researched with the **Refero** MCP (via Composio) and adapted, not cloned:

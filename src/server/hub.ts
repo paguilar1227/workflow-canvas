@@ -8,7 +8,14 @@ import type { OpEvent, Store } from './store';
 import { isTrustedRequest } from './guard';
 
 interface Client { id: string; ws: WebSocket; docId: string | null; connectedAt: number; lastActive: number }
-interface Pending { resolve: (v: unknown) => void; timer: NodeJS.Timeout }
+interface Pending {
+  resolve: (v: unknown) => void;
+  timer: NodeJS.Timeout;
+  /** When set, wait for the first answer this accepts, or for every target, instead of the first answer. */
+  prefer?: (result: Record<string, unknown>) => boolean;
+  expected?: number;
+  results?: Record<string, unknown>[];
+}
 
 /** Session fields that are global preferences and therefore mirrored to every open UI. */
 const SHARED_FIELDS: (keyof SessionState)[] = ['theme', 'background'];
@@ -103,26 +110,40 @@ export class Hub {
         break;
       case 'ack': {
         const p = this.pending.get(msg.requestId);
-        if (p) { clearTimeout(p.timer); this.pending.delete(msg.requestId); p.resolve(msg.result ?? { ok: true }); }
+        if (!p) break;
+        const result = (msg.result ?? { ok: true }) as Record<string, unknown>;
+        if (p.prefer) {
+          p.results!.push(result);
+          if (!p.prefer(result) && p.results!.length < p.expected!) break;
+          clearTimeout(p.timer); this.pending.delete(msg.requestId);
+          p.resolve(p.results!.find(p.prefer) ?? p.results!.find((r) => r.file) ?? p.results![0]);
+          break;
+        }
+        clearTimeout(p.timer); this.pending.delete(msg.requestId); p.resolve(result);
         break;
       }
     }
   }
 
-  private request(targets: Client[], msg: Record<string, unknown>, timeoutMs: number): Promise<unknown> {
+  private request(targets: Client[], msg: Record<string, unknown>, timeoutMs: number, prefer?: Pending['prefer']): Promise<unknown> {
     if (!targets.length) return Promise.resolve({ delivered: false, note: 'No browser UI is connected. Open the app in a browser to see view changes live.' });
     const requestId = nanoid(8);
     return new Promise((resolve) => {
-      const timer = setTimeout(() => { this.pending.delete(requestId); resolve({ delivered: true, acknowledged: false }); }, timeoutMs);
-      this.pending.set(requestId, { resolve, timer });
+      const timer = setTimeout(() => {
+        const p = this.pending.get(requestId);
+        this.pending.delete(requestId);
+        const got = p?.results ?? [];
+        resolve(got.length ? (got.find((r) => r.file) ?? got[0]) : { delivered: true, acknowledged: false });
+      }, timeoutMs);
+      this.pending.set(requestId, prefer ? { resolve, timer, prefer, expected: targets.length, results: [] } : { resolve, timer });
       for (const t of targets) this.send(t, { ...msg, requestId });
     });
   }
 
   /** Ask connected UIs to perform a view action (zoom, select, open, panels...). */
-  view(action: string, args: Record<string, unknown>, docId?: string) {
+  view(action: string, args: Record<string, unknown>, docId?: string, prefer?: Pending['prefer']) {
     const targets = action === 'open_document' ? [...this.clients.values()] : this.clientsFor(docId).length ? this.clientsFor(docId) : docId ? [] : [...this.clients.values()];
-    return this.request(targets, { type: 'view', action, args, docId }, VIEW_ACK_TIMEOUT_MS);
+    return this.request(targets, { type: 'view', action, args, docId }, VIEW_ACK_TIMEOUT_MS, prefer);
   }
 
   /** Render the canvas to an image in a browser that can show the document. */

@@ -17,6 +17,8 @@ import * as actions from '../actions';
 import type { CommandInput } from '../../shared/commands';
 
 const FLASH_MS = 1800;
+const MIN_ZOOM = 0.05;
+const MAX_ZOOM = 4;
 /** Parallel connectors between the same pair are spread so labels (about 20px tall) don't overlap. */
 const PARALLEL_EDGE_GAP = 28;
 
@@ -29,7 +31,12 @@ function childSideOf(n: CanvasNode, kids: CanvasNode[]): NodeData['childSide'] {
 }
 
 export function Canvas() {
+  useLongPressMenu();
+  useTouchPinch();
   const doc = useApp((s) => s.doc);
+  const coarse = useApp((s) => s.coarse);
+  /** On touch one finger pans (React Flow's touch default); the Area tool arms a single box-select drag. */
+  const areaSelect = useApp((s) => s.areaSelect);
   const selection = useApp((s) => s.selection);
   const overlay = useApp((s) => s.overlay);
   const editingId = useApp((s) => s.editingId);
@@ -254,6 +261,7 @@ export function Canvas() {
       onDoubleClick={(e) => {
         const t = e.target as HTMLElement;
         if (!t.classList.contains('react-flow__pane') || viewMode) return;
+        if (taps.lastTouch && !taps.prevOnPane) return;
         actions.addNode('topic', flowPoint(e.clientX, e.clientY));
       }}
       nodesDraggable={!viewMode && session.mode !== 'pan'}
@@ -261,7 +269,8 @@ export function Canvas() {
       connectionMode={ConnectionMode.Loose}
       selectionOnDrag={session.mode === 'select'}
       selectionMode={SelectionMode.Partial}
-      panOnDrag={session.mode === 'pan' ? true : [1, 2]}
+      panOnDrag={session.mode === 'pan' ? true : areaSelect ? false : [1, 2]}
+      onSelectionEnd={() => { if (get().areaSelect) set({ areaSelect: false }); }}
       panOnScroll
       zoomOnScroll={false}
       zoomOnPinch
@@ -273,10 +282,12 @@ export function Canvas() {
       elevateNodesOnSelect={false}
       snapToGrid={session.snapToGrid}
       snapGrid={[theme.gap, theme.gap]}
-      minZoom={0.05}
-      maxZoom={4}
+      minZoom={MIN_ZOOM}
+      maxZoom={MAX_ZOOM}
+      nodeDragThreshold={coarse ? TOUCH_SLOP_PX : undefined}
+      autoPanOnSelection={!coarse}
       attributionPosition="bottom-right"
-      className={session.mode === 'pan' ? 'mode-pan' : 'mode-select'}
+      className={(session.mode === 'pan' ? 'mode-pan' : 'mode-select') + (selection.nodes.length > 1 ? ' multi-select' : '')}
     >
       <MarkerDefs />
       {bgVariant !== 'none' ? <Background variant={variant} gap={theme.gap} size={variant === BackgroundVariant.Dots ? 1.3 : 1} color="var(--grid)" /> : null}
@@ -284,6 +295,128 @@ export function Canvas() {
     </ReactFlow>
     </>
   );
+}
+
+/** The last two pointer presses: a touch double-tap only adds a topic when both taps landed on empty canvas. */
+const taps = { prevOnPane: false, lastTouch: false };
+
+/** Android's default long-press timeout and touch slop (ViewConfiguration); iOS Safari never fires contextmenu for touch. */
+const LONG_PRESS_MS = 500;
+const TOUCH_SLOP_PX = 8;
+
+/** A touch long-press on a node, connector or empty canvas opens the same context menu as a right-click. */
+function useLongPressMenu() {
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let start: { x: number; y: number; id: number; pane: boolean } | null = null;
+    let fired = false;
+    const cancel = () => { clearTimeout(timer); start = null; };
+    let lastOnPane = false;
+    const down = (e: PointerEvent) => {
+      fired = false;
+      const onPane = !!(e.target as HTMLElement | null)?.classList?.contains('react-flow__pane');
+      taps.prevOnPane = lastOnPane;
+      taps.lastTouch = e.pointerType !== 'mouse';
+      lastOnPane = onPane;
+      if (e.pointerType === 'mouse') return;
+      if (start) { cancel(); return; }
+      const t = e.target as HTMLElement | null;
+      if (!t?.closest('.react-flow') || t.closest('.react-flow__panel, .react-flow__resize-control, textarea, input')) return;
+      const s = get();
+      if (s.session.mode !== 'select' || s.placing || s.areaSelect || s.editingId || s.editingEdgeId) return;
+      start = { x: e.clientX, y: e.clientY, id: e.pointerId, pane: t.classList.contains('react-flow__pane') };
+      timer = setTimeout(() => {
+        if (!start) return;
+        const { x, y } = start;
+        start = null;
+        fired = true;
+        // A press on a connection dot means its node: the dots sit on the node's edge.
+        const el = document.elementFromPoint(x, y) as HTMLElement | null;
+        const nodeId = (el?.closest('.react-flow__node') as HTMLElement | null)?.dataset.id;
+        const edgeEl = nodeId ? null : (el?.closest('.react-flow__edge') as HTMLElement | null);
+        const edgeId = edgeEl?.dataset.id && get().doc?.edges.some((d) => d.id === edgeEl.dataset.id) ? edgeEl.dataset.id : undefined;
+        if (nodeId && !get().selection.nodes.includes(nodeId)) set({ selection: { nodes: [nodeId], edges: [] } });
+        if (edgeId) set({ selection: { nodes: [], edges: [edgeId] } });
+        openCtx({ clientX: x, clientY: y } as MouseEvent, nodeId, edgeId);
+      }, LONG_PRESS_MS);
+    };
+    const move = (e: PointerEvent) => { if (start && e.pointerId === start.id && Math.hypot(e.clientX - start.x, e.clientY - start.y) > TOUCH_SLOP_PX) cancel(); };
+    const end = (e: PointerEvent) => {
+      if (!start || e.pointerId !== start.id) return;
+      // React Flow drops pane clicks from touch while drag-to-select is on, so a tap on empty canvas clears the selection here.
+      if (e.type === 'pointerup' && start.pane) set({ selection: { nodes: [], edges: [] }, menu: null, openMenu: null, editingId: null });
+      cancel();
+    };
+    const click = (e: MouseEvent) => { if (fired) { fired = false; e.stopPropagation(); e.preventDefault(); } };
+    const nativeMenu = (e: MouseEvent) => { if (fired || start) e.preventDefault(); };
+    window.addEventListener('pointerdown', down, true);
+    window.addEventListener('pointermove', move, true);
+    window.addEventListener('pointerup', end, true);
+    window.addEventListener('pointercancel', end, true);
+    window.addEventListener('click', click, true);
+    window.addEventListener('contextmenu', nativeMenu, true);
+    return () => {
+      cancel();
+      window.removeEventListener('pointerdown', down, true);
+      window.removeEventListener('pointermove', move, true);
+      window.removeEventListener('pointerup', end, true);
+      window.removeEventListener('pointercancel', end, true);
+      window.removeEventListener('click', click, true);
+      window.removeEventListener('contextmenu', nativeMenu, true);
+    };
+  }, []);
+}
+
+/**
+ * Two-finger pinch/pan that starts on a node or connector. React Flow only zooms when the gesture starts on empty
+ * canvas (draggable nodes are "nopan"), which makes zooming a dense diagram on a phone hit-or-miss.
+ */
+function useTouchPinch() {
+  useEffect(() => {
+    type Pt = { x: number; y: number };
+    let g: { ids: [number, number]; d0: number; m0: Pt; v0: Viewport; rect: DOMRect } | null = null;
+    const at = (t: Touch, r: DOMRect): Pt => ({ x: t.clientX - r.left, y: t.clientY - r.top });
+    const mid = (a: Pt, b: Pt): Pt => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+    const dist = (a: Pt, b: Pt) => Math.hypot(a.x - b.x, a.y - b.y) || 1;
+    const byId = (list: TouchList, id: number) => [...list].find((t) => t.identifier === id);
+    const start = (e: TouchEvent) => {
+      if (g || e.touches.length !== 2) return;
+      const rf = (e.target as HTMLElement | null)?.closest?.('.react-flow') as HTMLElement | null;
+      const f = flow();
+      if (!rf || !f) return;
+      const onElement = [...e.touches].some((t) => (t.target as HTMLElement | null)?.closest?.('.react-flow__node, .react-flow__edge'));
+      if (!onElement) return;
+      const rect = rf.getBoundingClientRect();
+      const [a, b] = [at(e.touches[0], rect), at(e.touches[1], rect)];
+      g = { ids: [e.touches[0].identifier, e.touches[1].identifier], d0: dist(a, b), m0: mid(a, b), v0: f.getViewport(), rect };
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    const move = (e: TouchEvent) => {
+      if (!g) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const ta = byId(e.touches, g.ids[0]), tb = byId(e.touches, g.ids[1]);
+      const f = flow();
+      if (!ta || !tb || !f) return;
+      const a = at(ta, g.rect), b = at(tb, g.rect), m = mid(a, b);
+      const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, g.v0.zoom * dist(a, b) / g.d0));
+      const fx = (g.m0.x - g.v0.x) / g.v0.zoom, fy = (g.m0.y - g.v0.y) / g.v0.zoom;
+      f.setViewport({ x: m.x - fx * zoom, y: m.y - fy * zoom, zoom });
+    };
+    const end = (e: TouchEvent) => { if (g && (!byId(e.touches, g.ids[0]) || !byId(e.touches, g.ids[1]))) g = null; };
+    const opts = { capture: true, passive: false } as const;
+    window.addEventListener('touchstart', start, opts);
+    window.addEventListener('touchmove', move, opts);
+    window.addEventListener('touchend', end, true);
+    window.addEventListener('touchcancel', end, true);
+    return () => {
+      window.removeEventListener('touchstart', start, opts);
+      window.removeEventListener('touchmove', move, opts);
+      window.removeEventListener('touchend', end, true);
+      window.removeEventListener('touchcancel', end, true);
+    };
+  }, []);
 }
 
 /** Freehand pen (Excalidraw-style "draw" tool): drag to draw, release to commit a 'drawing' node. */

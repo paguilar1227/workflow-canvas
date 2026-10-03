@@ -160,7 +160,8 @@ export function createTools(store: Store, hub: Hub): ToolDef[] {
       input: { documentId: docIdArg },
       run: async (a) => {
         const id = resolveDoc(a.documentId);
-        const ack = (await hub.view('save_file', {}, id)) as Record<string, unknown>;
+        // Several tabs can show the document; only the one with the file attached can save it, so prefer its answer.
+        const ack = (await hub.view('save_file', {}, id, (r) => r.ok === true)) as Record<string, unknown>;
         return { json: { ok: ack?.ok === true, documentId: id, ui: ack } };
       },
     },

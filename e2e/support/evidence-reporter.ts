@@ -8,6 +8,9 @@ const FFMPEG = process.env.FFMPEG ?? (fs.existsSync('/opt/homebrew/bin/ffmpeg') 
 
 interface Row {
   test: string;
+  project: string;
+  journey: string;
+  /** Evidence folder relative to EVIDENCE_DIR: <project>/<journey>. */
   slug: string;
   spec: string;
   status: string;
@@ -29,11 +32,11 @@ function toMp4(src: string, dest: string) {
 }
 
 function sideBySide(a: string, b: string, dest: string) {
-  const r = spawnSync(FFMPEG, ['-y', '-loglevel', 'error', '-i', a, '-i', b, '-filter_complex', '[0:v]scale=960:600[l];[1:v]scale=960:600[r];[l][r]hstack=inputs=2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', dest]);
+  const r = spawnSync(FFMPEG, ['-y', '-loglevel', 'error', '-i', a, '-i', b, '-filter_complex', '[0:v]scale=-2:720[l];[1:v]scale=-2:720[r];[l][r]hstack=inputs=2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', dest]);
   return r.status === 0 && fs.existsSync(dest);
 }
 
-/** Copies each journey's videos (as H.264 MP4) and screenshots into EVIDENCE_DIR/<slug>/ and writes summary.json. */
+/** Copies each journey's videos (as H.264 MP4) and screenshots into EVIDENCE_DIR/<project>/<slug>/ and writes summary.json with a per-project breakdown. */
 export default class EvidenceReporter implements Reporter {
   private results = new Map<string, { test: TestCase; result: TestResult }>();
   private baseURL = '';
@@ -52,8 +55,10 @@ export default class EvidenceReporter implements Reporter {
     fs.mkdirSync(EVIDENCE_DIR, { recursive: true });
     const rows: Row[] = [];
     for (const { test, result } of this.results.values()) {
-      const slug = slugOf(test.title);
-      const dir = path.join(EVIDENCE_DIR, slug);
+      const project = test.parent.project()?.name ?? 'default';
+      const journey = slugOf(test.title);
+      const slug = project + '/' + journey;
+      const dir = path.join(EVIDENCE_DIR, project, journey);
       fs.mkdirSync(dir, { recursive: true });
       const webms = result.attachments.filter((a) => a.path && a.contentType.startsWith('video/') && fs.existsSync(a.path));
       const videos: string[] = [];
@@ -80,6 +85,8 @@ export default class EvidenceReporter implements Reporter {
       const uniq = (xs: string[]) => [...new Set(xs)];
       rows.push({
         test: test.title,
+        project,
+        journey,
         slug,
         spec: path.relative(this.rootDir, test.location.file).split(path.sep).join('/'),
         status: result.status,
@@ -98,13 +105,16 @@ export default class EvidenceReporter implements Reporter {
     try { previous = JSON.parse(fs.readFileSync(file, 'utf8')).tests ?? []; } catch { /* first run */ }
     const bySlug = new Map(previous.map((r) => [r.slug, r]));
     for (const r of rows) bySlug.set(r.slug, r);
-    const tests = [...bySlug.values()].sort((a, b) => a.spec.localeCompare(b.spec) || a.test.localeCompare(b.test));
+    const tests = [...bySlug.values()].filter((t) => t.project).sort((a, b) => a.project.localeCompare(b.project) || a.spec.localeCompare(b.spec) || a.test.localeCompare(b.test));
+    const count = (ts: Row[]) => ({ passed: ts.filter((t) => t.status === 'passed').length, failed: ts.filter((t) => t.status !== 'passed' && t.status !== 'skipped').length, total: ts.length });
+    const projects = Object.fromEntries([...new Set(tests.map((t) => t.project))].map((p) => [p, count(tests.filter((t) => t.project === p))]));
     const summary = {
       generatedAt: new Date().toISOString(),
       baseURL: this.baseURL,
       evidenceDir: EVIDENCE_DIR,
       passed: tests.filter((t) => t.status === 'passed').length,
       failed: tests.filter((t) => t.status !== 'passed' && t.status !== 'skipped').length,
+      projects,
       tests,
     };
     fs.writeFileSync(file, JSON.stringify(summary, null, 2) + '\n');

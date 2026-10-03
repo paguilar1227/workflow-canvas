@@ -61,6 +61,7 @@ test('focus in zen mode and present in view mode', async ({ page, app, ev }) => 
 
   await test.step('View › View mode makes the canvas read-only', async () => {
     await app.fit();
+    await expect(page.locator('[data-testid="undo"]:visible'), 'there is an edit to undo before presenting').toBeEnabled();
     await app.menu('menu-view', 'view-readonly');
     await expect(page.getByTestId('view-pill')).toContainText('read-only');
     await expect(page.getByTestId('toast')).toContainText('View mode');
@@ -86,6 +87,14 @@ test('focus in zen mode and present in view mode', async ({ page, app, ev }) => 
     await page.mouse.dblclick(spot.x, spot.y);
     await page.waitForTimeout(400);
     await app.settled();
+    for (const id of ['undo', 'redo']) {
+      const button = page.locator('[data-testid="' + id + '"]:visible');
+      await expect(button, id + ' is disabled while presenting (BUG-P13)').toBeDisabled();
+      await button.click({ force: true });
+      await page.waitForTimeout(400);
+    }
+    await app.settled();
+    expect((await app.doc()).nodes.map((n) => n.title).sort(), 'Undo and Redo in the top bar change nothing in view mode (BUG-P13)').toEqual(before.nodes.map((n) => n.title).sort());
     const now = await app.doc();
     expect(now.nodes, 'no topic was added, removed, renamed or moved').toEqual(before.nodes);
     expect(now.edges).toEqual(before.edges);
