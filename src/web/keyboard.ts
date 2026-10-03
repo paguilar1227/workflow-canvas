@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { get, set } from './store';
 import * as actions from './actions';
 import { dispatch } from './sync';
+import * as files from './files';
 
 function isTyping(e: KeyboardEvent) {
   const t = e.target as HTMLElement | null;
@@ -14,13 +15,16 @@ export function useKeyboard() {
       const s = get();
       const mod = e.metaKey || e.ctrlKey;
       if (e.key === 'Escape' && s.session.mode === 'draw') actions.setMode('select');
-      if (e.key === 'Escape') { set({ menu: null, openMenu: null, helpOpen: false, importOpen: false, aiOpen: false, editingId: null, editingEdgeId: null }); if (!isTyping(e)) set({ selection: { nodes: [], edges: [] } }); return; }
+      if (e.key === 'Escape') { set({ placing: null, menu: null, openMenu: null, helpOpen: false, importOpen: false, aiOpen: false, editingId: null, editingEdgeId: null }); if (!isTyping(e)) set({ selection: { nodes: [], edges: [] } }); return; }
       if (mod && e.key.toLowerCase() === 'f') { e.preventDefault(); actions.openSearch(); return; }
+      if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); void files.save({ as: e.shiftKey }); return; }
+      if (mod && e.key.toLowerCase() === 'o') { e.preventDefault(); void files.openFile(); return; }
       if (e.altKey && e.code === 'KeyZ') { e.preventDefault(); actions.toggleZen(); return; }
       if (e.altKey && e.code === 'KeyR') { e.preventDefault(); actions.toggleViewMode(); return; }
       if (isTyping(e) || s.editingId || s.editingEdgeId) return;
       const one = s.selection.nodes.length === 1 ? s.selection.nodes[0] : undefined;
       const k = e.key;
+      if (s.placing && k === 'Enter' && !mod) { e.preventDefault(); actions.placeAt(); return; }
       if (s.session.viewMode) {
         if (k.startsWith('Arrow')) { e.preventDefault(); actions.navigate(k.slice(5).toLowerCase() as 'left'); }
         else if (k === '!' || (e.shiftKey && e.code === 'Digit1')) actions.fitView();
@@ -65,14 +69,14 @@ export function useKeyboard() {
       const letter = k.length === 1 ? k.toLowerCase() : '';
       if (!e.altKey && 'nrdostfcvhp'.includes(letter) && letter) e.preventDefault();
       switch (letter) {
-        case 'n': actions.addNode('topic'); break;
-        case 'r': actions.addNode('topic', undefined, { shape: 'rectangle' }); break;
-        case 'd': actions.addNode('topic', undefined, { shape: 'diamond' }); break;
-        case 'o': actions.addNode('topic', undefined, { shape: 'circle' }); break;
+        case 'n': actions.insert('topic'); break;
+        case 'r': actions.insert('topic', { shape: 'rectangle' }); break;
+        case 'd': actions.insert('topic', { shape: 'diamond' }); break;
+        case 'o': actions.insert('topic', { shape: 'circle' }); break;
         case 'p': actions.setMode('draw'); break;
-        case 's': actions.addNode('sticky'); break;
-        case 't': actions.addNode('text'); break;
-        case 'f': actions.frameSelection(); break;
+        case 's': actions.insert('sticky'); break;
+        case 't': actions.insert('text'); break;
+        case 'f': actions.insert('frame'); break;
         case 'c': actions.connectSelected(); break;
         case 'v': actions.setMode('select'); break;
         case 'h': actions.setMode('pan'); break;

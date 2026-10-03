@@ -1,7 +1,7 @@
 import { test, expect } from './support/journey';
 
 test('organize a diagram with frames and swimlanes', async ({ page, app, ev }) => {
-  ev.proves('A user groups selected topics into a named frame with Cmd+G, adds an empty frame from the toolbar, drags topics into it so they become members, drags the frame and sees its members travel with it, and arranges the frames as side-by-side swimlanes from the Layout menu.');
+  ev.proves('A user groups selected topics into a named frame with Cmd+G, adds an empty frame from the toolbar (arm the Frame button, Enter places it in free space at the view centre), drags topics into it so they become members, drags the frame and sees its members travel with it, and arranges the frames as side-by-side swimlanes from the Layout menu.');
   const docId = await app.newDoc('Checkout architecture');
   await app.tool('add_nodes', { documentId: docId, nodes: [
     { title: 'Web app', x: 0, y: 0 }, { title: 'Mobile app', x: 0, y: 140 },
@@ -35,6 +35,8 @@ test('organize a diagram with frames and swimlanes', async ({ page, app, ev }) =
   await test.step('the toolbar Frame button adds an empty frame', async () => {
     await page.keyboard.press('Escape');
     await page.getByTestId('add-frame').click();
+    await expect(page.getByTestId('place-pill'), 'with nothing selected the Frame button arms the placement cursor').toBeVisible();
+    await page.keyboard.press('Enter');
     await app.type('Data stores');
     const frame = (await app.doc()).nodes.find((n) => n.kind === 'frame' && n.title === 'Data stores');
     expect(frame, 'a frame named Data stores exists').toBeTruthy();

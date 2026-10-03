@@ -34,6 +34,15 @@ useApp.subscribe((s, prev) => {
   reportSession({ selection: s.selection });
 });
 
+/** Resolves once this tab has the server snapshot of the document. */
+export function waitForDoc(docId: string): Promise<void> {
+  if (get().docId === docId && get().confirmed?.id === docId) return Promise.resolve();
+  return new Promise((resolve) => {
+    const waiter = (id: string) => { if (id === docId) resolve(); else snapshotWaiters.push(waiter); };
+    snapshotWaiters.push(waiter);
+  });
+}
+
 export function openDocument(docId: string) {
   if (!docId) return;
   if (get().docId !== docId) set({ docId, doc: null, confirmed: null, pending: [], version: 0, selection: { nodes: [], edges: [] }, editingId: null, overlay: {} });
@@ -119,8 +128,9 @@ function onMessage(msg: any) {
         patch.selection = { nodes: (msg.selection.nodes as string[]).filter((id) => nodeIds.has(id)), edges: (msg.selection.edges as string[]).filter((id) => edgeIds.has(id)) };
       }
       set(patch);
-      for (const w of snapshotWaiters) w(msg.docId);
+      const waiting = snapshotWaiters;
       snapshotWaiters = [];
+      for (const w of waiting) w(msg.docId);
       break;
     }
     case 'op': {
@@ -176,6 +186,7 @@ async function handleView(msg: { action: string; args: any; docId?: string }): P
     return { ok: true, opened: msg.args.documentId };
   }
   if (msg.docId && msg.docId !== s.docId) return { ignored: true, reason: 'tab shows another document' };
+  if (msg.action === 'save_file') return (await import('./files')).saveForAi();
   if (msg.action === 'select') {
     set({ selection: { nodes: msg.args.nodes ?? [], edges: msg.args.edges ?? [] } });
     return { ok: true, selection: get().selection };

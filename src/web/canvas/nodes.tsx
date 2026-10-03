@@ -193,18 +193,25 @@ export const TextNode = memo(function TextNode({ data, selected }: NodeProps) {
   );
 });
 
-export const DrawingNode = memo(function DrawingNode({ data, selected }: NodeProps) {
+/** Drawn 1:1 in its own box so the stroke stays exactly where it was drawn; only an explicit resize scales it. */
+function drawingPath(pts: [number, number][], w: number, h: number) {
+  const natW = Math.max(4, Math.round(Math.max(0, ...pts.map((p) => p[0])))), natH = Math.max(4, Math.round(Math.max(0, ...pts.map((p) => p[1]))));
+  const sx = Math.abs(w - natW) <= 1 ? 1 : w / natW, sy = Math.abs(h - natH) <= 1 ? 1 : h / natH;
+  return strokePath(sx === 1 && sy === 1 ? pts : pts.map(([x, y]) => [x * sx, y * sy] as [number, number]));
+}
+
+export const DrawingNode = memo(function DrawingNode({ data, selected, width, height }: NodeProps) {
   const d = data as NodeData;
   const n = d.node;
   const pts = n.points ?? [];
-  const vw = Math.max(1, ...pts.map((p) => p[0])), vh = Math.max(1, ...pts.map((p) => p[1]));
+  const w = width ?? n.width, h = height ?? n.height;
   return (
     <>
       <NodeResizer isVisible={!!selected && !n.locked} minWidth={8} minHeight={8} onResizeEnd={(_e, p) => actions.updateNode(n.id, { x: Math.round(p.x), y: Math.round(p.y), width: Math.round(p.width), height: Math.round(p.height) })} />
       <div className={'wfc-drawing' + (d.flashing ? ' flash' : '')} key={d.flashing} style={{ ['--nc' as string]: colorVar(n.color) }} data-testid={'node-' + n.id}>
         <Handles />
-        <svg viewBox={'-2 -2 ' + (vw + 4) + ' ' + (vh + 4)} preserveAspectRatio="none" width="100%" height="100%">
-          <path d={strokePath(pts)} className="wfc-stroke" />
+        <svg width={w} height={h} viewBox={'0 0 ' + w + ' ' + h}>
+          <path d={drawingPath(pts, w, h)} className="wfc-stroke" />
         </svg>
       </div>
     </>

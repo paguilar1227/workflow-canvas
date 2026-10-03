@@ -5,6 +5,8 @@ test('style a topic in the inspector', async ({ page, app, ev }) => {
   const docId = await app.newDoc('Styled topic');
   await app.open(docId);
   await page.keyboard.press('n');
+  await expect(page.getByTestId('place-pill'), 'N arms the placement cursor').toBeVisible();
+  await page.keyboard.press('Enter');
   await app.type('Payments API');
   const id = (await app.selection()).nodes[0];
   const node = app.node(id);

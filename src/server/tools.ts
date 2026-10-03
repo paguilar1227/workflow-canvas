@@ -34,8 +34,9 @@ export const SERVER_INSTRUCTIONS = [
   'Coordinates are canvas pixels (x right, y down, top-left of node). Omit x/y to auto-place, then call auto_layout (graph | tree | lanes | grid).',
   'Fast path for a whole diagram: create_diagram with nodes (give each a short id) + edges referencing those ids + layout. Frames: create frame nodes and set frameId on members, then layout lanes.',
   'Read state with get_document (format summary), get_canvas_state, find_nodes. Verify visually with capture_screenshot (needs a browser tab open).',
-  'View & UI: control_view (fit/focus/zoom), select, set_theme / list_themes (includes a hand-drawn Excalidraw-style theme), set_ui (panels, minimap, snap, search, zen/view mode, pen mode, inline edit), open_document. undo/redo are shared with the human.',
+  'View & UI: control_view (fit/focus/zoom), select, set_theme / list_themes (includes hand-drawn Excalidraw-style themes in light and dark), set_ui (panels, minimap, snap, search, zen/view mode, pen mode, inline edit), open_document. undo/redo are shared with the human.',
   'Interop: import_content/export_document support Mermaid, Markdown outlines and Excalidraw (.excalidraw) scenes.',
+  'Files: when the person has pressed Save, the open document autosaves to their .excalidraw file after every change; save_to_file forces a save and reports the file.',
 ].join('\n');
 
 function summarizeDoc(doc: CanvasDocument, canUndo: boolean, canRedo: boolean): string {
@@ -151,6 +152,16 @@ export function createTools(store: Store, hub: Hub): ToolDef[] {
         const doc = store.create(a.title, (a.template ?? 'blank') as TemplateId, a.description);
         if (a.open !== false) { store.setSession({ activeDocumentId: doc.id }); await hub.view('open_document', { documentId: doc.id }); }
         return { json: { ok: true, documentId: doc.id, title: doc.title, nodes: doc.nodes.map(brief) } };
+      },
+    },
+    {
+      name: 'save_to_file', title: 'Save to file',
+      description: "Write the document to the .excalidraw file the person attached in the browser with Save. Autosave already rewrites that file after every change (including AI edits); this forces a save now and reports the file name. If no file is attached, the person must press Save once to pick a location: browsers only open file pickers from a person's click.",
+      input: { documentId: docIdArg },
+      run: async (a) => {
+        const id = resolveDoc(a.documentId);
+        const ack = (await hub.view('save_file', {}, id)) as Record<string, unknown>;
+        return { json: { ok: ack?.ok === true, documentId: id, ui: ack } };
       },
     },
     {

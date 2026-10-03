@@ -1,14 +1,16 @@
 import { test, expect } from './support/journey';
 
 test('build a mind map from the keyboard', async ({ page, app, ev }) => {
-  ev.proves('A keyboard-only user creates a root topic (N), children (Tab) and siblings (Enter) while typing titles, renames with F2, collapses and expands a branch with "/", deletes a topic, and switches the structure to a logic chart and an org chart from the Layout menu.');
+  ev.proves('A keyboard-only user creates a root topic (N arms placement, Enter drops it at the view centre), children (Tab) and siblings (Enter) while typing titles, renames with F2, collapses and expands a branch with "/", deletes a topic, and switches the structure to a logic chart and an org chart from the Layout menu.');
   const docId = await app.newDoc('Keyboard mind map');
   await app.open(docId);
   await ev.snap('empty-canvas');
   let rootId = '';
 
-  await test.step('N creates a topic and typing names it', async () => {
+  await test.step('N then Enter creates a topic and typing names it', async () => {
     await page.keyboard.press('n');
+    await expect(page.getByTestId('place-pill'), 'N arms the placement cursor').toBeVisible();
+    await page.keyboard.press('Enter');
     await app.type('Trip to Japan');
     rootId = (await app.selection()).nodes[0];
     await expect(app.node(rootId)).toBeVisible();

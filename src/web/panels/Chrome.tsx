@@ -9,24 +9,29 @@ import { COLOR_NAMES } from '../../shared/types';
 export function Toolbar() {
   const mode = useApp((s) => s.session.mode);
   const selCount = useApp((s) => s.selection.nodes.length);
+  const placing = useApp((s) => s.placing?.kind);
   return (
     <div className="toolbar" role="toolbar" aria-label="Canvas tools" data-testid="toolbar">
       <button className={'btn icon' + (mode === 'select' ? ' active' : '')} title="Select (V)" aria-label="Select tool" onClick={() => actions.setMode('select')}><MousePointer2 size={16} /></button>
       <button className={'btn icon' + (mode === 'pan' ? ' active' : '')} title="Hand / pan (H)" aria-label="Hand tool" data-testid="tool-pan" onClick={() => actions.setMode('pan')}><Hand size={16} /></button>
       <button className={'btn icon' + (mode === 'draw' ? ' active' : '')} title="Pen — freehand draw (P)" aria-label="Pen tool" data-testid="tool-pen" onClick={() => actions.setMode(mode === 'draw' ? 'select' : 'draw')}><PenLine size={16} /></button>
       <div className="sep" style={{ alignSelf: 'center' }} />
-      <button className="btn" title="Add topic (N)" data-testid="add-topic" onClick={() => actions.addNode('topic')}><Square size={15} />Topic</button>
-      <button className="btn" title="Add frame / lane (F)" data-testid="add-frame" onClick={() => actions.frameSelection()}><Frame size={15} />Frame</button>
-      <button className="btn" title="Add sticky note (S)" data-testid="add-sticky" onClick={() => actions.addNode('sticky')}><StickyNote size={15} />Sticky</button>
-      <button className="btn" title="Add text (T)" data-testid="add-text" onClick={() => actions.addNode('text')}><Type size={15} />Text</button>
+      <button className={'btn' + (placing === 'topic' ? ' active' : '')} title="Add topic (N) — click the canvas to place it, or it appears next to the selection" data-testid="add-topic" onClick={() => actions.insert('topic')}><Square size={15} />Topic</button>
+      <button className={'btn' + (placing === 'frame' ? ' active' : '')} title="Add frame / lane (F) — wraps the selection, or click the canvas to place one" data-testid="add-frame" onClick={() => actions.insert('frame')}><Frame size={15} />Frame</button>
+      <button className={'btn' + (placing === 'sticky' ? ' active' : '')} title="Add sticky note (S) — click the canvas to place it" data-testid="add-sticky" onClick={() => actions.insert('sticky')}><StickyNote size={15} />Sticky</button>
+      <button className={'btn' + (placing === 'text' ? ' active' : '')} title="Add text (T) — click the canvas to place it" data-testid="add-text" onClick={() => actions.insert('text')}><Type size={15} />Text</button>
       <div className="sep" style={{ alignSelf: 'center' }} />
       <button className="btn" title="Connect selected nodes (C)" data-testid="connect" disabled={selCount < 2} onClick={actions.connectSelected}><Spline size={15} />Connect</button>
     </div>
   );
 }
 
+const PLACE_LABEL: Record<string, string> = { topic: 'topic', frame: 'frame', sticky: 'sticky note', text: 'text' };
+
 export function ModePill() {
   const s = useApp((st) => st.session);
+  const placing = useApp((st) => st.placing);
+  if (placing && !s.viewMode) return <div className="mode-pill" data-testid="place-pill"><MousePointer2 size={14} />Click the canvas to place a {PLACE_LABEL[placing.kind] ?? placing.kind} · Enter = centre<button className="btn outline" onClick={actions.cancelPlacing}>Cancel (Esc)</button></div>;
   if (s.viewMode) return <div className="mode-pill" data-testid="view-pill"><Eye size={14} />View mode — read-only<button className="btn outline" onClick={actions.toggleViewMode} data-testid="exit-view">Edit (Alt+R)</button></div>;
   if (s.zenMode) return <div className="mode-pill" data-testid="zen-pill"><Minimize2 size={14} />Zen mode<button className="btn outline" onClick={actions.toggleZen} data-testid="exit-zen">Exit (Alt+Z)</button></div>;
   if (s.mode === 'draw') return <div className="mode-pill" data-testid="pen-pill"><PenLine size={14} />Pen — drag to draw<button className="btn outline" onClick={() => actions.setMode('select')}>Done (Esc)</button></div>;
@@ -158,7 +163,7 @@ export function HelpModal() {
     ['Add child topic', 'Tab'], ['Add sibling topic', 'Enter'], ['Edit selected', 'F2 / double-click'], ['Delete', 'Delete / ⌫'],
     ['Collapse / expand branch', '/'], ['Navigate between topics', 'Arrow keys'], ['Nudge selection', 'Shift + arrows'], ['Undo / redo', '⌘Z / ⇧⌘Z'],
     ['Copy / cut / paste', '⌘C / ⌘X / ⌘V'], ['Duplicate', '⌘D'], ['Select all', '⌘A'], ['Frame (group) selection', '⌘G'],
-    ['Connect selected in order', 'C'], ['New topic / sticky / text', 'N / S / T'], ['Select / hand tool', 'V / H'], ['Pan', 'Scroll, Space + drag, middle-drag'],
+    ['Connect selected in order', 'C'], ['New topic / sticky / text / frame (click to place; beside the selection if any)', 'N / S / T / F'], ['Place at view centre / cancel placing', 'Enter / Esc'], ['Select / hand tool', 'V / H'], ['Pan', 'Scroll, Space + drag, middle-drag'],
     ['Zoom', '⌘ + scroll, pinch, ⌘+ / ⌘-'], ['Fit to screen / selection', '⇧1 / ⇧2'], ['Search', '⌘F'], ['This help', '?'],
     ['Rectangle / diamond / ellipse', 'R / D / O'], ['Pen (freehand)', 'P, Esc to finish'], ['Zen mode', 'Alt+Z'], ['View (read-only) mode', 'Alt+R'],
   ];
@@ -183,7 +188,7 @@ export function AiModal() {
     <div className="modal-backdrop" onClick={() => set({ aiOpen: false })}>
       <div className="modal" onClick={(e) => e.stopPropagation()} data-testid="ai-modal">
         <h2>Connect an AI agent</h2>
-        <p className="lead">The canvas exposes 34 MCP tools — documents, nodes, connectors, frames, layout, selection, viewport, themes, panels, undo/redo, import/export and screenshots. AI edits show up here live.</p>
+        <p className="lead">The canvas exposes 35 MCP tools — documents, nodes, connectors, frames, layout, selection, viewport, themes, panels, undo/redo, import/export and screenshots. AI edits show up here live.</p>
         <h3>MCP endpoint (streamable HTTP)</h3>
         <div className="code">{url}</div>
         <h3>Codex CLI</h3>

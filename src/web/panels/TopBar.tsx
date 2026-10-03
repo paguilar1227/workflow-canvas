@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Undo2, Redo2, LayoutGrid, Palette, Download, Upload, PanelLeft, PanelRight, Map as MapIcon, HelpCircle, Bot, Search, ChevronDown, Check, Eye } from 'lucide-react';
+import { Undo2, Redo2, LayoutGrid, Palette, Download, Upload, PanelLeft, PanelRight, Map as MapIcon, HelpCircle, Bot, Search, ChevronDown, Check, Eye, Save, FolderOpen } from 'lucide-react';
+import * as files from '../files';
 import { useApp, set } from '../store';
 import * as actions from '../actions';
 import { THEMES } from '../../shared/themes';
@@ -8,8 +9,8 @@ export function Menu({ id, label, icon, children, align = 'right', testId }: { i
   const open = useApp((s) => s.openMenu === id);
   return (
     <div className="menu-anchor">
-      <button className={'btn' + (open ? ' active' : '')} data-testid={testId} aria-haspopup="menu" aria-expanded={open} onClick={(e) => { e.stopPropagation(); set({ openMenu: open ? null : id }); }}>
-        {icon}{label ? <span>{label}</span> : null}<ChevronDown size={13} />
+      <button className={'btn' + (open ? ' active' : '')} data-testid={testId} title={label} aria-haspopup="menu" aria-expanded={open} onClick={(e) => { e.stopPropagation(); set({ openMenu: open ? null : id }); }}>
+        {icon}{label ? <span className="menu-label-text">{label}</span> : null}<ChevronDown size={13} />
       </button>
       {open ? <div className={'menu ' + align} role="menu" onClick={(e) => e.stopPropagation()}>{children}</div> : null}
     </div>
@@ -64,6 +65,7 @@ export function TopBar() {
         <span className="dot" /><Bot size={13} />{aiLive ? 'AI editing' : 'AI ready · MCP'}
       </button>
       <div className="spacer" />
+      <SaveButton />
       <button className="btn icon" title="Undo (⌘Z)" aria-label="Undo" data-testid="undo" disabled={!canUndo} onClick={actions.undo}><Undo2 size={16} /></button>
       <button className="btn icon" title="Redo (⇧⌘Z)" aria-label="Redo" data-testid="redo" disabled={!canRedo} onClick={actions.redo}><Redo2 size={16} /></button>
       <div className="sep" />
@@ -95,7 +97,12 @@ export function TopBar() {
           ))}
         </div>
       </Menu>
-      <Menu id="export" label="Export" icon={<Download size={15} />} testId="menu-export">
+      <Menu id="export" label="File" icon={<Download size={15} />} testId="menu-export">
+        <MenuItem testId="file-open" kbd="⌘O" onClick={() => void files.openFile()}><FolderOpen size={14} />Open .excalidraw…</MenuItem>
+        <MenuItem testId="file-save" kbd="⌘S" onClick={() => void files.save()}><Save size={14} />Save</MenuItem>
+        <MenuItem testId="file-save-as" kbd="⇧⌘S" onClick={() => void files.save({ as: true })}><span style={{ width: 14 }} />Save as…</MenuItem>
+        <hr />
+        <div className="menu-label">Export</div>
         <MenuItem testId="export-png" onClick={() => actions.exportAs('png')}>PNG image</MenuItem>
         <MenuItem testId="export-svg" onClick={() => actions.exportAs('svg')}>SVG image</MenuItem>
         <MenuItem testId="export-markdown" onClick={() => actions.exportAs('markdown')}>Markdown outline</MenuItem>
@@ -125,3 +132,22 @@ export function TopBar() {
   );
 }
 
+
+const SAVE_LABEL: Record<string, string> = { none: 'Save', saving: 'Saving…', saved: 'Saved', paused: 'Resume autosave', error: 'Save failed', unsupported: 'Save' };
+
+/** Save state for the open document: Finder dialog on first save, then autosave to that .excalidraw file. */
+function SaveButton() {
+  const file = useApp((s) => s.file);
+  const viewMode = useApp((s) => s.session.viewMode);
+  if (viewMode) return null;
+  const tip = file.state === 'none' ? 'Save to a .excalidraw file (⌘S); after that every change autosaves'
+    : file.state === 'unsupported' ? 'Download a .excalidraw copy (⌘S). Autosave to a file needs Chrome or Edge.'
+    : file.state === 'paused' ? 'Click to let the browser keep autosaving to ' + file.name
+    : file.state === 'error' ? 'Saving to ' + (file.name ?? 'the file') + ' failed: ' + (file.error ?? 'unknown error') + '. Click to retry.'
+    : 'Autosaving to ' + file.name + (file.savedAt ? ' · last saved ' + new Date(file.savedAt).toLocaleTimeString() : '');
+  return (
+    <button className={'btn save-btn ' + file.state} data-testid="save-file" data-state={file.state} title={tip} onClick={(e) => { e.stopPropagation(); void files.save(); }}>
+      {file.state === 'saved' ? <Check size={15} /> : <Save size={15} />}<span className="menu-label-text">{SAVE_LABEL[file.state]}</span>
+    </button>
+  );
+}

@@ -8,7 +8,7 @@ import { nodeTypes, type NodeData } from './nodes';
 import { edgeTypes, MarkerDefs } from './edges';
 import { strokePath } from './sketch';
 import { childrenMap, descendants, hiddenIds, depthOf, branchAncestor, isAncestor } from '../../shared/graph';
-import { containsPoint } from '../../shared/sizes';
+import { containsPoint, defaultSize } from '../../shared/sizes';
 import { getTheme } from '../../shared/themes';
 import type { CanvasNode, Side } from '../../shared/types';
 import { dispatch, reportSession } from '../sync';
@@ -220,9 +220,11 @@ export function Canvas() {
   const variant = bgVariant === 'lines' ? BackgroundVariant.Lines : bgVariant === 'cross' ? BackgroundVariant.Cross : BackgroundVariant.Dots;
 
   const viewMode = session.viewMode;
+  const placing = useApp((s) => s.placing);
   return (
     <>
     {session.mode === 'draw' && !viewMode ? <PenLayer /> : null}
+    {placing && !viewMode ? <PlaceLayer /> : null}
     <ReactFlow
       nodes={rfNodes}
       edges={rfEdges}
@@ -278,7 +280,7 @@ export function Canvas() {
     >
       <MarkerDefs />
       {bgVariant !== 'none' ? <Background variant={variant} gap={theme.gap} size={variant === BackgroundVariant.Dots ? 1.3 : 1} color="var(--grid)" /> : null}
-      {session.panels.minimap && !session.zenMode ? <MiniMap pannable zoomable position="bottom-right" style={{ width: 180, height: 120, marginBottom: 28 }} nodeStrokeWidth={0} nodeColor={(n) => (n.type === 'frame' ? 'var(--frame-border)' : 'var(--text-3)')} nodeBorderRadius={3} /> : null}
+      {session.panels.minimap && !session.zenMode ? <MiniMap pannable zoomable position="bottom-right" style={{ width: 180, height: 120, marginBottom: 'var(--minimap-lift, 28px)' }} nodeStrokeWidth={0} nodeColor={(n) => (n.type === 'frame' ? 'var(--frame-border)' : 'var(--text-3)')} nodeBorderRadius={3} /> : null}
     </ReactFlow>
     </>
   );
@@ -299,8 +301,15 @@ function PenLayer() {
       onPointerDown={(e) => { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); ref.current = { pts: [local(e)], id: e.pointerId }; force((x) => x + 1); }}
       onPointerMove={(e) => {
         const cur = ref.current; if (!cur || cur.id !== e.pointerId) return;
-        const p = local(e); const last = cur.pts[cur.pts.length - 1];
-        if (Math.hypot(p[0] - last[0], p[1] - last[1]) >= 2) { cur.pts.push(p); force((x) => x + 1); }
+        const r = e.currentTarget.getBoundingClientRect();
+        const samples = e.nativeEvent.getCoalescedEvents?.() ?? [];
+        let added = false;
+        for (const s of samples.length ? samples : [e.nativeEvent]) {
+          const p: [number, number] = [s.clientX - r.left, s.clientY - r.top];
+          const last = cur.pts[cur.pts.length - 1];
+          if (Math.hypot(p[0] - last[0], p[1] - last[1]) >= 1) { cur.pts.push(p); added = true; }
+        }
+        if (added) force((x) => x + 1);
       }}
       onPointerUp={(e) => {
         const cur = ref.current; ref.current = null; force((x) => x + 1);
@@ -310,16 +319,7 @@ function PenLayer() {
         const pts = cur.pts.map(([x, y]) => { const q = f.screenToFlowPosition({ x: x + r.left, y: y + r.top }); return [Math.round(q.x * 10) / 10, Math.round(q.y * 10) / 10] as [number, number]; });
         dispatch({ type: 'add_nodes', nodes: [{ kind: 'drawing', points: pts }] });
       }}
-      onWheel={(e) => {
-        const f = flow(); if (!f) return;
-        const v = f.getViewport();
-        if (e.ctrlKey || e.metaKey) {
-          const r = e.currentTarget.getBoundingClientRect();
-          const px = e.clientX - r.left, py = e.clientY - r.top;
-          const z = Math.min(4, Math.max(0.05, v.zoom * (1 - e.deltaY * 0.002)));
-          f.setViewport({ x: px - ((px - v.x) * z) / v.zoom, y: py - ((py - v.y) * z) / v.zoom, zoom: z });
-        } else f.setViewport({ x: v.x - e.deltaX, y: v.y - e.deltaY, zoom: v.zoom });
-      }}
+      onWheel={wheelPassThrough}
     >
       <svg>{ref.current ? <path d={strokePath(ref.current.pts)} /> : null}</svg>
     </div>
@@ -327,6 +327,40 @@ function PenLayer() {
 }
 
 import { flow } from '../flowApi';
+
+/** Overlays (pen, placement) keep wheel zoom and pan working underneath them. */
+function wheelPassThrough(e: React.WheelEvent<HTMLElement>) {
+  const f = flow(); if (!f) return;
+  const v = f.getViewport();
+  if (e.ctrlKey || e.metaKey) {
+    const r = e.currentTarget.getBoundingClientRect();
+    const px = e.clientX - r.left, py = e.clientY - r.top;
+    const z = Math.min(4, Math.max(0.05, v.zoom * (1 - e.deltaY * 0.002)));
+    f.setViewport({ x: px - ((px - v.x) * z) / v.zoom, y: py - ((py - v.y) * z) / v.zoom, zoom: z });
+  } else f.setViewport({ x: v.x - e.deltaX, y: v.y - e.deltaY, zoom: v.zoom });
+}
+
+/** Placement cursor: a ghost of the armed element follows the pointer; a click drops it there. */
+function PlaceLayer() {
+  const placing = useApp((s) => s.placing);
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  if (!placing) return null;
+  const zoom = flow()?.getZoom() ?? 1;
+  const size = defaultSize(placing.kind, placing.kind === 'topic' ? (placing.extra.shape ?? 'card') : undefined);
+  return (
+    <div
+      className="place-layer"
+      data-testid="place-layer"
+      onPointerMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); setPos({ x: e.clientX - r.left, y: e.clientY - r.top }); }}
+      onPointerLeave={() => setPos(null)}
+      onClick={(e) => actions.placeAt(flowPoint(e.clientX, e.clientY))}
+      onContextMenu={(e) => { e.preventDefault(); actions.cancelPlacing(); }}
+      onWheel={wheelPassThrough}
+    >
+      {pos ? <div className={'place-ghost kind-' + placing.kind} style={{ left: pos.x - (size.width * zoom) / 2, top: pos.y - (size.height * zoom) / 2, width: size.width * zoom, height: size.height * zoom }} /> : null}
+    </div>
+  );
+}
 function flowPoint(x: number, y: number) {
   return flow()?.screenToFlowPosition({ x, y }) ?? { x: 0, y: 0 };
 }

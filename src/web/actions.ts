@@ -35,6 +35,33 @@ export function addNode(kind: NodeKind = 'topic', at?: { x: number; y: number },
   return ids[0];
 }
 
+/** Toolbar and shortcut inserts: next to the selected element, or arm a placement cursor for the next canvas click. */
+export function insert(kind: NodeKind, extra: Partial<CanvasNode> = {}) {
+  const s = get();
+  if (s.session.viewMode) return;
+  const selected = sel().nodes.map(nodeById).filter((n): n is CanvasNode => !!n);
+  if (kind === 'frame' && selected.some((n) => n.kind !== 'frame')) { frameSelection(); return; }
+  const anchor = selected.find((n) => n.kind !== 'drawing') ?? selected[0];
+  if (anchor) { spawnBeside(kind, anchor, extra); return; }
+  if (s.session.mode !== 'select') setMode('select');
+  set({ placing: { kind, extra }, menu: null, openMenu: null });
+}
+
+/** Place the armed element at a canvas point, or in free space at the view centre when no point is given. */
+export function placeAt(point?: { x: number; y: number }) {
+  const p = get().placing;
+  if (!p) return;
+  set({ placing: null });
+  addNode(p.kind, point, p.extra);
+}
+
+export function cancelPlacing() { set({ placing: null }); }
+
+function spawnBeside(kind: NodeKind, anchor: CanvasNode, extra: Partial<CanvasNode>) {
+  const size = defaultSize(kind, kind === 'topic' ? (extra.shape ?? 'card') : undefined);
+  addNode(kind, { x: anchor.x + anchor.width + 48 + size.width / 2, y: anchor.y + anchor.height / 2 }, extra);
+}
+
 export function addChild(parentId?: string) {
   const id = parentId ?? sel().nodes[0];
   const parent = id ? nodeById(id) : undefined;

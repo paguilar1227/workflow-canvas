@@ -20,13 +20,15 @@ async function connectByHandle(app: App, ev: Evidence, from: string, fromSide: s
 }
 
 test('sketch a workflow with the mouse', async ({ page, app, ev }) => {
-  ev.proves('A mouse user adds topics from the toolbar and by double-clicking empty canvas, drags a topic to a new spot, draws connectors by dragging from a node handle to another node, labels connectors by double-clicking the line and via the inspector, and restyles a connector (bezier routing, dashed, arrows at both ends, animated flow) with visible results.');
+  ev.proves('A mouse user adds topics from the toolbar (arm the Topic button, click the canvas to place) and by double-clicking empty canvas, drags a topic to a new spot, draws connectors by dragging from a node handle to another node, labels connectors by double-clicking the line and via the inspector, and restyles a connector (bezier routing, dashed, arrows at both ends, animated flow) with visible results.');
   const docId = await app.newDoc('Order workflow');
   await app.open(docId);
   const pane = await app.paneBox();
 
   await test.step('add topics with the toolbar and by double-clicking the canvas', async () => {
     await page.getByTestId('add-topic').click();
+    await expect(page.getByTestId('place-pill'), 'the Topic button arms the placement cursor').toBeVisible();
+    await page.mouse.click(pane.x + pane.width / 2, pane.y + pane.height / 2);
     await app.type('Receive order');
     await page.mouse.dblclick(pane.x + pane.width * 0.8, pane.y + pane.height * 0.28);
     await app.type('Check stock');
@@ -94,4 +96,3 @@ test('sketch a workflow with the mouse', async ({ page, app, ev }) => {
     await ev.snap('connector-animated');
   });
 });
-

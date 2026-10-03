@@ -204,6 +204,29 @@ export const THEMES: ThemeDef[] = [
       '--c-blue': '#1971c2', '--c-green': '#2f9e44', '--c-amber': '#f08c00', '--c-red': '#e03131', '--c-purple': '#9c36b5', '--c-pink': '#c2255c', '--c-teal': '#0c8599', '--c-gray': '#868e96',
     },
   },
+  {
+    id: 'excalidraw-sketch-dark',
+    name: 'Excalidraw Sketch Dark',
+    mode: 'dark',
+    description: 'Dark variant of the hand-drawn whiteboard look, following Excalidraw dark mode: near-black canvas, light rough strokes, handwritten labels, brighter palette.',
+    source: { label: 'Excalidraw (MIT) dark mode · rough.js', url: 'https://github.com/excalidraw/excalidraw' },
+    background: 'dots', gap: 20, sketch: true,
+    tokens: {
+      '--font-ui': INTER, '--font-display': HAND, '--font-mono': JBMONO, '--font-node': HAND,
+      '--bg': '#121212', '--grid': 'rgba(227,227,232,.14)',
+      '--panel': '#232329', '--panel-2': '#2e2d39', '--panel-border': '#3a3946',
+      '--text': '#e3e3e8', '--text-2': '#b4b4bd', '--text-3': '#7c7c87',
+      '--accent': '#a8a5ff', '--accent-text': '#121212', '--accent-soft': 'rgba(168,165,255,.16)',
+      '--node-bg': '#121212', '--node-border': '#e3e3e8', '--node-icon-bg': 'transparent', '--node-title': '#e3e3e8', '--node-sub': '#b4b4bd',
+      '--node-radius': '10px', '--node-shadow': 'none',
+      '--badge-bg': '#121212', '--badge-border': '#e3e3e8', '--badge-text': '#e3e3e8',
+      '--frame-bg': 'transparent', '--frame-border': '#5c5c66', '--frame-label': '#b4b4bd',
+      '--edge': '#e3e3e8', '--edge-label-bg': '#121212', '--edge-label-border': 'transparent', '--edge-label-text': '#e3e3e8',
+      '--sticky-bg': '#3d3418', '--sticky-text': '#f1e6b8',
+      '--selection': '#a8a5ff', '--ui-radius': '8px',
+      '--c-blue': '#4dabf7', '--c-green': '#51cf66', '--c-amber': '#fcc419', '--c-red': '#ff6b6b', '--c-purple': '#da77f2', '--c-pink': '#f06595', '--c-teal': '#22b8cf', '--c-gray': '#adb5bd',
+    },
+  },
 ];
 
 export function getTheme(id: string | undefined): ThemeDef {

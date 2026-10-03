@@ -1,6 +1,11 @@
 // User-perspective AI scenarios for scripts/ai-tests/run.mjs.
 // Prompts are phrased the way a person would ask: they name the document but never explain the tools.
 // Only scenario E changes the (global) theme, and only at its end.
+import fs from 'node:fs';
+import path from 'node:path';
+import { tsImport } from 'tsx/esm/api';
+
+const { documentFromExcalidraw } = await tsImport('../../src/shared/excalidraw.ts', import.meta.url);
 
 const SRC_DIR = new URL('../../src', import.meta.url).pathname;
 
@@ -13,6 +18,53 @@ const center = (n) => ({ x: n.x + n.width / 2, y: n.y + n.height / 2 });
 const onScreen = (r, pane, tol = 1) => !!r && r.x >= pane.x - tol && r.y >= pane.y - tol && r.x + r.w <= pane.x + pane.w + tol && r.y + r.h <= pane.y + pane.h + tol;
 const okCalls = (c, tool) => c.calls.filter((x) => x.tool === tool && x.ok);
 const screenshotCheck = (c, check) => check('AI took a screenshot of the canvas to verify its work', okCalls(c, 'capture_screenshot').length > 0, { calls: okCalls(c, 'capture_screenshot').length });
+
+const DOC_EDIT_TOOLS = ['add_nodes', 'update_nodes', 'delete_nodes', 'move_nodes', 'duplicate_nodes', 'reparent_node', 'set_collapsed', 'add_edges', 'update_edges', 'delete_edges',
+  'create_diagram', 'auto_layout', 'align_nodes', 'distribute_nodes', 'fit_frame_to_contents', 'import_content', 'update_document', 'undo', 'redo'];
+// Same loop as the save_to_file race repro (work/repro-save-race.mjs) that confirmed the in-flight autosave fix.
+const SAVE_RACE = { edits: 20, pauseMs: 300 };
+
+/** Page init script: back the browser's save dialog with a real file in the origin-private file system (OPFS). */
+function opfsSavePicker() {
+  window.__wfcPicked = [];
+  window.showSaveFilePicker = async (opts = {}) => {
+    const root = await navigator.storage.getDirectory();
+    const handle = await root.getFileHandle(opts.suggestedName || 'canvas.excalidraw', { create: true });
+    window.__wfcPicked.push(handle.name);
+    return handle;
+  };
+}
+const opfsFiles = (page) => page.evaluate(async () => {
+  const root = await navigator.storage.getDirectory();
+  const out = [];
+  for await (const [name, h] of root.entries()) if (h.kind === 'file') out.push({ name, text: await (await h.getFile()).text() });
+  return out;
+});
+const pickedFile = async (page) => (await page.evaluate(() => window.__wfcPicked ?? [])).at(-1) ?? null;
+const saveState = (page) => page.locator('[data-testid="save-file"]').getAttribute('data-state');
+const waitSaved = (page) => page.waitForFunction(() => document.querySelector('[data-testid="save-file"]')?.dataset.state === 'saved', null, { timeout: 20_000 });
+function parseFile(f) {
+  if (!f) return { found: false };
+  try {
+    const scene = JSON.parse(f.text);
+    return { found: true, name: f.name, bytes: f.text.length, type: scene.type, workflowCanvasMeta: !!scene.workflowCanvas, doc: documentFromExcalidraw(f.text) };
+  } catch (e) { return { found: true, name: f.name, bytes: f.text.length, parseError: String(e.message ?? e) }; }
+}
+const canon = (v) => (Array.isArray(v) ? v.map(canon) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).filter((k) => v[k] !== undefined).sort().map((k) => [k, canon(v[k])])) : v);
+const records = (items) => Object.fromEntries((items ?? []).map((x) => [x.id, JSON.stringify(canon(x))]));
+function recordDiff(a, b) {
+  const ra = records(a), rb = records(b);
+  return [...new Set([...Object.keys(ra), ...Object.keys(rb)])].filter((id) => ra[id] !== rb[id]).map((id) => ({ id, file: ra[id] ?? null, server: rb[id] ?? null }));
+}
+function fEdits(d) {
+  if (!d) return null;
+  const write = d.nodes.find((n) => n.id === 'step-1');
+  const sec = d.nodes.find((n) => /security sign-?off/i.test(n.title ?? ''));
+  const conn = write && sec ? d.edges.find((e) => e.source === write.id && e.target === sec.id) : null;
+  const sticky = d.nodes.find((n) => n.kind === 'sticky' && /ship on friday/i.test(n.title ?? ''));
+  return { 'step-1': write?.title ?? null, securityStep: sec?.title ?? null, connector: conn ? { label: conn.label ?? null, style: conn.style ?? null } : null, sticky: sticky?.title ?? null };
+}
+const fLanded = (e) => !!e && e['step-1'] === 'Write release notes' && !!e.securityStep && /before merge/i.test(e.connector?.label ?? '') && e.connector?.style === 'dashed' && !!e.sticky;
 
 function hiddenIds(doc) {
   const hidden = new Set();
@@ -189,16 +241,16 @@ export const SCENARIOS = [
   {
     id: 'E',
     slug: 'E-excalidraw-roundtrip-sketch-theme',
-    title: 'Excalidraw interop: freehand pen highlight, export .excalidraw, import into a new document, hand-drawn theme',
+    title: 'Excalidraw interop: freehand pen highlight, export .excalidraw, import into a new document, dark hand-drawn theme',
     model: 'gpt-6-sol',
-    changesTheme: 'excalidraw-sketch',
+    changesTheme: 'excalidraw-sketch-dark',
     async setup(h) {
       const r = await h.tool('create_document', { title: 'AI test E · Architecture to Excalidraw', template: 'architecture', open: false });
       return { docId: r.json.documentId };
     },
     prompt: (c) => 'My Workflow Canvas document ' + c.docId + ' has a small architecture diagram. Use the freehand pen to circle "API service" so it stands out. ' +
       'Then export the diagram as an Excalidraw file and import that file into a brand-new document called "Excalidraw round-trip", so I can check nothing gets lost on the way. ' +
-      'Compare the two documents, then switch the app to the hand-drawn sketch theme and take a screenshot of the new document.',
+      'Compare the two documents, then switch the app to the dark hand-drawn sketch theme and take a screenshot of the new document.',
     verify(c, check) {
       const { doc, page, session } = c;
       const api = doc.nodes.find((n) => n.id === 'api');
@@ -225,9 +277,108 @@ export const SCENARIOS = [
         check('connectors and their labels survived the round trip', JSON.stringify(sig(copy)) === JSON.stringify(sig(doc)), { original: sig(doc), copy: sig(copy) });
         check('the freehand pen stroke survived the round trip', copy.nodes.filter((n) => n.kind === 'drawing').length === pens.length && pens.length > 0, { original: pens.length, copy: copy.nodes.filter((n) => n.kind === 'drawing').length });
       }
-      check('app switched to the hand-drawn sketch theme (shared session and live UI)', session.theme === 'excalidraw-sketch' && page.dataTheme === 'excalidraw-sketch', { session: session.theme, ui: page.dataTheme });
+      check('app switched to the dark hand-drawn sketch theme (shared session and live UI)', session.theme === 'excalidraw-sketch-dark' && page.dataTheme === 'excalidraw-sketch-dark', { session: session.theme, ui: page.dataTheme });
       const shotOfCopy = okCalls(c, 'capture_screenshot').filter((x) => copy && x.args?.documentId === copy.id);
       check('AI took a screenshot of the new document', shotOfCopy.length > 0, { screenshots: c.calls.filter((x) => x.tool === 'capture_screenshot').map((x) => ({ documentId: x.args?.documentId, ok: x.ok })) });
+    },
+  },
+  {
+    id: 'F',
+    slug: 'F-save-to-attached-file',
+    title: "Save to the person's .excalidraw file: no-file reason relayed, then AI edits land in the file the person attached",
+    model: 'gpt-6-sol',
+    environmentNote: "The recorded tab's save dialog (showSaveFilePicker) is backed by a real file in the browser's origin-private file system via page.addInitScript, because a headless browser cannot show the OS dialog. The person's Save click, autosave and save_to_file then run the app's real File System Access code path; the harness reads that file back in the same tab and parses it with documentFromExcalidraw (src/shared/excalidraw.ts). After the AI turns the harness repeats the save_to_file race repro (" + SAVE_RACE.edits + ' x edit then immediate save_to_file) on the Start node notes.',
+    initScript: opfsSavePicker,
+    async setup(h) {
+      const r = await h.tool('create_document', { title: 'AI test F · Release checklist', template: 'workflow', open: false });
+      return { docId: r.json.documentId };
+    },
+    turns: [
+      { prompt: (c) => 'Please save my Workflow Canvas document ' + c.docId + ' to my .excalidraw file.' },
+      {
+        async before(p) {
+          const filesBeforeSave = (await opfsFiles(p.page)).map((f) => f.name);
+          const stateBeforeSave = await saveState(p.page);
+          await p.caption('person presses Save and picks a file in the save dialog');
+          await p.page.waitForTimeout(800);
+          await p.page.locator('[data-testid="save-file"]').click();
+          await waitSaved(p.page);
+          const picked = await pickedFile(p.page);
+          const file = (await opfsFiles(p.page)).find((f) => f.name === picked);
+          fs.writeFileSync(path.join(p.dir, 'attached-file.after-person-save.excalidraw'), file?.text ?? '');
+          p.log('pressed Save (button ' + stateBeforeSave + ' -> saved) and picked "' + picked + '" (' + (file?.text.length ?? 0) + ' bytes written)');
+          await p.caption('person pressed Save · autosaving to ' + picked);
+          return { filesBeforeSave, stateBeforeSave, stateAfterSave: await saveState(p.page), picked, baseline: parseFile(file) };
+        },
+        prompt: (c) => 'I pressed Save in the browser and picked a file. Now update my Workflow Canvas document ' + c.docId + ': rename "Do the work" to "Write release notes", ' +
+          'add a new step "Security sign-off" connected from "Write release notes" with a dashed connector labeled "before merge", and add a sticky note "Ship on Friday" next to "Done". ' +
+          'Then save it to my file and tell me which file it went to.',
+      },
+    ],
+    async collect(p) {
+      await waitSaved(p.page).catch(() => {});
+      const picked = await pickedFile(p.page);
+      const afterAi = (await opfsFiles(p.page)).find((f) => f.name === picked);
+      const serverAtFileRead = await p.http('/api/documents/' + encodeURIComponent(p.docId));
+      fs.writeFileSync(path.join(p.dir, 'attached-file.after-ai.excalidraw'), afterAi?.text ?? '');
+      p.log('after the AI turns the attached file "' + picked + '" has ' + (afterAi?.text.length ?? 0) + ' bytes');
+      await p.caption('harness: ' + SAVE_RACE.edits + ' x edit then immediate save_to_file');
+      const results = [];
+      const lastEdit = 'save-race edit ' + (SAVE_RACE.edits - 1);
+      for (let i = 0; i < SAVE_RACE.edits; i++) {
+        await p.tool('update_nodes', { documentId: p.docId, updates: [{ id: 'start', notes: 'save-race edit ' + i }] });
+        results.push((await p.tool('save_to_file', { documentId: p.docId })).json);
+        await p.page.waitForTimeout(SAVE_RACE.pauseMs);
+      }
+      await waitSaved(p.page).catch(() => {});
+      const afterRace = (await opfsFiles(p.page)).find((f) => f.name === picked);
+      fs.writeFileSync(path.join(p.dir, 'attached-file.excalidraw'), afterRace?.text ?? '');
+      const raceFile = parseFile(afterRace);
+      const fileStartNotes = raceFile.doc?.nodes.find((n) => n.id === 'start')?.notes ?? null;
+      p.log('save race: ' + results.filter((r) => r?.ok === true).length + '/' + SAVE_RACE.edits + ' save_to_file ok; file Start notes = ' + JSON.stringify(fileStartNotes));
+      return {
+        attached: parseFile(afterAi), serverAtFileRead,
+        race: { ...SAVE_RACE, results, lastEdit, file: raceFile.name ?? null, parseError: raceFile.parseError, fileStartNotes },
+        evidenceFiles: ['attached-file.after-person-save.excalidraw', 'attached-file.after-ai.excalidraw', 'attached-file.excalidraw'],
+      };
+    },
+    verify(c, check) {
+      const { doc, data } = c;
+      const reason = (x) => String(x.resultJson?.ui?.reason ?? '');
+      const saves1 = c.calls.filter((x) => x.turn === 1 && x.tool === 'save_to_file');
+      check('turn 1, no file attached: save_to_file returned ok:false with the "person must press Save" reason', saves1.length > 0 && saves1.every((x) => x.ok && x.resultJson?.ok === false && /press Save/i.test(reason(x))),
+        saves1.map((x) => ({ ok: x.resultJson?.ok, reason: reason(x) })));
+      const m1 = c.finalMessages[0] ?? '';
+      const relayed = /\b(press|click|hit|tap|use)\w*\b[^.\n]{0,40}\bsave\b/i.test(m1);
+      const claimed = /\b(I('ve| have) (successfully )?saved|successfully saved|saved successfully|is now saved|saved (it|the document|your document|your file) to)\b/i.test(m1);
+      check('turn 1: AI relayed that the person must press Save and did not claim success', relayed && !claimed, { relayed, claimed, finalMessage: m1 });
+      check('nothing was written to disk before the person pressed Save', Array.isArray(data.filesBeforeSave) && data.filesBeforeSave.length === 0 && data.stateBeforeSave === 'none',
+        { filesBeforeSave: data.filesBeforeSave ?? null, saveButtonState: data.stateBeforeSave ?? null, personError: data.personError });
+      const base = data.baseline;
+      check('person pressed Save: the dialog returned a file and autosave turned on', !!data.picked && data.stateAfterSave === 'saved' && !!base?.doc && fEdits(base.doc)['step-1'] === 'Do the work',
+        { picked: data.picked ?? null, saveButtonState: data.stateAfterSave ?? null, baseline: base && { bytes: base.bytes, parseError: base.parseError, edits: fEdits(base.doc) } });
+      const be = fEdits(base?.doc);
+      check('the file had none of the edits before the AI turn', !!be && be['step-1'] === 'Do the work' && !be.securityStep && !be.connector && !be.sticky, be);
+      check("AI's edits are in the server document", fLanded(fEdits(doc)), fEdits(doc));
+      const a = data.attached;
+      check("AI's edits landed in the person's attached file (read from OPFS, parsed with documentFromExcalidraw)", !!a?.doc && a.name === data.picked && a.type === 'excalidraw' && fLanded(fEdits(a.doc)),
+        { file: a?.name ?? null, picked: data.picked ?? null, type: a?.type, bytes: a?.bytes, parseError: a?.parseError ?? data.collectError, edits: fEdits(a?.doc) });
+      const server = data.serverAtFileRead;
+      const nodeDiff = a?.doc && server ? recordDiff(a.doc.nodes, server.nodes) : null;
+      const edgeDiff = a?.doc && server ? recordDiff(a.doc.edges, server.edges) : null;
+      check('the attached file holds the whole document exactly (every node and connector record equals the server copy)', !!nodeDiff && !!edgeDiff && nodeDiff.length === 0 && edgeDiff.length === 0 && a.doc.title === server.title && a.workflowCanvasMeta,
+        { title: { file: a?.doc?.title, server: server?.title }, nodes: server?.nodes.length, edges: server?.edges.length, nodeDiff: nodeDiff?.slice(0, 5), edgeDiff: edgeDiff?.slice(0, 5) });
+      const t2 = c.calls.filter((x) => x.turn === 2);
+      const lastEditAt = t2.reduce((at, x, i) => (x.ok && DOC_EDIT_TOOLS.includes(x.tool) ? i : at), -1);
+      const savesAfter = t2.filter((x, i) => i > lastEditAt && x.tool === 'save_to_file');
+      check('turn 2: after its edits the AI called save_to_file, which reported ok and the attached file name', lastEditAt >= 0 && savesAfter.some((x) => x.ok && x.resultJson?.ok === true && x.resultJson?.ui?.file === data.picked),
+        { picked: data.picked ?? null, savesAfterLastEdit: savesAfter.map((x) => ({ ok: x.resultJson?.ok, ui: x.resultJson?.ui })), sequence: t2.map((x) => x.tool + (x.ok ? '' : ' ✗')) });
+      const m2 = c.finalMessages[1] ?? '';
+      check('turn 2: AI told the person which file it saved to', !!data.picked && m2.includes(data.picked.replace(/\.excalidraw$/, '')), { file: data.picked ?? null, finalMessage: m2 });
+      const race = data.race;
+      const bad = (race?.results ?? []).map((r, i) => ({ i, r })).filter(({ r }) => r?.ok !== true || r?.ui?.file !== data.picked);
+      check('save race: every edit-then-immediate save_to_file returned ok:true and the file has the last edit', !!race && race.results.length === race.edits && bad.length === 0 && race.file === data.picked && race.fileStartNotes === race.lastEdit,
+        { edits: race?.edits, ok: race ? race.results.length - bad.length : 0, failures: bad.slice(0, 5), lastEdit: race?.lastEdit, fileStartNotes: race?.fileStartNotes, parseError: race?.parseError });
     },
   },
 ];

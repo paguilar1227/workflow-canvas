@@ -1,7 +1,7 @@
 import { test, expect } from './support/journey';
 
 test('swap the theme of a diagram', async ({ page, app, ev }) => {
-  ev.proves('A user opens the Theme menu and switches the same diagram through all 8 themes (including the hand-drawn Excalidraw Sketch), with a full-page screenshot per theme; each switch changes the canvas palette (--bg) to that theme’s colour, the sketch theme draws rough outlines in a hand-written font that does not leak into the next theme, and the chosen theme survives a page reload.');
+  ev.proves('A user opens the Theme menu and switches the same diagram through all 9 themes (including the hand-drawn Excalidraw Sketch in light and dark), with a full-page screenshot per theme; each switch changes the canvas palette (--bg) to that theme’s colour, both sketch themes draw rough outlines in a hand-written font that does not leak into the next theme, and the chosen theme survives a page reload.');
   const docId = await app.newDoc('Theme gallery', 'architecture');
   await app.tool('add_nodes', { documentId: docId, nodes: [
     { id: 'tg-root', title: 'Launch v2', shape: 'pill', color: 'blue', x: 40, y: 470 },
@@ -22,13 +22,14 @@ test('swap the theme of a diagram', async ({ page, app, ev }) => {
 
   await page.getByTestId('menu-theme').click();
   const options = page.locator('.theme-option');
-  await expect(options, 'the Theme menu offers 8 themes').toHaveCount(8);
+  await expect(options, 'the Theme menu offers 9 themes').toHaveCount(9);
   const themes = await options.evaluateAll((els) => els.map((el) => ({
     id: el.getAttribute('data-testid')!.replace(/^theme-/, ''),
     name: el.querySelector('.theme-name')!.textContent!.trim(),
     swatch: getComputedStyle(el.querySelector('.theme-swatch')!).backgroundColor,
   })));
-  expect(themes.map((t) => t.id)).toContain('excalidraw-sketch');
+  expect(themes.map((t) => t.id)).toEqual(expect.arrayContaining(['excalidraw-sketch', 'excalidraw-sketch-dark']));
+  const sketchThemes = new Set(['excalidraw-sketch', 'excalidraw-sketch-dark']);
   await ev.snap('theme-menu-open');
   await page.keyboard.press('Escape');
 
@@ -43,7 +44,7 @@ test('swap the theme of a diagram', async ({ page, app, ev }) => {
       await expect.poll(async () => (await app.state()).session.theme).toBe(t.id);
       await expect.poll(bgRgb, 'canvas background is the ' + t.name + ' colour').toBe(t.swatch);
       seen[t.id] = await bgRgb();
-      if (t.id === 'excalidraw-sketch') {
+      if (sketchThemes.has(t.id)) {
         await expect(page.locator('svg.wfc-rough').first(), 'sketch theme draws rough hand-drawn outlines').toBeVisible();
         expect(await titleFont(), 'sketch theme uses the hand-written font').toContain('Patrick Hand');
       } else {
@@ -54,6 +55,25 @@ test('swap the theme of a diagram', async ({ page, app, ev }) => {
       await ev.snap('theme-' + t.id, { exactName: true, fullPage: true });
     });
   }
+
+  await test.step('long theme names never widen the page past a 1280px window', async () => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    for (const id of ['excalidraw-sketch-dark', 'excalidraw-sketch']) {
+      await page.getByTestId('menu-theme').click();
+      await page.getByTestId('theme-' + id).click();
+      await page.keyboard.press('Escape');
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), id + ' fits the window').toBeLessThanOrEqual(0);
+      await expect(page.getByTestId('inspector')).toBeInViewport({ ratio: 0.95 });
+    }
+    await ev.snap('sketch-dark-fits-1280');
+    await page.setViewportSize({ width: 1440, height: 900 });
+  });
+
+  await test.step('the dark sketch variant is a dark canvas with light hand-drawn strokes', async () => {
+    const luminance = (rgb: string) => { const [r, g, b] = rgb.match(/\d+/g)!.map(Number); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+    expect(luminance(seen['excalidraw-sketch-dark']), 'dark canvas').toBeLessThan(40);
+    expect(luminance(seen['excalidraw-sketch']), 'light canvas').toBeGreaterThan(200);
+  });
 
   await test.step('leaving the sketch theme drops its hand-drawn font and outlines', async () => {
     if ((await app.state()).session.theme !== 'excalidraw-sketch') {

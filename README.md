@@ -22,7 +22,7 @@ There is no login, so by default the app only listens on this machine (`127.0.0.
 | Canvas | Infinite pan/zoom (scroll, ⌘+scroll / pinch, Space+drag, hand tool), fit view, minimap, dot/line/cross grid, snap to grid |
 | Mind maps (XMind-style) | Tab = child, Enter = sibling, F2 edit, `/` collapse/expand with counts, arrow-key navigation, drag a topic onto another to re-parent, auto-arranged branches, layouts: balanced mind map, logic chart →/←, org chart ↓ |
 | Diagrams | Cards (icon + title + monospace subtitle + badge, like the pr-lens reference), rounded/pill/rectangle/diamond/circle/hexagon/cylinder shapes, stickies, free text, frames/swimlanes (members move with the frame), connectors via handle drag (drop anywhere on the target), labels, arrows, solid/dashed/dotted, smooth/bezier/straight/step routing, animated flow |
-| Excalidraw-inspired | Freehand pen (P), hand-drawn "Excalidraw Sketch" theme (rough.js), R/D/O shape shortcuts, zen mode (Alt+Z), view-only mode (Alt+R), copy PNG to clipboard, `.excalidraw` import/export |
+| Excalidraw-inspired | Freehand pen (P), hand-drawn "Excalidraw Sketch" themes in light and dark (rough.js), R/D/O shape shortcuts, zen mode (Alt+Z), view-only mode (Alt+R), copy PNG to clipboard, `.excalidraw` import/export |
 | Editing | Inspector for every property (title, subtitle, badge, emoji icon, color, shape, status, priority, tags, link, notes, size, lock), multi-select align/distribute/frame/connect, copy/cut/paste/duplicate, context menus, undo/redo (shared with AI) |
 | Layout | Graph (dagre) LR/TB with frames as clusters, swimlanes, grid, tree layouts |
 | Documents | Multiple canvases from templates (blank, mind map, architecture lanes, workflow), rename, duplicate, delete, outline panel, search (⌘F) |
@@ -30,6 +30,10 @@ There is no login, so by default the app only listens on this machine (`127.0.0.
 | Collaboration | Every open tab and every AI client sees changes live; AI edits show an activity feed and highlight the touched nodes |
 
 Press **?** in the app for the full shortcut list.
+
+## Saving to a file
+
+Press **Save** (⌘S) to pick where to save the drawing in the Finder save dialog. From then on every change, including AI edits, is autosaved to that `.excalidraw` file. **File → Open** (⌘O) loads a `.excalidraw` file and keeps autosaving to it; **Save as** (⇧⌘S) picks a new file. Files are standard Excalidraw scenes, so they open in Excalidraw too; Workflow Canvas stores everything Excalidraw has no native field for (mind-map structure, collapse state, statuses, connector routing, document settings) in Excalidraw's `customData`, so reopening a saved file in Workflow Canvas is lossless. Saving to disk uses the browser's File System Access API (Chrome, Edge and other Chromium browsers); after a reload one click on **Resume autosave** re-grants access. In other browsers Save downloads a copy instead. Documents are also kept on the server as before.
 
 ## Themes
 
@@ -45,6 +49,7 @@ Themes are token sets (CSS variables) swappable at runtime by humans or AI. Dire
 | Nornorm Ink | light | Refero style: Nornorm |
 | Hyperstudio Amber | dark | Refero style: Hyperstudio |
 | Excalidraw Sketch | light | Excalidraw (MIT) · rough.js hand-drawn rendering |
+| Excalidraw Sketch Dark | dark | Excalidraw (MIT) dark mode · rough.js hand-drawn rendering |
 
 Fonts are bundled open-source substitutes (Inter, Manrope, Space Grotesk, Fraunces, JetBrains Mono, Geist Mono, Patrick Hand).
 
@@ -59,9 +64,9 @@ The server exposes the same command model the UI uses, so AI and human actions a
 - **Plain HTTP:** `GET /api/tools` (JSON Schemas), `POST /api/tools/<name>` with JSON arguments. `GET /api/documents/<id>?format=markdown|mermaid`.
 - **Script client:** `node scripts/mcp-call.mjs list` / `node scripts/mcp-call.mjs call <tool> '<json>' [--save shot.png]`
 
-### 34 tools
+### 35 tools
 
-`get_canvas_state`, `list_documents`, `get_document`, `find_nodes`, `create_document`, `open_document`, `update_document`, `duplicate_document`, `delete_document`, `add_nodes`, `update_nodes`, `delete_nodes`, `move_nodes`, `duplicate_nodes`, `reparent_node`, `set_collapsed`, `add_edges`, `update_edges`, `delete_edges`, `create_diagram`, `auto_layout`, `align_nodes`, `distribute_nodes`, `fit_frame_to_contents`, `import_content`, `export_document`, `capture_screenshot`, `undo`, `redo`, `select`, `control_view`, `list_themes`, `set_theme`, `set_ui`.
+`get_canvas_state`, `list_documents`, `get_document`, `find_nodes`, `create_document`, `open_document`, `update_document`, `duplicate_document`, `delete_document`, `add_nodes`, `update_nodes`, `delete_nodes`, `move_nodes`, `duplicate_nodes`, `reparent_node`, `set_collapsed`, `add_edges`, `update_edges`, `delete_edges`, `create_diagram`, `auto_layout`, `align_nodes`, `distribute_nodes`, `fit_frame_to_contents`, `import_content`, `export_document`, `capture_screenshot`, `undo`, `redo`, `select`, `control_view`, `list_themes`, `set_theme`, `set_ui`, `save_to_file`.
 
 ### UI ↔ AI parity
 
@@ -83,6 +88,7 @@ The server exposes the same command model the UI uses, so AI and human actions a
 | Select / multi-select | `select` (and read the human's selection via `get_canvas_state`) |
 | Zoom, pan, fit, focus | `control_view` |
 | Theme picker | `list_themes`, `set_theme` |
+| Save / autosave to a .excalidraw file | `save_to_file` (the first save needs the person's click to pick a location) |
 | Panels, minimap, snap, background, search, pen/hand/select tool, zen, view-only, start inline editing | `set_ui` |
 | Look at the canvas | `capture_screenshot`, `get_document`, `find_nodes` |
 

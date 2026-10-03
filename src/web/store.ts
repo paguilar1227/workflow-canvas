@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { CanvasDocument, DocumentSummary, SessionState } from '../shared/types';
+import type { CanvasDocument, CanvasNode, DocumentSummary, NodeKind, SessionState } from '../shared/types';
 import { DEFAULT_SESSION } from '../shared/types';
 import { applyCommand, type Command } from '../shared/commands';
 
@@ -21,6 +21,10 @@ export interface AppState {
   selection: { nodes: string[]; edges: string[] };
   editingId: string | null;
   editingEdgeId: string | null;
+  /** Toolbar/shortcut element waiting for a click on the canvas (per tab, not shared). */
+  placing: { kind: NodeKind; extra: Partial<CanvasNode> } | null;
+  /** The .excalidraw file this tab autosaves the open document to. */
+  file: { docId: string | null; name: string | null; state: 'none' | 'saving' | 'saved' | 'paused' | 'error' | 'unsupported'; savedAt?: number; error?: string };
   overlay: Record<string, { x?: number; y?: number; width?: number; height?: number }>;
   dropTargetId: string | null;
   activity: Activity[];
@@ -50,6 +54,8 @@ export const useApp = create<AppState>(() => ({
   selection: { nodes: [], edges: [] },
   editingId: null,
   editingEdgeId: null,
+  placing: null,
+  file: { docId: null, name: null, state: 'none' },
   overlay: {},
   dropTargetId: null,
   activity: [],

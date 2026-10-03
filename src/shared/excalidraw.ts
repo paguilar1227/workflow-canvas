@@ -2,8 +2,8 @@
  * Interop with Excalidraw (MIT, https://github.com/excalidraw/excalidraw) using its documented
  * .excalidraw scene format: { type: 'excalidraw', version: 2, elements, appState, files }.
  */
-import type { CanvasDocument, CanvasNode, ColorName } from './types';
-import type { EdgeInput, NodeInput } from './commands';
+import type { CanvasDocument, CanvasEdge, CanvasNode, ColorName, DocSettings } from './types';
+import { applyCommand, normalizeCommand, type EdgeInput, type NodeInput } from './commands';
 import { childrenMap } from './graph';
 
 const STROKE: Record<string, string> = { default: '#1e1e1e', blue: '#1971c2', green: '#2f9e44', amber: '#f08c00', red: '#e03131', purple: '#9c36b5', pink: '#c2255c', teal: '#0c8599', gray: '#868e96' };
@@ -35,6 +35,14 @@ function textEl(id: string, text: string, x: number, y: number, width: number, h
   });
 }
 
+/** Everything about a node except what the Excalidraw element itself carries (geometry), so files round-trip exactly. */
+function nodeRecord(n: CanvasNode) {
+  const { x: _x, y: _y, width: _w, height: _h, points: _p, ...rest } = n;
+  return rest;
+}
+
+const label = (n: CanvasNode) => [n.icon ? n.icon + ' ' + n.title : n.title, n.subtitle].filter(Boolean).join('\n');
+
 export function exportExcalidraw(doc: CanvasDocument): Record<string, unknown> {
   const els: El[] = [];
   const bound = new Map<string, { id: string; type: string }[]>();
@@ -46,16 +54,16 @@ export function exportExcalidraw(doc: CanvasDocument): Record<string, unknown> {
     const frameId = n.frameId && frames.has(n.frameId) ? n.frameId : null;
     const c = color(n);
     if (n.kind === 'frame') {
-      const el = base(n.id, 'frame', n.x, n.y, n.width, n.height, { name: n.title || 'Frame', roughness: 0, customData: { workflowCanvas: { kind: 'frame', subtitle: n.subtitle, color: n.color, notes: n.notes } } });
+      const el = base(n.id, 'frame', n.x, n.y, n.width, n.height, { name: n.title || 'Frame', roughness: 0, customData: { workflowCanvas: { kind: 'frame', subtitle: n.subtitle, color: n.color, notes: n.notes, node: nodeRecord(n) } } });
       els.push(el); nodeEl.set(n.id, el); continue;
     }
     if (n.kind === 'text') {
-      const el = textEl(n.id, n.title, n.x, n.y, n.width, n.height, null, { frameId, strokeColor: STROKE[c], fontSize: 24 });
+      const el = textEl(n.id, n.title, n.x, n.y, n.width, n.height, null, { frameId, strokeColor: STROKE[c], fontSize: 24, customData: { workflowCanvas: { node: nodeRecord(n) } } });
       els.push(el); nodeEl.set(n.id, el); continue;
     }
     if (n.kind === 'drawing') {
       const pts = (n.points ?? []).map(([px, py]) => [px, py]);
-      const el = base(n.id, 'freedraw', n.x, n.y, n.width, n.height, { frameId, strokeColor: STROKE[c], points: pts, pressures: [], simulatePressure: true, lastCommittedPoint: null });
+      const el = base(n.id, 'freedraw', n.x, n.y, n.width, n.height, { frameId, strokeColor: STROKE[c], points: pts, pressures: [], simulatePressure: true, lastCommittedPoint: null, customData: { workflowCanvas: { node: nodeRecord(n) } } });
       els.push(el); nodeEl.set(n.id, el); continue;
     }
     const type = n.kind === 'topic' && n.shape === 'diamond' ? 'diamond' : n.kind === 'topic' && n.shape === 'circle' ? 'ellipse' : 'rectangle';
@@ -63,17 +71,17 @@ export function exportExcalidraw(doc: CanvasDocument): Record<string, unknown> {
     const el = base(n.id, type, n.x, n.y, n.width, n.height, {
       frameId, roundness: rounded, strokeColor: STROKE[c],
       backgroundColor: n.kind === 'sticky' ? (c === 'default' ? STICKY_FILL : FILL[c]) : FILL[c], fillStyle: n.kind === 'sticky' ? 'solid' : 'hachure',
-      link: n.link ?? null, locked: !!n.locked, customData: { workflowCanvas: { kind: n.kind, shape: n.shape, color: n.color ?? 'default', subtitle: n.subtitle, badge: n.badge, icon: n.icon, notes: n.notes, tags: n.tags, status: n.status, priority: n.priority, parentId: n.parentId } },
+      link: n.link ?? null, locked: !!n.locked, customData: { workflowCanvas: { kind: n.kind, shape: n.shape, color: n.color ?? 'default', subtitle: n.subtitle, badge: n.badge, icon: n.icon, notes: n.notes, tags: n.tags, status: n.status, priority: n.priority, parentId: n.parentId, node: nodeRecord(n) } },
     });
     els.push(el); nodeEl.set(n.id, el);
-    const label = [n.icon ? n.icon + ' ' + n.title : n.title, n.subtitle].filter(Boolean).join('\n');
-    if (label) {
+    const text = label(n);
+    if (text) {
       const tid = n.id + '-label';
-      els.push(textEl(tid, label, n.x + 8, n.y + n.height / 2 - 12, n.width - 16, 24, n.id, { frameId, fontSize: n.subtitle ? 16 : 18 }));
+      els.push(textEl(tid, text, n.x + 8, n.y + n.height / 2 - 12, n.width - 16, 24, n.id, { frameId, fontSize: n.subtitle ? 16 : 18 }));
       addBound(n.id, { id: tid, type: 'text' });
     }
   }
-  const arrow = (id: string, s: CanvasNode, t: CanvasNode, opts: { label?: string; style?: string; arrow?: string; color?: string }) => {
+  const arrow = (id: string, s: CanvasNode, t: CanvasNode, opts: { label?: string; style?: string; arrow?: string; color?: string; edge?: CanvasEdge }) => {
     const sc = { x: s.x + s.width / 2, y: s.y + s.height / 2 }, tc = { x: t.x + t.width / 2, y: t.y + t.height / 2 };
     const c = opts.color && opts.color !== 'default' ? opts.color : 'default';
     els.push(base(id, 'arrow', sc.x, sc.y, Math.abs(tc.x - sc.x), Math.abs(tc.y - sc.y), {
@@ -81,6 +89,7 @@ export function exportExcalidraw(doc: CanvasDocument): Record<string, unknown> {
       points: [[0, 0], [tc.x - sc.x, tc.y - sc.y]], lastCommittedPoint: null, elbowed: false,
       startBinding: { elementId: s.id, focus: 0, gap: 6 }, endBinding: { elementId: t.id, focus: 0, gap: 6 },
       startArrowhead: opts.arrow === 'start' || opts.arrow === 'both' ? 'arrow' : null, endArrowhead: opts.arrow === 'end' || opts.arrow === 'both' ? 'arrow' : null,
+      ...(opts.edge ? { customData: { workflowCanvas: { edge: opts.edge } } } : { customData: { workflowCanvas: { tree: true } } }),
     }));
     addBound(s.id, { id, type: 'arrow' }); addBound(t.id, { id, type: 'arrow' });
     if (opts.label) {
@@ -91,10 +100,13 @@ export function exportExcalidraw(doc: CanvasDocument): Record<string, unknown> {
   };
   const byId = new Map(doc.nodes.map((n) => [n.id, n]));
   for (const n of doc.nodes) { const p = n.parentId ? byId.get(n.parentId) : undefined; if (p) arrow('tree-' + n.id, p, n, { arrow: 'none', color: n.color }); }
-  for (const e of doc.edges) { const s = byId.get(e.source), t = byId.get(e.target); if (s && t) arrow(e.id, s, t, { label: e.label, style: e.style, arrow: e.arrow, color: e.color }); }
+  for (const e of doc.edges) { const s = byId.get(e.source), t = byId.get(e.target); if (s && t) arrow(e.id, s, t, { label: e.label, style: e.style, arrow: e.arrow, color: e.color, edge: e }); }
   for (const el of els) { const b = bound.get(el.id); if (b) el.boundElements = b; }
   void childrenMap;
-  return { type: 'excalidraw', version: 2, source: 'https://github.com/paguilar1227/workflow-canvas', elements: els, appState: { viewBackgroundColor: '#ffffff', gridSize: null }, files: {} };
+  return {
+    type: 'excalidraw', version: 2, source: 'https://github.com/paguilar1227/workflow-canvas', elements: els, appState: { viewBackgroundColor: '#ffffff', gridSize: null }, files: {},
+    workflowCanvas: { version: 1, title: doc.title, description: doc.description, settings: doc.settings },
+  };
 }
 
 function nearestColor(hex: unknown): ColorName | undefined {
@@ -209,3 +221,74 @@ export function importExcalidraw(content: string | Record<string, unknown>, pref
   return out;
 }
 
+
+export interface OpenedDocument { title?: string; description?: string; settings?: DocSettings; nodes: CanvasNode[]; edges: CanvasEdge[]; foreign: number }
+
+/**
+ * Rebuild a full document from a .excalidraw file. Elements written by Workflow Canvas carry their complete node/edge
+ * record, so they come back exactly; geometry, labels and bindings are read from the element so edits made in Excalidraw
+ * win. Elements drawn natively in Excalidraw are converted like an import.
+ */
+export function documentFromExcalidraw(content: string | Record<string, unknown>): OpenedDocument {
+  const scene = (typeof content === 'string' ? JSON.parse(content) : content) as { elements?: El[]; workflowCanvas?: { title?: string; description?: string; settings?: DocSettings } };
+  const elements = (scene.elements ?? []).filter((e) => e && !e.isDeleted) as El[];
+  const byId = new Map(elements.map((e) => [e.id, e]));
+  const meta = (e: El) => ((e.customData as Record<string, unknown> | undefined)?.workflowCanvas ?? {}) as { node?: Omit<CanvasNode, 'x' | 'y' | 'width' | 'height'>; edge?: CanvasEdge; tree?: boolean };
+  const textFor = new Map<string, string>();
+  for (const e of elements) if (e.type === 'text' && e.containerId) textFor.set(String(e.containerId), String(e.text ?? e.originalText ?? ''));
+  const exact: CanvasNode[] = [];
+  for (const e of elements) {
+    const rec = meta(e).node;
+    if (!rec) continue;
+    const n = { ...rec, x: Number(e.x), y: Number(e.y), width: Number(e.width), height: Number(e.height) } as CanvasNode;
+    if (n.kind === 'drawing') n.points = ((e.points as [number, number][] | undefined) ?? []).map(([px, py]) => [px, py] as [number, number]);
+    if (n.kind === 'frame' && typeof e.name === 'string') n.title = e.name;
+    if (n.kind === 'text' && typeof e.text === 'string') n.title = e.text;
+    if (n.kind === 'topic' || n.kind === 'sticky') {
+      const text = textFor.get(e.id);
+      if (text !== undefined && text !== label(n)) {
+        if (n.kind === 'sticky') n.title = text;
+        else { const [first = '', ...rest] = text.split('\n'); n.title = n.icon && first.startsWith(n.icon + ' ') ? first.slice(n.icon.length + 1) : first; if (rest.length) n.subtitle = rest.join(' '); else delete n.subtitle; }
+      }
+    }
+    const frameId = e.frameId ? String(e.frameId) : null;
+    if (frameId && byId.has(frameId)) n.frameId = frameId; else if (n.kind !== 'frame' && e.frameId === null && n.frameId) delete n.frameId;
+    if (typeof e.link === 'string' && e.link) n.link = e.link;
+    exact.push(n);
+  }
+  const exactIds = new Set(exact.map((n) => n.id));
+  const resolve = (b: unknown) => { const t = (b as { elementId?: string } | null)?.elementId; const el = t ? byId.get(t) : undefined; return el?.type === 'text' && el.containerId ? String(el.containerId) : t; };
+  const edges: CanvasEdge[] = [];
+  for (const e of elements) {
+    const m = meta(e);
+    if (e.type !== 'arrow' || !m.edge) continue;
+    const s = resolve(e.startBinding) ?? m.edge.source, t = resolve(e.endBinding) ?? m.edge.target;
+    const edge: CanvasEdge = { ...m.edge, source: s, target: t };
+    const text = textFor.get(e.id);
+    if (text !== undefined) edge.label = text; else delete edge.label;
+    edges.push(edge);
+  }
+  const ours = (e: El) => exactIds.has(e.id) || !!meta(e).edge || !!meta(e).tree || (e.type === 'text' && !!e.containerId && (exactIds.has(String(e.containerId)) || !!meta(byId.get(String(e.containerId)) ?? ({} as El)).edge || !!meta(byId.get(String(e.containerId)) ?? ({} as El)).tree));
+  let nodes = exact;
+  let foreign = 0;
+  if (elements.some((e) => !ours(e))) {
+    const imported = importExcalidraw({ elements: elements.filter((e) => !meta(e).edge && !meta(e).tree) }, '');
+    const keep = imported.nodes.filter((n) => !exactIds.has(n.id as string));
+    foreign = keep.length;
+    let scratch: CanvasDocument = { id: 'open', title: '', nodes: exact, edges: [], settings: scene.workflowCanvas?.settings ?? { autoArrange: true, treeLayout: 'mindmap' }, createdAt: '', updatedAt: '' };
+    let seq = 0;
+    const genId = () => 'x' + ++seq;
+    if (keep.length) scratch = applyCommand(scratch, normalizeCommand(scratch, { type: 'add_nodes', nodes: keep }, { genId }));
+    const ids = new Set(scratch.nodes.map((n) => n.id));
+    const extraEdges = imported.edges.filter((e) => ids.has(e.source) && ids.has(e.target) && !edges.some((x) => x.id === e.id));
+    if (extraEdges.length) { const withEdges = applyCommand({ ...scratch, edges }, normalizeCommand({ ...scratch, edges }, { type: 'add_edges', edges: extraEdges }, { genId })); edges.splice(0, edges.length, ...withEdges.edges); }
+    nodes = scratch.nodes;
+  }
+  const ids = new Set(nodes.map((n) => n.id));
+  return {
+    title: scene.workflowCanvas?.title, description: scene.workflowCanvas?.description, settings: scene.workflowCanvas?.settings,
+    nodes: nodes.map((n) => (n.parentId && !ids.has(n.parentId) ? { ...n, parentId: undefined } : n)),
+    edges: edges.filter((e) => ids.has(e.source) && ids.has(e.target)),
+    foreign,
+  };
+}

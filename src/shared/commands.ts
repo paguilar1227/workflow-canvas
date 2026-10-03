@@ -101,12 +101,12 @@ export function normalizeCommand(doc: CanvasDocument, input: CommandInput, opts:
           const pts = raw.points.map(([px, py]) => [Number(px), Number(py)] as [number, number]);
           const minX = Math.min(...pts.map((p) => p[0])), minY = Math.min(...pts.map((p) => p[1]));
           const maxX = Math.max(...pts.map((p) => p[0])), maxY = Math.max(...pts.map((p) => p[1]));
-          const ox = hasPos ? 0 : minX, oy = hasPos ? 0 : minY;
+          const ox = hasPos ? 0 : Math.round(minX), oy = hasPos ? 0 : Math.round(minY);
           node.points = pts.map(([px, py]) => [Math.round((px - ox) * 10) / 10, Math.round((py - oy) * 10) / 10]);
-          node.x = hasPos ? raw.x! : Math.round(minX);
-          node.y = hasPos ? raw.y! : Math.round(minY);
-          node.width = raw.width ?? Math.max(4, Math.round(maxX - (hasPos ? 0 : minX)));
-          node.height = raw.height ?? Math.max(4, Math.round(maxY - (hasPos ? 0 : minY)));
+          node.x = hasPos ? raw.x! : ox;
+          node.y = hasPos ? raw.y! : oy;
+          node.width = raw.width ?? Math.max(4, Math.round(maxX - ox));
+          node.height = raw.height ?? Math.max(4, Math.round(maxY - oy));
           node.title = raw.title ?? '';
         } else if (hasPos) { node.x = raw.x!; node.y = raw.y!; }
         else if (parent) {
