@@ -17,6 +17,7 @@ function database(): pg.Pool | null {
 
 /** Preview-platform readiness: a real write/read through the injected database credentials. Inactive without DATABASE_URL. */
 export function mountReadiness(app: Express) {
+  app.get('/deployment', (_req, res) => { res.json({ deploymentId: process.env.DEMO_DEPLOYMENT_ID ?? null, sourceSha: process.env.DEMO_DEPLOY_SOURCE_SHA ?? null }); });
   app.post('/db-marker', async (req, res) => {
     const db = database();
     if (!db) { res.status(404).json({ status: 'error', message: 'No database configured' }); return; }

@@ -65,6 +65,12 @@ test('an AI client works over the API safely and predictably', async ({ page, ap
     await ev.snap('selection-after-switching-away-and-back');
   });
 
+  await test.step('the deployment marker is JSON, not the app page', async () => {
+    const res = await request.get('/deployment');
+    expect(res.headers()['content-type']).toContain('application/json');
+    expect(Object.keys(await res.json()).sort()).toEqual(['deploymentId', 'sourceSha']);
+  });
+
   await test.step('an idle keep-alive connection can be reused', async () => {
     const host = new URL(baseURL!).host;
     const get = 'GET /health HTTP/1.1\r\nHost: ' + host + '\r\nConnection: keep-alive\r\n\r\n';
