@@ -1,6 +1,6 @@
 import { get, set, toast, useApp } from './store';
 import { callTool, dispatch, openDocument, waitForDoc } from './sync';
-import { exportExcalidraw, documentFromExcalidraw } from '../shared/excalidraw';
+import { exportExcalidraw, documentFromExcalidraw, excalidrawFileName } from '../shared/excalidraw';
 
 /** Saving and autosaving to a .excalidraw file on the user's disk (File System Access API; Chromium browsers). */
 export type FileState = 'none' | 'saving' | 'saved' | 'paused' | 'error' | 'unsupported';
@@ -45,8 +45,6 @@ async function permitted(h: FsHandle, ask: boolean) {
   if ((await h.queryPermission({ mode: 'readwrite' })) === 'granted') return true;
   return ask && !!h.requestPermission && (await h.requestPermission({ mode: 'readwrite' })) === 'granted';
 }
-
-const baseName = (title: string) => title.replace(/[\\/:*?"<>|]+/g, '').trim() || 'canvas';
 
 /** One in-flight write per document; callers that arrive mid-write get a promise that settles after a pass that includes their change. */
 const inflight = new Map<string, Promise<void>>();
@@ -111,7 +109,7 @@ export async function save(opts: { as?: boolean } = {}) {
   const doc = get().doc;
   if (!doc) return;
   if (!fileApiSupported) {
-    download(baseName(doc.title) + '.excalidraw', JSON.stringify(exportExcalidraw(doc), null, 2));
+    download(excalidrawFileName(doc.title), JSON.stringify(exportExcalidraw(doc), null, 2));
     toast('Downloaded a copy. This browser cannot autosave to a file; use Chrome or Edge for autosave.');
     return;
   }
@@ -119,7 +117,7 @@ export async function save(opts: { as?: boolean } = {}) {
     let h = opts.as ? undefined : handles.get(doc.id);
     if (h && !(await permitted(h, true))) { setFile({ state: 'paused' }); toast('Autosave needs permission to write to ' + h.name); return; }
     if (!h) {
-      h = await picker.showSaveFilePicker!({ suggestedName: baseName(doc.title) + '.excalidraw', types: SAVE_TYPES });
+      h = await picker.showSaveFilePicker!({ suggestedName: excalidrawFileName(doc.title), types: SAVE_TYPES });
       remember(doc.id, h);
     }
     setFile({ docId: doc.id, name: h.name, state: 'saved' });

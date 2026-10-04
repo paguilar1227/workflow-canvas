@@ -42,6 +42,8 @@ Press **?** in the app for the full shortcut list.
 
 Press **Save** (⌘S) to pick where to save the drawing in the Finder save dialog. From then on every change, including AI edits, is autosaved to that `.excalidraw` file. **File → Open** (⌘O) loads a `.excalidraw` file and keeps autosaving to it; **Save as** (⇧⌘S) picks a new file. Files are standard Excalidraw scenes, so they open in Excalidraw too; Workflow Canvas stores everything Excalidraw has no native field for (mind-map structure, collapse state, statuses, connector routing, document settings) in Excalidraw's `customData`, so reopening a saved file in Workflow Canvas is lossless. Saving to disk uses the browser's File System Access API (Chrome, Edge and other Chromium browsers); after a reload one click on **Resume autosave** re-grants access. In other browsers Save downloads a copy instead. Documents are also kept on the server as before.
 
+**AI sessions save without a click.** An agent calls `save_to_file` with a `path`: a `.excalidraw` file, or a folder such as its session artifacts folder (the file is named after the document). The server writes it and autosaves it after every change, by the AI or a person, and keeps doing so after a restart. Later calls without `path` save to the attached file. It never replaces an existing file unless the agent passes `overwrite: true`. Docker Compose shares `~/Documents` into the container at the same path, so host paths work as-is; set `WFC_SAVE_ROOT=/some/folder` to share a different folder. When the server cannot reach the path (outside the shared folder, or a hosted preview with no shared folder), nothing is written and the response carries the file contents for the agent to write itself; that copy is not autosaved.
+
 ## Phones and tablets
 
 Whenever the screen is too narrow for both side columns and the toolbar (phones, portrait tablets, landscape phones, and desktop windows under about 1120px) the outline and inspector become drawers that slide over the canvas. Open the outline with ☰, the inspector with **Style** or **More → Inspector**; each drawer expands to full width or closes from its own header, and tapping outside closes it. Everything else in the top bar moves into one **More** sheet.
@@ -111,7 +113,7 @@ The server exposes the same command model the UI uses, so AI and human actions a
 | Select / multi-select | `select` (and read the human's selection via `get_canvas_state`) |
 | Zoom, pan, fit, focus | `control_view` |
 | Theme picker | `list_themes`, `set_theme` |
-| Save / autosave to a .excalidraw file | `save_to_file` (the first save needs the person's click to pick a location) |
+| Save / autosave to a .excalidraw file | `save_to_file` with `path` (a file or the session's artifacts folder; autosaves from then on) |
 | Panels, minimap, snap, background, search, pen/hand/select tool, zen, view-only, start inline editing | `set_ui` |
 | Look at the canvas | `capture_screenshot`, `get_document`, `find_nodes` |
 

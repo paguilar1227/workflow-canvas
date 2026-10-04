@@ -7,8 +7,11 @@ services:
       - "${WFC_BIND:-127.0.0.1}:${WFC_PORT:-8790}:8790"
     environment:
       WFC_ALLOWED_HOSTS: "${WFC_ALLOWED_HOSTS:-}"
+      # AI sessions can save .excalidraw files here (save_to_file path). Shared at the same path so host paths work as-is.
+      WFC_SAVE_ROOTS: "${WFC_SAVE_ROOT:-${HOME}/Documents}"
     volumes:
       - workflow-canvas-data:/data
+      - "${WFC_SAVE_ROOT:-${HOME}/Documents}:${WFC_SAVE_ROOT:-${HOME}/Documents}"
     restart: unless-stopped
 
 volumes:

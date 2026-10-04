@@ -10,6 +10,7 @@ import { THEMES } from '../shared/themes';
 import { exportMarkdown, exportMermaid } from '../shared/io';
 import { isTrustedRequest, UNTRUSTED_MESSAGE } from './guard';
 import { mountReadiness } from './readiness';
+import { FileSaver, saveRoots } from './files';
 
 export interface AppOptions { dataDir: string; webDir?: string; dev?: boolean }
 
@@ -17,7 +18,9 @@ export async function createApp(opts: AppOptions) {
   const store = new Store(opts.dataDir);
   await store.init();
   const hub = new Hub(store);
-  const tools = createTools(store, hub);
+  const files = new FileSaver(store, saveRoots(), path.join(opts.dataDir, 'files.json'));
+  await files.init();
+  const tools = createTools(store, hub, files);
   const app = express();
   app.use((req, res, next) => { if (isTrustedRequest(req)) next(); else res.status(403).json({ ok: false, error: UNTRUSTED_MESSAGE }); });
   app.use(express.json({ limit: '25mb' }));
@@ -58,6 +61,6 @@ export async function createApp(opts: AppOptions) {
     app.use(express.static(opts.webDir, { index: false, maxAge: '1h' }));
     app.use((req, res, next) => { if (req.method === 'GET' && req.accepts('html')) res.sendFile(path.join(opts.webDir!, 'index.html')); else next(); });
   }
-  return { app, server, store, hub, tools };
+  return { app, server, store, hub, tools, files };
 }
 

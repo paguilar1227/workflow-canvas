@@ -7,10 +7,11 @@ import { CommandError } from '../shared/commands';
 import { THEMES, getTheme } from '../shared/themes';
 import { exportMarkdown, exportMermaid, planImport, type ImportFormat } from '../shared/io';
 import { cloneNodes } from '../shared/clipboard';
-import { exportExcalidraw } from '../shared/excalidraw';
+import { excalidrawFileName, exportExcalidraw } from '../shared/excalidraw';
 import { TEMPLATE_IDS, type TemplateId } from '../shared/templates';
 import { genId, type OpEvent, type Store } from './store';
 import type { Hub } from './hub';
+import type { FileSaver } from './files';
 import { isAncestor } from '../shared/graph';
 
 export interface ToolContext { origin: string }
@@ -37,7 +38,7 @@ export const SERVER_INSTRUCTIONS = [
   'View & UI: control_view (fit/focus/zoom), select, set_theme / list_themes (includes hand-drawn Excalidraw-style themes in light and dark), set_ui (panels, minimap, snap, search, zen/view mode, pen mode, inline edit), open_document. undo/redo are shared with the human.',
   'Text: sticky and text nodes render GitHub-flavoured Markdown (task lists toggle with a click); topic/frame titles and connector labels render inline Markdown. :shortcodes: (GitHub names, e.g. :rocket: :white_check_mark:) are converted to emoji in every text field, for people and AI alike.',
   'Interop: import_content/export_document support Mermaid, Markdown outlines and Excalidraw (.excalidraw) scenes.',
-  'Files: when the person has pressed Save, the open document autosaves to their .excalidraw file after every change; save_to_file forces a save and reports the file.',
+  'Files: save_to_file with a path (a .excalidraw file or a folder such as your session artifacts folder) saves the document there and keeps it autosaved after every change; without a path it saves to the file already attached (by you or by the person pressing Save). If the server cannot reach the path (for example a hosted preview), it returns the file contents for you to write.',
 ].join('\n');
 
 function summarizeDoc(doc: CanvasDocument, canUndo: boolean, canRedo: boolean): string {
@@ -73,7 +74,7 @@ function summarizeDoc(doc: CanvasDocument, canUndo: boolean, canRedo: boolean): 
   return lines.join('\n');
 }
 
-export function createTools(store: Store, hub: Hub): ToolDef[] {
+export function createTools(store: Store, hub: Hub, files: FileSaver): ToolDef[] {
   const resolveDoc = (id?: string): string => {
     if (id) { if (!store.has(id)) throw new Error('Document not found: ' + id + '. Use list_documents.'); return id; }
     const active = store.session.activeDocumentId;
@@ -157,13 +158,32 @@ export function createTools(store: Store, hub: Hub): ToolDef[] {
     },
     {
       name: 'save_to_file', title: 'Save to file',
-      description: "Write the document to the .excalidraw file the person attached in the browser with Save. Autosave already rewrites that file after every change (including AI edits); this forces a save now and reports the file name. If no file is attached, the person must press Save once to pick a location: browsers only open file pickers from a person's click.",
-      input: { documentId: docIdArg },
+      description: 'Save the document as an .excalidraw file and keep it autosaved after every change (yours and the person\'s). The first time, give path: a .excalidraw file, or a folder such as your session artifacts folder (the file is named after the document title). Later calls without path save to the attached file, whether you attached it or the person did with Save. If the server cannot reach the path (a hosted preview, or a folder outside the one shared with the server), nothing is written and the response carries the file contents for you to write yourself.',
+      input: {
+        documentId: docIdArg,
+        path: z.string().min(1).optional().describe('Absolute path to a .excalidraw file, or to a folder to save "<title>.excalidraw" in. Omit to save to the file already attached.'),
+        overwrite: z.boolean().optional().describe('Replace an existing file that is not already this document\'s file (default false).'),
+      },
       run: async (a) => {
         const id = resolveDoc(a.documentId);
+        const doc = store.get(id)!;
+        const handBack = (reason: string, extra: Record<string, unknown> = {}) => ({ json: { ok: false, saved: false, documentId: id, reason, ...extra, file: { name: excalidrawFileName(doc.title), content: JSON.stringify(exportExcalidraw(doc)) }, next: 'Write file.content to a .excalidraw file yourself. That copy is not autosaved: save again after later changes.' } });
+        if (a.path) {
+          const place = await files.place(id, a.path, a.overwrite === true);
+          if (!place.ok) { if (place.unreachable) return handBack(place.reason); throw new Error(place.reason); }
+          const res = await files.attach(id, place.file);
+          if (!res.ok) return handBack('Writing ' + place.file + ' failed: ' + res.error);
+          return { json: { ok: true, documentId: id, file: res.file, autosave: true } };
+        }
+        const server = files.fileFor(id) ? await files.save(id) : null;
         // Several tabs can show the document; only the one with the file attached can save it, so prefer its answer.
-        const ack = (await hub.view('save_file', {}, id, (r) => r.ok === true)) as Record<string, unknown>;
-        return { json: { ok: ack?.ok === true, documentId: id, ui: ack } };
+        const ui = (await hub.view('save_file', {}, id, (r) => r.ok === true)) as Record<string, unknown>;
+        if (server?.ok || ui?.ok === true) return { json: { ok: true, documentId: id, ...(server?.ok ? { file: server.file, autosave: true } : {}), ui } };
+        if (server) return handBack('Writing ' + server.file + ' failed: ' + server.error, { ui });
+        // The person's browser has a file attached but could not write it (for example autosave is paused): report that, not "no file".
+        if (ui?.file) return { json: { ok: false, documentId: id, reason: String(ui.reason ?? 'The browser could not save ' + ui.file + '.'), ui } };
+        if (!files.roots.length) return handBack('No file is attached, and this server cannot write files on your machine (for example, a hosted preview).', { ui });
+        return { json: { ok: false, documentId: id, reason: 'No file is attached yet. Call again with path set to the folder where your session keeps its files (its artifacts folder) to save it there and keep it autosaved. If the server cannot reach that folder, the response carries the file contents for you to write there. The person can also press Save to pick a file.', ui } };
       },
     },
     {

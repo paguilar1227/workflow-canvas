@@ -184,6 +184,9 @@ test('save to a file and keep it autosaved', async ({ page, app, ev, browser, ba
     expect(res.ok, 'a paused file is not written').toBe(false);
     expect(res.ui.file).toBe(FILE);
     expect(res.ui.reason).toMatch(/paused until the person clicks Save/);
+    expect(res.reason, 'the AI gets the browser\'s own reason (regression: "No file is attached" while a file was attached but paused)').toBe(res.ui.reason);
+    expect(res, 'a paused file is not handed back for the AI to write elsewhere').not.toHaveProperty('file');
+    expect(res).not.toHaveProperty('next');
     expect(titleIn(await readFile(page), 'st'), 'the paused edit is not on disk yet').toBe('Remember the risk');
     await ev.snap('paused-after-reload');
     await save.click();

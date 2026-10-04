@@ -2,6 +2,7 @@
 // Prompts are phrased the way a person would ask: they name the document but never explain the tools.
 // Only scenario E changes the (global) theme, and only at its end.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { getInternalNodesBounds, getViewportForBounds } from '@xyflow/system';
 import { tsImport } from 'tsx/esm/api';
@@ -210,6 +211,69 @@ async function gWaitStored(p, stickyId, ok) {
   }
 }
 
+// Scenario H: the AI saves into a session artifacts folder with no click from the person; the server autosaves that file after
+// the person's and the AI's later edits. A second server with no shared folder (like a hosted preview) hands the file back to the AI.
+const H_STEPS = ['Draft the announcement', 'Review with legal', 'Publish the blog post', 'Share on social'];
+const H_RENAME = { from: 'Review with legal', to: 'Review with legal and security' };
+const H_NEW = { after: 'Share on social', title: 'Send the newsletter' };
+const H_PREVIEW_STEPS = ['Pick a date', 'Book the venue', 'Send invites'];
+const H_WAIT_MS = 20_000; // same budget as waitSaved (scenario F) for a browser autosave to land
+const hNorm = (s) => String(s ?? '').trim().toLowerCase();
+const hNode = (d, title) => (d?.nodes ?? []).find((n) => hNorm(n.title) === hNorm(title)) ?? null;
+function hChain(d, titles) {
+  const ids = titles.map((t) => hNode(d, t)?.id ?? null);
+  const missingNodes = titles.filter((_, i) => !ids[i]);
+  const missingEdges = titles.slice(1).map((t, i) => [titles[i], t]).filter(([a, b]) => !(d?.edges ?? []).some((e) => e.source === hNode(d, a)?.id && e.target === hNode(d, b)?.id)).map(([a, b]) => a + ' -> ' + b);
+  return { ok: missingNodes.length === 0 && missingEdges.length === 0, missingNodes, missingEdges };
+}
+const hFiles = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => /\.excalidraw$/i.test(f) && !f.startsWith('.')).sort() : []);
+const inDir = (p, dir) => typeof p === 'string' && path.isAbsolute(p) && (path.resolve(p) === dir || path.resolve(p).startsWith(dir + path.sep));
+const DOCUMENTS = path.join(os.homedir(), 'Documents');
+/** Where a save_to_file path lands, in the person's terms: the folder the test shares with the server is ~/Documents. */
+const saveLocation = (file, sc) => (!file ? 'none'
+  : inDir(file, sc.dir) ? "the scenario's evidence folder"
+  : inDir(file, sc.cwdDir) ? "the agent's working folder"
+  : path.dirname(path.resolve(file)) === DOCUMENTS ? 'the root of ~/Documents'
+  : inDir(file, DOCUMENTS) ? 'a subfolder of ~/Documents'
+  : 'outside ~/Documents (not shared with the server)');
+function hRead(file) {
+  if (!file || !fs.existsSync(file)) return { found: false, file };
+  const textIn = fs.readFileSync(file, 'utf8');
+  const parsed = parseFile({ name: path.basename(file), text: textIn });
+  let elements = null;
+  try { elements = JSON.parse(textIn).elements?.length ?? null; } catch { /* reported by parseFile */ }
+  return { ...parsed, file, elements, mtimeMs: fs.statSync(file).mtimeMs, text: textIn };
+}
+/** File and server document hold the same records (title, every node and connector). */
+function hSame(f, server) {
+  if (!f?.doc || !server) return { same: false };
+  const nodeDiff = recordDiff(f.doc.nodes, server.nodes), edgeDiff = recordDiff(f.doc.edges, server.edges);
+  return { same: nodeDiff.length === 0 && edgeDiff.length === 0 && f.doc.title === server.title, nodeDiff: nodeDiff.slice(0, 5), edgeDiff: edgeDiff.slice(0, 5) };
+}
+/** Poll the server document and the file until the file holds the server copy and ok(file, server) holds, or the wait runs out. */
+async function hWaitSynced(p, file, ok = () => true) {
+  const t0 = Date.now();
+  for (;;) {
+    const server = await p.http('/api/documents/' + encodeURIComponent(p.docId));
+    const f = hRead(file);
+    const same = hSame(f, server);
+    if ((same.same && ok(f, server)) || Date.now() - t0 > H_WAIT_MS) return { synced: same.same && ok(f, server), waitedMs: Date.now() - t0, f, server, same };
+    await p.page.waitForTimeout(200);
+  }
+}
+const hBrief = (w) => w && { synced: w.synced, waitedMs: w.waitedMs, file: w.f.file, name: w.f.name, type: w.f.type, elements: w.f.elements, bytes: w.f.bytes, parseError: w.f.parseError, workflowCanvasMeta: w.f.workflowCanvasMeta, mtimeMs: w.f.mtimeMs, nodes: w.f.doc?.nodes.length, edges: w.f.doc?.edges.length, diff: w.same };
+/** Page init script: any save/open dialog the tab tries to show is recorded and cancelled (the person never picks a file in H). */
+function pickerTrap() {
+  window.__wfcPickerCalls = [];
+  const trap = (kind) => async () => { window.__wfcPickerCalls.push(kind); throw new DOMException('The test person does not pick files in this scenario', 'AbortError'); };
+  window.showSaveFilePicker = trap('save');
+  window.showOpenFilePicker = trap('open');
+}
+const hTab = (page) => page.evaluate(() => ({ pickerCalls: window.__wfcPickerCalls ?? null, file: window.__wfc.state().file, saveButton: document.querySelector('[data-testid="save-file"]')?.dataset.state ?? null }));
+const hNoClick = (t) => !!t && Array.isArray(t.pickerCalls) && t.pickerCalls.length === 0 && t.file?.state === 'none' && !t.file?.name && t.saveButton === 'none';
+const H_NOT_AUTOSAVED = /(\bnot\b|n['’]t\b|\bno\b|\bwithout\b)[^.\n]{0,60}\bauto-?(sav|updat|sync)|(\bnot\b|n['’]t\b)[^.\n]{0,40}\b(automatically|kept in sync|stay in sync|keep (it )?in sync|(kept|stay|keep it) up to date)|(\bnot\b|n['’]t\b)\s+(be\s+)?(update|updated|updating)\b/i;
+const clipText = (s) => { s = String(s ?? ''); return s.length > 300 ? s.slice(0, 300) + '…' : s; };
+
 export const SCENARIOS = [
   {
     id: 'A',
@@ -399,10 +463,17 @@ export const SCENARIOS = [
       const api = doc.nodes.find((n) => n.id === 'api');
       const pens = doc.nodes.filter((n) => n.kind === 'drawing' && (n.points?.length ?? 0) >= 2);
       check('freehand pen stroke drawn around "API service" in the original', !!api && pens.some((p) => overlaps(p, api)), pens.map((p) => ({ id: p.id, x: p.x, y: p.y, w: p.width, h: p.height, points: p.points?.length })));
+      // The Excalidraw file can come from export_document, or from save_to_file writing a .excalidraw file to a path (read where the harness moved it).
+      const sceneOf = (t) => { try { return JSON.parse(t ?? 'null'); } catch { return null; } };
+      const validScene = (s) => s?.type === 'excalidraw' && Array.isArray(s?.elements) && s.elements.length > 0;
       const exp = okCalls(c, 'export_document').filter((x) => x.args?.format === 'excalidraw');
-      let scene = null;
-      try { scene = JSON.parse(exp[0]?.resultText ?? 'null'); } catch { scene = null; }
-      check('AI exported a valid Excalidraw scene', scene?.type === 'excalidraw' && Array.isArray(scene?.elements) && scene.elements.length > 0, { exports: exp.length, type: scene?.type, elements: scene?.elements?.length });
+      const fromExport = sceneOf(exp[0]?.resultText);
+      const fileSaves = okCalls(c, 'save_to_file').filter((x) => x.args?.documentId === doc.id && x.resultJson?.ok === true && typeof x.resultJson?.file === 'string');
+      const savedFile = fileSaves.at(-1)?.resultJson.file;
+      const savedAt = savedFile ? (c.data.relocated?.find((r) => r.from === path.resolve(savedFile))?.to ?? savedFile) : null;
+      const fromFile = savedAt && fs.existsSync(savedAt) ? sceneOf(fs.readFileSync(savedAt, 'utf8')) : null;
+      check('AI exported a valid Excalidraw scene (export_document, or save_to_file writing a .excalidraw file)', validScene(fromExport) || validScene(fromFile),
+        { exports: exp.length, exportType: fromExport?.type ?? null, exportElements: fromExport?.elements?.length ?? null, fileSaves: fileSaves.map((x) => ({ path: x.args?.path, file: x.resultJson.file })), readFrom: savedAt, fileType: fromFile?.type ?? null, fileElements: fromFile?.elements?.length ?? null });
       const copy = c.createdDocs.find((d) => /excalidraw round-trip/i.test(d.title));
       check('a new document "Excalidraw round-trip" was created', !!copy, c.createdDocs.map((d) => d.title));
       const imp = okCalls(c, 'import_content').filter((x) => x.args?.format === 'excalidraw' && copy && x.args?.documentId === copy.id);
@@ -502,12 +573,28 @@ export const SCENARIOS = [
       const { doc, data } = c;
       const reason = (x) => String(x.resultJson?.ui?.reason ?? '');
       const saves1 = c.calls.filter((x) => x.turn === 1 && x.tool === 'save_to_file');
-      check('turn 1, no file attached: save_to_file returned ok:false with the "person must press Save" reason', saves1.length > 0 && saves1.every((x) => x.ok && x.resultJson?.ok === false && /press Save/i.test(reason(x))),
-        saves1.map((x) => ({ ok: x.resultJson?.ok, reason: reason(x) })));
+      const pathless1 = saves1.filter((x) => !x.args?.path);
+      check('turn 1, no file attached: every save_to_file without a path returned ok:false with the browser\'s "press Save" reason and the server\'s offer to save to a path',
+        saves1.length > 0 && pathless1.every((x) => x.ok && x.resultJson?.ok === false && /press Save/i.test(reason(x)) && /\bpath\b/i.test(String(x.resultJson?.reason ?? ''))),
+        saves1.map((x) => ({ args: x.args, ok: x.resultJson?.ok, reason: x.resultJson?.reason ?? null, uiReason: reason(x), file: typeof x.resultJson?.file === 'string' ? x.resultJson.file : undefined })));
       const m1 = c.finalMessages[0] ?? '';
       const relayed = /\b(press|click|hit|tap|use)\w*\b[^.\n]{0,40}\bsave\b/i.test(m1);
       const claimed = /\b(I('ve| have) (successfully )?saved|successfully saved|saved successfully|is now saved|saved (it|the document|your document|your file) to)\b/i.test(m1);
-      check('turn 1: AI relayed that the person must press Save and did not claim success', relayed && !claimed, { relayed, claimed, finalMessage: m1 });
+      // Since the server can save to a path, the AI may save the document to a path itself instead of waiting for the person's Save.
+      const pathSave1 = saves1.filter((x) => x.args?.path && x.ok && x.resultJson?.ok === true && typeof x.resultJson?.file === 'string').at(-1);
+      const pf = pathSave1 && (data.relocated?.find((r) => r.from === pathSave1.resultJson.file)?.to ?? pathSave1.resultJson.file);
+      const pathFile = pf ? parseFile(fs.existsSync(pf) ? { name: path.basename(pf), text: fs.readFileSync(pf, 'utf8') } : null) : null;
+      check('turn 1: the AI reported what happened (saved to a path it named: that file exists, is a valid scene of this document and is named in the message; otherwise it relayed that the person must press Save and claimed no save)',
+        pathSave1 ? !!pathFile?.doc && pathFile.type === 'excalidraw' && pathFile.doc.title === doc.title && m1.includes(path.basename(pathSave1.resultJson.file, '.excalidraw')) : relayed && !claimed,
+        pathSave1 ? { savedTo: pathSave1.resultJson.file, args: pathSave1.args, movedTo: pf, file: pathFile && { found: pathFile.found, type: pathFile.type, bytes: pathFile.bytes, parseError: pathFile.parseError, title: pathFile.doc?.title ?? null }, documentTitle: doc.title, finalMessage: m1 } : { relayed, claimed, finalMessage: m1 });
+      const where1 = saves1.filter((x) => x.args?.path).map((x) => {
+        const savedTo = typeof x.resultJson?.file === 'string' ? x.resultJson.file : null;
+        const target = savedTo ?? (/\.excalidraw$/i.test(x.args.path) ? x.args.path : path.join(x.args.path, '<document title>.excalidraw'));
+        return { path: x.args.path, ok: x.resultJson?.ok ?? null, savedTo, reason: x.resultJson?.reason ?? x.error ?? null, location: saveLocation(target, c.sc) };
+      });
+      check('turn 1: where the AI chose to save after the no-file hint (passes unless it saved straight into the root of ~/Documents)',
+        !where1.some((w) => w.ok === true && w.location === 'the root of ~/Documents'),
+        { pathSaves: where1, savedWithPath: where1.some((w) => w.ok === true), agentWorkingFolder: c.sc.cwdDir, evidenceFolder: c.sc.dir, movedIntoEvidence: data.relocated ?? [] }, { info: true });
       check('nothing was written to disk before the person pressed Save', Array.isArray(data.filesBeforeSave) && data.filesBeforeSave.length === 0 && data.stateBeforeSave === 'none',
         { filesBeforeSave: data.filesBeforeSave ?? null, saveButtonState: data.stateBeforeSave ?? null, personError: data.personError });
       const base = data.baseline;
@@ -641,6 +728,148 @@ export const SCENARIOS = [
         { updateNodes: ticks.map((x) => x.args), stickyFinal: fin?.title ?? null, tasks: finShape.tasks, sequence: t2.map((x) => x.tool + (x.ok ? '' : ' ✗')) });
       const rf = data.renderedFinal?.sticky;
       check("person's tab shows both tasks checked", !!rf && rf.tasks.length === 2 && rf.tasks.every((t) => t.checked), rf?.tasks ?? null);
+    },
+  },
+  {
+    id: 'H',
+    slug: 'H-ai-saves-to-artifacts-folder',
+    title: 'AI saves to the session artifacts folder with no click; the server autosaves after the person and the AI edit; a server without a shared folder hands the file back',
+    model: 'gpt-6-sol',
+    environmentNote: "Scenario H: the AI's save_to_file names the scenario's artifacts/ folder (under the evidence folder in ~/Documents, which the test container shares at the same path with WFC_SAVE_ROOTS). The recorded tab's save/open dialogs are trapped (any call is recorded and cancelled) and the person never presses Save, so every write to artifacts/ comes from the server; the agent runs in codex's read-only sandbox for turns 1-2, so it cannot write the file itself. Between turns the harness acts as the person: it renames a step in the recorded tab (double-click, type, Enter) and polls the file until it holds the server copy. Turn 3 points the agent at a second server from the same image with no shared folder (like a hosted preview) and runs it in codex's workspace-write sandbox with only fallback-artifacts/ added, so the agent can write the handed-back file there itself.",
+    initScript: pickerTrap,
+    async setup(h) {
+      const artifactsDir = path.join(h.dir, 'artifacts'), fallbackDir = path.join(h.dir, 'fallback-artifacts');
+      for (const d of [artifactsDir, fallbackDir]) { fs.rmSync(d, { recursive: true, force: true }); fs.mkdirSync(d, { recursive: true }); }
+      if (!h.fallback) throw new Error('Scenario H needs --fallback-base: a second server with no shared folder');
+      const r = await h.tool('create_document', { title: 'AI test H · Website launch plan', open: false });
+      const r2 = await h.fallback.tool('create_document', { title: 'AI test H · Preview plan', open: false });
+      return { docId: r.json.documentId, artifactsDir, fallbackDir, fallbackDocId: r2.json.documentId, watch: [{ docId: r2.json.documentId, base: h.fallback.base }] };
+    },
+    turns: [
+      {
+        prompt: (c) => 'In my Workflow Canvas document ' + c.docId + ', build a small website launch plan: four steps, ' + H_STEPS.map((s) => '"' + s + '"').join(', then ') + ', each connected to the next. ' +
+          "Then save it as an .excalidraw file into this session's artifacts folder, " + c.artifactsDir + ', so it stays saved while we keep working, and tell me the full path of the file.',
+      },
+      {
+        async before(p) {
+          const file = hFiles(path.join(p.dir, 'artifacts')).map((f) => path.join(p.dir, 'artifacts', f));
+          const target = file.length === 1 ? file[0] : null;
+          const afterSave = target ? await hWaitSynced(p, target) : null;
+          if (target) fs.copyFileSync(target, path.join(p.dir, 'file.after-ai-save.excalidraw'));
+          const tabAfterTurn1 = await hTab(p.page);
+          p.log('after turn 1 the artifacts folder holds ' + JSON.stringify(file.map((f) => path.basename(f))) + '; file ' + JSON.stringify(hBrief(afterSave)) + '; tab ' + JSON.stringify(tabAfterTurn1));
+          const doc = afterSave?.server ?? await p.http('/api/documents/' + encodeURIComponent(p.docId));
+          const node = hNode(doc, H_RENAME.from);
+          const edit = { nodeId: node?.id ?? null, renamed: false };
+          if (node && target) {
+            await p.caption('person renames "' + H_RENAME.from + '" in the tab (no Save click)');
+            await p.page.locator('[data-testid="fit-view"]').click().catch(() => {});
+            await p.page.waitForTimeout(800);
+            edit.mtimeBefore = fs.statSync(target).mtimeMs;
+            await p.page.locator('[data-testid="node-' + node.id + '"]').dblclick();
+            const box = p.page.locator('[data-testid="node-' + node.id + '"] textarea');
+            await box.waitFor({ timeout: 10_000 });
+            await box.selectText();
+            await p.page.keyboard.type(H_RENAME.to, { delay: 30 });
+            await p.page.keyboard.press('Enter');
+            edit.renamed = true;
+            const w = await hWaitSynced(p, target, (f) => hNode(f.doc, H_RENAME.to)?.id === node.id);
+            edit.file = hBrief(w);
+            edit.serverTitle = w.server.nodes.find((n) => n.id === node.id)?.title ?? null;
+            edit.fileTitle = w.f.doc?.nodes.find((n) => n.id === node.id)?.title ?? null;
+            fs.copyFileSync(target, path.join(p.dir, 'file.after-person-edit.excalidraw'));
+            await p.page.waitForTimeout(400);
+            await p.page.screenshot({ path: path.join(p.dir, 'person-1-renamed.png') });
+            p.log('renamed "' + H_RENAME.from + '" -> ' + JSON.stringify(edit.serverTitle) + ' in the tab; file autosaved: ' + JSON.stringify(edit.file));
+            await p.caption('person renamed a step · the file in artifacts/ autosaved it');
+          }
+          return { artifactsFiles: file, file: target, afterSave: hBrief(afterSave), afterSaveDoc: afterSave?.f.doc ?? null, tabAfterTurn1, edit, tabAfterEdit: await hTab(p.page) };
+        },
+        prompt: (c) => 'In my Workflow Canvas document ' + c.docId + ', add a step "' + H_NEW.title + '" after "' + H_NEW.after + '", connected from it. ' +
+          'The plan already autosaves to its file in my artifacts folder (' + c.artifactsDir + '), so there is no need to save it again. Tell me when it is done.',
+      },
+      {
+        server: 'fallback',
+        sandbox: 'workspace-write',
+        addDirs: (c) => [c.fallbackDir],
+        async before(p) {
+          const target = hFiles(path.join(p.dir, 'artifacts')).map((f) => path.join(p.dir, 'artifacts', f));
+          const w = target.length === 1 ? await hWaitSynced(p, target[0], (f) => !!hNode(f.doc, H_NEW.title) && !!hNode(f.doc, H_RENAME.to)) : null;
+          if (w) fs.copyFileSync(target[0], path.join(p.dir, 'file.after-ai-turn2.excalidraw'));
+          p.log('after turn 2 the file ' + JSON.stringify(hBrief(w)));
+          const preview = p.pages.find((x) => x.docId !== p.docId)?.page;
+          if (preview) await preview.bringToFront().catch(() => {});
+          return { artifactsFilesAfterTurn2: target, afterTurn2: hBrief(w), afterTurn2Doc: w?.f.doc ?? null, tabAfterTurn2: await hTab(p.page) };
+        },
+        prompt: (c) => "I'm also trying Workflow Canvas as a hosted preview. In its document " + c.fallbackDocId + ', build a small three-step plan: ' + H_PREVIEW_STEPS.map((s) => '"' + s + '"').join(', then ') + ', each connected to the next. ' +
+          'Then save it as an .excalidraw file into my folder ' + c.fallbackDir + ' and tell me where it is.',
+      },
+    ],
+    async collect(p) {
+      const target = hFiles(path.join(p.dir, 'artifacts')).map((f) => path.join(p.dir, 'artifacts', f));
+      const final = target.length === 1 ? hBrief(await hWaitSynced(p, target[0])) : null;
+      const fallbackDir = path.join(p.dir, 'fallback-artifacts');
+      const preview = await p.fallback.http('/api/documents/' + encodeURIComponent(p.pages.find((x) => x.docId !== p.docId)?.docId ?? ''));
+      const fallbackFiles = hFiles(fallbackDir).map((f) => { const r = hRead(path.join(fallbackDir, f)); return { name: f, file: r.file, type: r.type, elements: r.elements, bytes: r.bytes, parseError: r.parseError, doc: r.doc ?? null, text: r.text }; });
+      p.log('fallback folder holds ' + JSON.stringify(fallbackFiles.map((f) => ({ name: f.name, bytes: f.bytes, type: f.type, parseError: f.parseError }))) + '; final artifacts file ' + JSON.stringify(final));
+      return {
+        artifactsFilesFinal: target, final, preview, fallbackFiles, tabFinal: await hTab(p.page),
+        evidenceFiles: ['artifacts/' + (target[0] ? path.basename(target[0]) : '(missing)'), 'file.after-ai-save.excalidraw', 'file.after-person-edit.excalidraw', 'file.after-ai-turn2.excalidraw', 'person-1-renamed.png', ...fallbackFiles.map((f) => 'fallback-artifacts/' + f.name)],
+      };
+    },
+    verify(c, check) {
+      const { doc, data } = c;
+      const artifactsDir = c.sc.artifactsDir, fallbackDir = c.sc.fallbackDir;
+      const t = (n) => c.calls.filter((x) => x.turn === n);
+      const plan1 = hChain(data.afterSaveDoc, H_STEPS);
+      const saves1 = t(1).filter((x) => x.tool === 'save_to_file');
+      const pathSaves = saves1.filter((x) => x.ok && inDir(x.args?.path, artifactsDir) && x.resultJson?.ok === true && x.resultJson?.autosave === true && inDir(x.resultJson?.file, artifactsDir) && /\.excalidraw$/.test(x.resultJson.file));
+      const savedFile = pathSaves.at(-1)?.resultJson?.file ?? null;
+      check('turn 1, no click: AI called save_to_file with a path in the artifacts folder and the server answered ok, autosave on, with the file it wrote',
+        pathSaves.length > 0 && savedFile === data.file, { artifactsDir, saves: saves1.map((x) => ({ args: x.args, result: x.resultJson ?? x.error })), fileFound: data.file ?? null, artifactsFiles: data.artifactsFiles });
+      const a = data.afterSave;
+      check('the .excalidraw file exists in the artifacts folder and is a valid Excalidraw scene holding the whole 4-step plan (equals the server copy)',
+        !!a?.synced && a.type === 'excalidraw' && a.elements > 0 && a.workflowCanvasMeta && !a.parseError && plan1.ok,
+        { file: a ?? null, plan: plan1 });
+      check('the person never clicked: the recorded tab opened no save/open dialog and has no browser file attached (checked after each turn and at the end)',
+        [data.tabAfterTurn1, data.tabAfterEdit, data.tabAfterTurn2, data.tabFinal].every(hNoClick), { afterTurn1: data.tabAfterTurn1, afterPersonEdit: data.tabAfterEdit, afterTurn2: data.tabAfterTurn2, end: data.tabFinal });
+      const m1 = c.finalMessages[0] ?? '';
+      check('turn 1: AI told the person the file path', !!savedFile && (m1.includes(savedFile) || (m1.includes(path.basename(savedFile, '.excalidraw')) && m1.includes('artifacts'))), { file: savedFile, finalMessage: m1 });
+      const e = data.edit ?? {};
+      check('person renamed "' + H_RENAME.from + '" in the recorded tab: the server has it and the file autosaved it (file equals the server copy)',
+        e.renamed === true && e.serverTitle === H_RENAME.to && e.fileTitle === H_RENAME.to && !!e.file?.synced && e.file.mtimeMs > e.mtimeBefore,
+        { ...e, personError: data.personError });
+      const t2 = t(2);
+      const edits2 = t2.filter((x) => x.ok && DOC_EDIT_TOOLS.includes(x.tool));
+      const newStep = hNode(doc, H_NEW.title);
+      const newEdge = newStep && doc.edges.find((x) => x.source === hNode(doc, H_NEW.after)?.id && x.target === newStep.id);
+      check('turn 2: AI added "' + H_NEW.title + '" connected from "' + H_NEW.after + '" and did not call save_to_file',
+        edits2.length > 0 && !!newEdge && t2.every((x) => x.tool !== 'save_to_file'), { sequence: t2.map((x) => x.tool + (x.ok ? '' : ' ✗')), newStep: newStep?.id ?? null, edge: newEdge ?? null });
+      const w2 = data.afterTurn2, d2 = data.afterTurn2Doc;
+      const n2 = hNode(d2, H_NEW.title);
+      check("after turn 2 the file autosaved the AI's edit and kept the person's rename (file equals the server copy)",
+        !!w2?.synced && !!n2 && d2.edges.some((x) => x.source === hNode(d2, H_NEW.after)?.id && x.target === n2.id) && hNode(d2, H_RENAME.to)?.id === e.nodeId && w2.mtimeMs > (e.file?.mtimeMs ?? Infinity),
+        { file: w2 ?? null, renameKept: hNode(d2, H_RENAME.to)?.id ?? null, newStep: n2?.id ?? null });
+      const t3 = t(3);
+      const saves3 = t3.filter((x) => x.tool === 'save_to_file');
+      const handBacks = saves3.filter((x) => x.ok && x.resultJson?.ok === false && x.resultJson?.saved === false && !!x.resultJson?.reason && /\.excalidraw$/.test(x.resultJson?.file?.name ?? '') && typeof x.resultJson?.file?.content === 'string');
+      check('fallback server (no shared folder): save_to_file wrote nothing and answered ok:false, saved:false with a reason and the file contents',
+        handBacks.length > 0 && saves3.every((x) => x.resultJson?.ok !== true), saves3.map((x) => ({ args: x.args, ok: x.resultJson?.ok, saved: x.resultJson?.saved, reason: x.resultJson?.reason, file: x.resultJson?.file && { name: x.resultJson.file.name, bytes: x.resultJson.file.content?.length }, next: x.resultJson?.next })));
+      const back = handBacks.at(-1)?.resultJson?.file;
+      const backDoc = (() => { try { return back ? documentFromExcalidraw(back.content) : null; } catch { return null; } })();
+      const files = data.fallbackFiles ?? [];
+      const ff = files.find((f) => f.name === back?.name) ?? (files.length === 1 ? files[0] : null);
+      const same = ff?.doc && backDoc ? { nodes: recordDiff(ff.doc.nodes, backDoc.nodes), edges: recordDiff(ff.doc.edges, backDoc.edges) } : null;
+      const identical = (() => { try { return !!ff && !!back && JSON.stringify(canon(JSON.parse(ff.text))) === JSON.stringify(canon(JSON.parse(back.content))); } catch { return false; } })();
+      const preview = hChain(data.preview, H_PREVIEW_STEPS);
+      const writes = (c.items ?? []).filter((x) => x.turn === 3 && (x.type === 'file_change' ? (x.changes ?? []).some((ch) => inDir(ch.path, fallbackDir)) : String(x.command ?? '').includes(fallbackDir) || String(x.command ?? '').includes('fallback-artifacts')));
+      check('fallback: the AI wrote a valid .excalidraw file itself into the named folder, holding the handed-back document (the 3-step preview plan)',
+        !!ff && ff.type === 'excalidraw' && ff.elements > 0 && !ff.parseError && !!same && same.nodes.length === 0 && same.edges.length === 0 && preview.ok && hChain(ff.doc, H_PREVIEW_STEPS).ok && writes.length > 0,
+        { fallbackDir, files: files.map((f) => ({ name: f.name, bytes: f.bytes, type: f.type, elements: f.elements, parseError: f.parseError })), handedBack: back && { name: back.name, bytes: back.content.length }, diffVsHandedBack: same && { nodes: same.nodes.slice(0, 5), edges: same.edges.slice(0, 5) }, byteForByteSameJson: identical, previewPlan: preview, agentWrites: writes.map((x) => ({ type: x.type, command: clipText(x.command), changes: x.changes, exitCode: x.exitCode, status: x.status })) });
+      const m3 = c.finalMessages[2] ?? '';
+      check('fallback: AI told the person where the copy is', !!ff && (m3.includes(path.basename(ff.name, '.excalidraw')) || m3.includes(fallbackDir)), { file: ff?.name ?? null, fallbackDir, finalMessage: m3 });
+      check("fallback: AI told the person the copy isn't autosaved", H_NOT_AUTOSAVED.test(m3), { finalMessage: m3 }, { info: true });
+      check('the artifacts file still equals the server copy at the end', !!data.final?.synced, data.final ?? null);
     },
   },
 ];

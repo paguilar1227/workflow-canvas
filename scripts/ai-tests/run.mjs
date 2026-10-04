@@ -6,9 +6,11 @@
 //
 // A scenario may have several turns (separate codex exec runs on the same document); a turn's before() hook acts as
 // the person in the recorded tab (e.g. clicking Save) between AI turns.
+// A turn may point the agent at the fallback server (server: 'fallback') and give it a writable sandbox (sandbox, addDirs).
 //
 //   node scripts/ai-tests/run.mjs [--base http://localhost:8790] [--out <dir>] [--only A,C] [--timeout-min 25] [--headed]
 //                                 [--container wfc-ai-test] [--expect-tools 35]
+//                                 [--fallback-base http://127.0.0.1:8799] [--fallback-container wfc-ai-test-nomount]
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import nodeHttp from 'node:http';
@@ -32,6 +34,9 @@ const BASELINE_THEME = 'lens-dark';
 const REQUIRED_AI_TOOLS = ['add_nodes', 'update_nodes', 'create_diagram', 'save_to_file'];
 const EXPECTED_TOOL_COUNT = Number(args['expect-tools'] ?? 35);
 const CONTAINER = args.container ? String(args.container) : null;
+// A second server with no shared folder (like a hosted preview), for scenarios that need one.
+const FALLBACK_BASE = args['fallback-base'] ? String(args['fallback-base']).replace(/\/$/, '') : null;
+const FALLBACK_CONTAINER = args['fallback-container'] ? String(args['fallback-container']) : null;
 
 function parseArgs(argv) {
   const o = {};
@@ -47,15 +52,18 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const clip = (s, n) => { s = typeof s === 'string' ? s : JSON.stringify(s) ?? ''; return s.length > n ? s.slice(0, n) + '…' : s; };
 const stamp = (t0) => '[+' + ((Date.now() - t0) / 1000).toFixed(1).padStart(6) + 's]';
 
-async function http(p, { method = 'GET', body } = {}) {
-  const res = await fetch(BASE + p, { method, headers: { 'content-type': 'application/json', 'x-origin': 'user', 'x-client-name': 'ai-test-harness' }, body: body === undefined ? undefined : JSON.stringify(body) });
+const httpAt = (base) => async (p, { method = 'GET', body } = {}) => {
+  const res = await fetch(base + p, { method, headers: { 'content-type': 'application/json', 'x-origin': 'user', 'x-client-name': 'ai-test-harness' }, body: body === undefined ? undefined : JSON.stringify(body) });
   const raw = await res.text();
   let data;
   try { data = JSON.parse(raw); } catch { data = raw; }
   if (!res.ok) throw new Error(method + ' ' + p + ' -> HTTP ' + res.status + ': ' + raw.slice(0, 300));
   return data;
-}
-const tool = async (name, a = {}) => (await http('/api/tools/' + encodeURIComponent(name), { method: 'POST', body: a })).result;
+};
+const toolAt = (h) => async (name, a = {}) => (await h('/api/tools/' + encodeURIComponent(name), { method: 'POST', body: a })).result;
+const http = httpAt(BASE);
+const tool = toolAt(http);
+const fallback = FALLBACK_BASE ? { base: FALLBACK_BASE, http: httpAt(FALLBACK_BASE), tool: toolAt(httpAt(FALLBACK_BASE)) } : null;
 
 function run(cmd, argv, { input, timeoutMs = 120_000, cwd } = {}) {
   return new Promise((resolve) => {
@@ -70,10 +78,11 @@ function run(cmd, argv, { input, timeoutMs = 120_000, cwd } = {}) {
   });
 }
 
-function codexArgv(sc, prompt) {
-  return ['exec', '--ignore-user-config', '--disable', 'apps', '--json', '--ephemeral', '--skip-git-repo-check', '-s', 'read-only',
+function codexArgv(sc, prompt, turn = {}) {
+  return ['exec', '--ignore-user-config', '--disable', 'apps', '--json', '--ephemeral', '--skip-git-repo-check', '-s', turn.sandbox ?? 'read-only',
+    ...(turn.addDirs ?? []).flatMap((d) => ['--add-dir', d]),
     '-m', sc.model, '-c', 'model_reasoning_effort="' + REASONING + '"',
-    '-c', 'mcp_servers.' + MCP_NAME + '.url="' + (sc.mcpUrl ?? BASE + '/mcp') + '"',
+    '-c', 'mcp_servers.' + MCP_NAME + '.url="' + (turn.mcpUrl ?? sc.mcpUrl ?? BASE + '/mcp') + '"',
     '-c', 'mcp_servers.' + MCP_NAME + '.default_tools_approval_mode="approve"',
     prompt];
 }
@@ -87,9 +96,9 @@ function toolNames(text) {
   return names;
 }
 
-// Per-agent pass-through in front of BASE/mcp that records the tools/list responses delivered to that agent.
-function startMcpTap(sc) {
-  const target = new URL(BASE);
+// Per-agent pass-through in front of <base>/mcp that records the tools/list responses delivered to that agent.
+function startMcpTap(sc, base = BASE) {
+  const target = new URL(base);
   const server = nodeHttp.createServer((req, res) => {
     const chunks = [];
     req.on('data', (c) => chunks.push(c));
@@ -179,10 +188,10 @@ async function dockerImage(container) {
   return { container, image, id, containerStartedAt: startedAt, ports: bindings };
 }
 
-async function openWatcher(context, docId, initScript) {
+async function openWatcher(context, docId, initScript, base = BASE) {
   const page = await context.newPage();
   if (initScript) await page.addInitScript(initScript);
-  await page.goto(BASE + '/?doc=' + encodeURIComponent(docId) + '&pin=1');
+  await page.goto(base + '/?doc=' + encodeURIComponent(docId) + '&pin=1');
   await page.waitForFunction((id) => window.__wfc?.state().doc?.id === id && !!document.querySelector('.react-flow'), docId, { timeout: 30_000 });
   return page;
 }
@@ -218,7 +227,11 @@ async function main() {
   const readOnly = new Set(toolList.filter((t) => t.annotations?.readOnlyHint).map((t) => t.name));
   const codexVersion = (await run('codex', ['--version'], { timeoutMs: 30_000 })).stdout.trim();
   const imageAtStart = CONTAINER ? await dockerImage(CONTAINER) : null;
+  const fallbackHealth = fallback ? await fallback.http('/health') : null;
+  const fallbackTools = fallback ? (await fallback.http('/api/tools')).tools.map((t) => t.name) : null;
+  const fallbackImageAtStart = FALLBACK_CONTAINER ? await dockerImage(FALLBACK_CONTAINER) : null;
   console.log('Workflow Canvas ' + BASE + ' (' + health.name + ' ' + health.version + ', ' + toolList.length + ' tools' + (imageAtStart ? ', ' + CONTAINER + ' on ' + imageAtStart.id : '') + ') · ' + codexVersion + ' · scenarios ' + scenarios.map((s) => s.id).join(','));
+  if (fallback) console.log('Fallback server ' + FALLBACK_BASE + ' (' + fallbackTools.length + ' tools' + (fallbackImageAtStart ? ', ' + FALLBACK_CONTAINER + ' on ' + fallbackImageAtStart.id : '') + ')');
 
   const claudeProbe = probeClaude().catch((e) => ({ error: String(e) }));
   if (themeChangers.length) await tool('set_theme', { themeId: BASELINE_THEME });
@@ -230,20 +243,28 @@ async function main() {
   for (const sc of scenarios) {
     sc.dir = path.join(OUT, sc.slug);
     fs.rmSync(path.join(sc.dir, 'steps'), { recursive: true, force: true });
-    if (fs.existsSync(sc.dir)) for (const f of fs.readdirSync(sc.dir)) if (/^(ai-capture-.*\.png|final.*\.png|person-.*\.png|video.*\.mp4|attached-file.*\.excalidraw)$/.test(f)) fs.rmSync(path.join(sc.dir, f));
+    fs.rmSync(path.join(sc.dir, 'ai-saved-elsewhere'), { recursive: true, force: true });
+    if (fs.existsSync(sc.dir)) for (const f of fs.readdirSync(sc.dir)) if (/^(ai-capture-.*\.png|final.*\.png|person-.*\.png|video.*\.mp4|attached-file.*\.excalidraw|file\..*\.excalidraw)$/.test(f)) fs.rmSync(path.join(sc.dir, f));
     fs.mkdirSync(path.join(sc.dir, 'steps'), { recursive: true });
-    Object.assign(sc, await sc.setup({ tool, http }));
+    Object.assign(sc, await sc.setup({ tool, http, dir: sc.dir, fallback }));
     sc.cwdDir = sc.cwd === 'repo' ? REPO : fs.mkdtempSync(path.join(os.tmpdir(), 'wfc-ai-' + sc.id + '-'));
     sc.turns = sc.turns ?? [{ prompt: sc.prompt }];
-    sc.promptTexts = sc.turns.map((t) => t.prompt({ docId: sc.docId }));
-    sc.toolLists = []; sc.stderrText = '';
+    sc.promptTexts = sc.turns.map((t) => t.prompt(sc));
+    sc.toolLists = []; sc.stderrText = ''; sc.items = [];
     sc.tap = await startMcpTap(sc);
     sc.mcpUrl = sc.tap.url;
-    sc.argv = codexArgv(sc, sc.promptTexts[0]);
+    if (sc.turns.some((t) => t.server === 'fallback')) {
+      if (!fallback) throw new Error('Scenario ' + sc.id + ' needs --fallback-base');
+      sc.fallbackTap = await startMcpTap(sc, FALLBACK_BASE);
+    }
+    sc.turnOpts = sc.turns.map((t) => ({ sandbox: t.sandbox, addDirs: t.addDirs?.(sc), mcpUrl: t.server === 'fallback' ? sc.fallbackTap.url : sc.mcpUrl, server: t.server === 'fallback' ? FALLBACK_BASE : BASE }));
+    sc.argvs = sc.turns.map((t, i) => codexArgv(sc, sc.promptTexts[i], sc.turnOpts[i]));
+    sc.argv = sc.argvs[0];
     sc.context = await browser.newContext({ viewport: VIEW, deviceScaleFactor: 1, recordVideo: { dir: path.join(videoTmp, sc.slug), size: VIEW } });
     sc.pages = [{ docId: sc.docId, page: await openWatcher(sc.context, sc.docId, sc.initScript) }];
+    for (const w of sc.watch ?? []) sc.pages.push({ docId: w.docId, page: await openWatcher(sc.context, w.docId, sc.initScript, w.base) });
     sc.label = sc.id + ' · ' + sc.title + ' — codex ' + sc.model;
-    await setCaption(sc.pages[0].page, sc.label, 'waiting for the AI…');
+    for (const p of sc.pages) await setCaption(p.page, sc.label, 'waiting for the AI…');
     sc.calls = []; sc.transcript = []; sc.finalMessage = null; sc.finalMessages = []; sc.usage = null; sc.usages = []; sc.createdDocIds = []; sc.step = 0; sc.shots = Promise.resolve(); sc.aiImages = 0; sc.turn = 0; sc.data = {};
     console.log(sc.id + ': doc ' + sc.docId + ' ready');
   }
@@ -253,6 +274,14 @@ async function main() {
 
   for (const sc of scenarios) {
     await sc.context.close();
+    for (const r of sc.data.relocated ?? []) {
+      if (!r.moved || !fs.existsSync(r.from)) continue;
+      // The server autosaves a file it attached after every change; if it wrote the old path again after the move, move that copy too.
+      const again = r.to.replace(/\.excalidraw$/i, '') + '.rewritten-after-move.excalidraw';
+      fs.renameSync(r.from, again);
+      r.rewrittenAfterMove = again;
+      console.log(sc.id + ': the server rewrote ' + r.from + ' after it was moved; moved that copy to ' + again);
+    }
     const videos = [];
     for (const [i, p] of sc.pages.entries()) {
       const webm = await p.page.video()?.path();
@@ -269,6 +298,7 @@ async function main() {
 
   const claude = await claudeProbe;
   const imageAtEnd = CONTAINER ? await dockerImage(CONTAINER) : null;
+  const fallbackImageAtEnd = FALLBACK_CONTAINER ? await dockerImage(FALLBACK_CONTAINER) : null;
   const summary = {
     runStartedAt: runStarted.toISOString(),
     runFinishedAt: new Date().toISOString(),
@@ -278,10 +308,15 @@ async function main() {
     expectedToolCount: EXPECTED_TOOL_COUNT,
     tools: serverTools,
     serverImage: imageAtStart && { ...imageAtStart, sameContainerThroughout: !!imageAtEnd && imageAtEnd.id === imageAtStart.id && imageAtEnd.containerStartedAt === imageAtStart.containerStartedAt, note: 'docker inspect ' + CONTAINER + ' at the start and the end of the run; the whole run executed against this image.' },
+    ...(fallback ? {
+      fallbackServer: { base: FALLBACK_BASE, health: fallbackHealth, toolCount: fallbackTools.length, sameToolsAsServer: JSON.stringify([...fallbackTools].sort()) === JSON.stringify([...serverTools].sort()),
+        image: fallbackImageAtStart && { ...fallbackImageAtStart, sameContainerThroughout: !!fallbackImageAtEnd && fallbackImageAtEnd.id === fallbackImageAtStart.id && fallbackImageAtEnd.containerStartedAt === fallbackImageAtStart.containerStartedAt },
+        note: 'Second server from the same image with no WFC_SAVE_ROOTS and no shared folder (like a hosted preview); only turns marked server: fallback talk to it.' },
+    } : {}),
     parallel: true,
     aiClient: { name: 'codex exec', version: codexVersion, flags: codexArgv({ model: '<model>' }, '<prompt>').slice(0, -1), ignoreUserConfig: true, reasoningEffort: REASONING },
     pass: scenarios.every((s) => s.result.pass),
-    scenarios: scenarios.map((s) => ({ id: s.id, slug: s.slug, title: s.title, model: s.model, turns: s.turns.length, documentId: s.docId, createdDocuments: s.result.createdDocuments, pass: s.result.pass, passed: s.result.checks.filter((c) => c.pass).length, failed: s.result.checks.filter((c) => !c.pass).map((c) => c.name), durationSec: s.result.durationSec, toolCalls: s.result.toolCalls.total, exit: s.result.exit, dir: s.dir })),
+    scenarios: scenarios.map((s) => ({ id: s.id, slug: s.slug, title: s.title, model: s.model, turns: s.turns.length, documentId: s.docId, createdDocuments: s.result.createdDocuments, pass: s.result.pass, passed: s.result.checks.filter((c) => c.pass).length, failed: s.result.checks.filter((c) => !c.pass).map((c) => c.name), ...(s.result.observations ? { informational: s.result.observations.map((o) => ({ name: o.name, pass: o.pass })) } : {}), durationSec: s.result.durationSec, toolCalls: s.result.toolCalls.total, exit: s.result.exit, dir: s.dir })),
     environmentNotes: [
       { topic: 'Claude Code', probe: claude, note: 'Claude Code connects to the workflow-canvas MCP server, but cannot run a turn unless it is logged in; when not logged in, the cross-client scenario runs through codex exec with a different model instead.' },
       { topic: 'codex config', note: 'codex exec runs with --ignore-user-config --disable apps so only this MCP server is attached; MCP tools are auto-approved via mcp_servers.workflow_canvas.default_tools_approval_mode="approve" because exec has no interactive approvals.' },
@@ -292,7 +327,8 @@ async function main() {
     ],
   };
   fs.writeFileSync(path.join(OUT, 'summary.json'), JSON.stringify(summary, null, 2));
-  console.log('\n' + scenarios.map((s) => (s.result.pass ? 'PASS ' : 'FAIL ') + s.id + ' ' + s.result.checks.filter((c) => c.pass).length + '/' + s.result.checks.length + ' checks, ' + s.result.toolCalls.total + ' tool calls, ' + s.result.durationSec + 's').join('\n'));
+  console.log('\n' + scenarios.map((s) => (s.result.pass ? 'PASS ' : 'FAIL ') + s.id + ' ' + s.result.checks.filter((c) => c.pass).length + '/' + s.result.checks.length + ' checks, ' + s.result.toolCalls.total + ' tool calls, ' + s.result.durationSec + 's'
+    + (s.result.observations ? ' · informational (not counted): ' + s.result.observations.map((o) => (o.pass ? 'yes' : 'no') + ' — ' + o.name).join('; ') : '')).join('\n'));
   console.log('Evidence: ' + OUT);
   process.exitCode = summary.pass ? 0 : 1;
 }
@@ -343,7 +379,8 @@ async function runScenario(sc, { t0, readOnly, serverTools }) {
         }
         if (it.server === MCP_NAME && (!readOnly.has(it.tool) || it.tool === 'capture_screenshot')) shot(call);
       } else if (it.type === 'agent_message') { sc.finalMessage = it.text; sc.finalMessages[sc.turn - 1] = it.text; log('AI: ' + it.text); }
-      else if (it.type === 'command_execution') log('$ ' + clip(it.command, 300) + ' (exit ' + it.exit_code + ')');
+      else if (it.type === 'command_execution') { sc.items.push({ turn: sc.turn, type: it.type, command: it.command, exitCode: it.exit_code, status: it.status }); log('$ ' + clip(it.command, 300) + ' (exit ' + it.exit_code + ')'); }
+      else if (it.type === 'file_change') { sc.items.push({ turn: sc.turn, type: it.type, changes: it.changes, status: it.status }); log('[file_change] ' + clip(it, 300)); }
       else if (it.type === 'reasoning') log('(thinking) ' + clip((it.text ?? '').replace(/\s+/g, ' '), 300));
       else if (it.type === 'error') log('! ' + it.message);
       else log('[' + it.type + '] ' + clip(it, 300));
@@ -381,15 +418,16 @@ async function runScenario(sc, { t0, readOnly, serverTools }) {
     child.on('error', (e) => { clearTimeout(timer); log('! could not start codex: ' + e.message); resolve({ code: -1, signal: null, timedOut }); });
     child.on('close', (code, signal) => { clearTimeout(timer); handle(buf); resolve({ code, signal, timedOut }); });
   });
-  const person = { page: main, docId: sc.docId, log: (line) => log('PERSON: ' + line), caption: (line) => setCaption(main, sc.label, line), tool, http, dir: sc.dir };
+  const person = { page: main, docId: sc.docId, log: (line) => log('PERSON: ' + line), caption: (line) => setCaption(main, sc.label, line), tool, http, dir: sc.dir, fallback, pages: sc.pages };
   const exits = [];
   for (const [i, turn] of sc.turns.entries()) {
     sc.turn = i + 1;
-    if (sc.turns.length > 1) { log('— turn ' + sc.turn + '/' + sc.turns.length); raw.write(JSON.stringify({ type: 'harness.turn', turn: sc.turn }) + '\n'); errOut.write('--- turn ' + sc.turn + '\n'); }
+    const opts = sc.turnOpts[i];
+    if (sc.turns.length > 1) { log('— turn ' + sc.turn + '/' + sc.turns.length + (opts.server !== BASE ? ' on ' + opts.server : '') + (turn.sandbox ? ' · sandbox ' + turn.sandbox + (opts.addDirs?.length ? ' + ' + opts.addDirs.join(', ') : '') : '')); raw.write(JSON.stringify({ type: 'harness.turn', turn: sc.turn, server: opts.server, sandbox: turn.sandbox ?? 'read-only', addDirs: opts.addDirs ?? [] }) + '\n'); errOut.write('--- turn ' + sc.turn + '\n'); }
     if (turn.before) {
       try { Object.assign(sc.data, await turn.before(person)); } catch (e) { log('! person step failed: ' + e.message); sc.data.personError = String(e.message); }
     }
-    const ex = await runAgent(codexArgv(sc, sc.promptTexts[i]));
+    const ex = await runAgent(sc.argvs[i]);
     exits.push(ex);
     if (sc.turns.length > 1) log('turn ' + sc.turn + ' exit=' + ex.code + (ex.timedOut ? ' (timed out)' : ''));
     if (ex.code !== 0 || ex.timedOut) break;
@@ -399,10 +437,24 @@ async function runScenario(sc, { t0, readOnly, serverTools }) {
   const durationSec = Math.round((Date.now() - started.getTime()) / 100) / 10;
   log('END exit=' + exit.code + (exit.timedOut ? ' (timed out)' : '') + ' after ' + durationSec + 's');
   sc.tap.close();
+  sc.fallbackTap?.close();
   await sc.shots;
   await sleep(SETTLE_MS);
   if (sc.collect) {
     try { Object.assign(sc.data, await sc.collect({ ...person, log: (line) => log('HARNESS: ' + line) })); } catch (e) { log('! harness collection failed: ' + e.message); sc.data.collectError = String(e.stack ?? e); }
+  }
+  // Files the server wrote for the AI outside this scenario's evidence folder (save_to_file with a path the AI chose) are moved into
+  // <evidence>/ai-saved-elsewhere/ so test runs leave nothing behind in the shared folder. Only files created during this scenario are moved.
+  sc.data.relocated = [];
+  const savedFiles = [...new Set(sc.calls.filter((c) => c.tool === 'save_to_file' && c.ok && c.resultJson?.ok === true && typeof c.resultJson?.file === 'string').map((c) => path.resolve(c.resultJson.file)))];
+  for (const f of savedFiles.filter((x) => !x.startsWith(sc.dir + path.sep))) {
+    const st = fs.existsSync(f) ? fs.statSync(f) : null;
+    if (!st || st.birthtimeMs < started.getTime()) { sc.data.relocated.push({ from: f, moved: false, why: st ? 'existed before the scenario started' : 'missing' }); log('HARNESS: left ' + f + ' in place (' + (st ? 'existed before the scenario started' : 'missing') + ')'); continue; }
+    const to = path.join(sc.dir, 'ai-saved-elsewhere', path.basename(f));
+    fs.mkdirSync(path.dirname(to), { recursive: true });
+    fs.renameSync(f, to);
+    sc.data.relocated.push({ from: f, to, moved: true });
+    log('HARNESS: moved ' + f + ' (saved by the AI outside the evidence folder) to ' + to);
   }
 
   const page = await main.evaluate(readPageState);
@@ -428,7 +480,9 @@ async function runScenario(sc, { t0, readOnly, serverTools }) {
   for (const id of sc.createdDocIds) { try { createdDocs.push(await http('/api/documents/' + encodeURIComponent(id))); } catch { /* deleted by the AI */ } }
 
   const checks = [];
-  const check = (name, pass, detail) => checks.push({ name, pass: !!pass, detail });
+  const observations = [];
+  // { info: true } records an informational observation: reported with its outcome but not part of the scenario's pass/fail.
+  const check = (name, pass, detail, opts) => (opts?.info ? observations.push({ name, pass: !!pass, informational: true, detail }) : checks.push({ name, pass: !!pass, detail }));
   const multi = sc.turns.length > 1;
   check('agent finished on its own (exit 0, no timeout)' + (multi ? ' in all ' + sc.turns.length + ' turns' : ''), exits.length === sc.turns.length && exits.every((e) => e.code === 0 && !e.timedOut), multi ? exits : exit);
   const skipped = sc.stderrText.split('\n').filter((l) => l.includes('Skipping MCP tool'));
@@ -439,7 +493,7 @@ async function runScenario(sc, { t0, readOnly, serverTools }) {
   const extra = listed.filter((t) => !serverTools.includes(t));
   check('agent tool list has all ' + EXPECTED_TOOL_COUNT + ' server tools, incl. ' + REQUIRED_AI_TOOLS.join(', '), sc.toolLists.length > 0 && serverTools.length === EXPECTED_TOOL_COUNT && listed.length === EXPECTED_TOOL_COUNT && missing.length === 0 && extra.length === 0,
     { toolsListResponses: sc.toolLists.length, serverTools: serverTools.length, toolsListed: listed.length, expected: EXPECTED_TOOL_COUNT, required: REQUIRED_AI_TOOLS, missing, extra });
-  try { sc.verify({ doc, session, page, fitZoom, calls: sc.calls, finalMessage: sc.finalMessage, finalMessages: sc.finalMessages, data: sc.data, canRedo, markdown, createdDocs }, check); }
+  try { sc.verify({ doc, session, page, fitZoom, calls: sc.calls, items: sc.items, finalMessage: sc.finalMessage, finalMessages: sc.finalMessages, data: sc.data, canRedo, markdown, createdDocs, sc }, check); }
   catch (e) { check('verification ran without crashing', false, String(e.stack ?? e)); }
 
   const byTool = {};
@@ -448,18 +502,19 @@ async function runScenario(sc, { t0, readOnly, serverTools }) {
     'Scenario ' + sc.id + ': ' + sc.title,
     'Client: codex exec (' + sc.model + ', reasoning ' + REASONING + ') · MCP ' + BASE + '/mcp via recording pass-through ' + sc.mcpUrl + ' · document ' + sc.docId,
     'Command: codex ' + sc.argv.slice(0, -1).map((a) => (/[\s"]/.test(a) ? "'" + a + "'" : a)).join(' ') + ' "<prompt>"',
+    ...sc.argvs.slice(1).flatMap((a, i) => (JSON.stringify(a.slice(0, -1)) === JSON.stringify(sc.argv.slice(0, -1)) ? [] : ['Command (turn ' + (i + 2) + '): codex ' + a.slice(0, -1).map((x) => (/[\s"]/.test(x) ? "'" + x + "'" : x)).join(' ') + ' "<prompt>"'])),
     '', ...(multi ? sc.promptTexts.flatMap((p, i) => ['Prompt (turn ' + (i + 1) + '):', p, '']) : ['Prompt:', sc.promptTexts[0], '']), 'Transcript:', ...sc.transcript, '',
   ].join('\n'));
   sc.result = {
     scenario: sc.id, slug: sc.slug, title: sc.title,
-    client: { name: 'codex exec', model: sc.model, reasoningEffort: REASONING, ignoreUserConfig: true, argv: ['codex', ...sc.argv.slice(0, -1), '<prompt>'], mcpPassThrough: sc.mcpUrl, toolsListed: [...new Set(sc.toolLists.flat())] },
+    client: { name: 'codex exec', model: sc.model, reasoningEffort: REASONING, ignoreUserConfig: true, argv: ['codex', ...sc.argv.slice(0, -1), '<prompt>'], ...(multi ? { argvByTurn: sc.argvs.map((a) => ['codex', ...a.slice(0, -1), '<prompt>']), serverByTurn: sc.turnOpts.map((o) => o.server) } : {}), mcpPassThrough: sc.mcpUrl, toolsListed: [...new Set(sc.toolLists.flat())] },
     server: BASE, documentId: sc.docId, createdDocuments: createdDocs.map((d) => ({ id: d.id, title: d.title, nodes: d.nodes.length, edges: d.edges.length })),
     prompt: multi ? sc.promptTexts : sc.promptTexts[0], startedAt: started.toISOString(), durationSec, exit, ...(multi ? { turns: exits, usages: sc.usages } : {}), usage: sc.usage,
     toolCalls: { total: sc.calls.length, failed: sc.calls.filter((c) => !c.ok).map((c) => ({ n: c.n, turn: c.turn, tool: c.tool, error: c.error })), byTool, sequence: sc.calls.map((c) => (multi ? 't' + c.turn + ':' : '') + c.tool + (c.ok ? '' : ' ✗')) },
     finalDocument: { title: doc.title, nodes: doc.nodes.length, edges: doc.edges.length, frames: doc.nodes.filter((n) => n.kind === 'frame').length, settings: doc.settings },
     finalAgentMessage: sc.finalMessage, ...(multi ? { finalAgentMessages: sc.finalMessages } : {}),
-    pass: checks.every((c) => c.pass), checks,
-    evidence: { dir: sc.dir, finalScreenshots: finals, steps: fs.readdirSync(path.join(sc.dir, 'steps')).sort().map((f) => 'steps/' + f), aiCaptures: fs.readdirSync(sc.dir).filter((f) => f.startsWith('ai-capture-')).sort(), transcript: 'transcript.txt', rawEvents: 'transcript.raw.jsonl', ...(sc.data.evidenceFiles ? { files: sc.data.evidenceFiles } : {}) },
+    pass: checks.every((c) => c.pass), checks, ...(observations.length ? { observations } : {}),
+    evidence: { dir: sc.dir, finalScreenshots: finals, steps: fs.readdirSync(path.join(sc.dir, 'steps')).sort().map((f) => 'steps/' + f), aiCaptures: fs.readdirSync(sc.dir).filter((f) => f.startsWith('ai-capture-')).sort(), transcript: 'transcript.txt', rawEvents: 'transcript.raw.jsonl', ...(sc.data.evidenceFiles ? { files: sc.data.evidenceFiles } : {}), ...(sc.data.relocated.length ? { aiSavedElsewhere: sc.data.relocated } : {}) },
   };
   console.log((sc.result.pass ? 'PASS ' : 'FAIL ') + sc.id + ' in ' + durationSec + 's (' + sc.calls.length + ' tool calls)');
 }

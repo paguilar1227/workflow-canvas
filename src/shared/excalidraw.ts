@@ -43,6 +43,11 @@ function nodeRecord(n: CanvasNode) {
 
 const label = (n: CanvasNode) => [n.icon ? n.icon + ' ' + n.title : n.title, n.subtitle].filter(Boolean).join('\n');
 
+/** File name for a document: its title without characters file systems reject. */
+export function excalidrawFileName(title: string) {
+  return (title.replace(/[\\/:*?"<>|]+/g, '').trim() || 'canvas') + '.excalidraw';
+}
+
 export function exportExcalidraw(doc: CanvasDocument): Record<string, unknown> {
   const els: El[] = [];
   const bound = new Map<string, { id: string; type: string }[]>();
