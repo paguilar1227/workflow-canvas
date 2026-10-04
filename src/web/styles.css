@@ -99,8 +99,8 @@ input, textarea, select { font: inherit; color: var(--text); }
 .doc-item.active { background: var(--accent-soft); color: var(--text); }
 .doc-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .doc-item .meta { font-size: 11px; color: var(--text-3); font-family: var(--font-mono); }
-.doc-item .doc-actions { display: none; gap: 2px; }
-.doc-item:hover .doc-actions { display: flex; }
+.doc-item .doc-actions { display: flex; gap: 2px; visibility: hidden; }
+.doc-item:hover .doc-actions, .doc-item:focus-within .doc-actions { visibility: visible; }
 .doc-item .doc-actions button { border: 0; background: transparent; color: var(--text-3); cursor: pointer; padding: 2px; border-radius: 4px; }
 .doc-item .doc-actions button:hover { color: var(--text); background: var(--panel); }
 
@@ -121,7 +121,7 @@ input, textarea, select { font: inherit; color: var(--text); }
 }
 .field textarea { resize: vertical; min-height: 64px; font-family: var(--font-ui); }
 .field input:focus, .field textarea:focus, .field select:focus { border-color: var(--selection); }
-.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.field-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
 .seg { display: flex; flex-wrap: wrap; gap: 4px; }
 .seg button { padding: 4px 8px; border-radius: var(--ui-radius); border: 1px solid var(--panel-border); background: var(--panel-2); color: var(--text-2); cursor: pointer; font-size: 12px; }
 .seg button.on { border-color: var(--selection); color: var(--text); background: var(--accent-soft); }
@@ -416,7 +416,7 @@ input, textarea, select { font: inherit; color: var(--text); }
   .menu-item { min-height: 44px; }
   .theme-option { min-height: 52px; }
   .doc-item { min-height: 44px; }
-  .doc-item .doc-actions { display: flex; }
+  .doc-item .doc-actions { visibility: visible; }
   .doc-item .doc-actions button { width: 44px; height: 44px; display: grid; place-items: center; }
   .outline-row { min-height: 44px; }
   .outline-row .twisty { width: 44px; height: 44px; flex: none; }
@@ -524,4 +524,51 @@ input, textarea, select { font: inherit; color: var(--text); }
   .emoji-picker-head input { min-height: 44px; font-size: 16px; }
   .emoji-close { width: 44px; }
   .md-task { width: 1.15em; height: 1.15em; }
+}
+
+/* ---------- resizable documents list ---------- */
+.doc-list { position: relative; }
+.panel-splitter { flex: none; position: relative; z-index: 2; height: 10px; margin: -5px 0; display: grid; place-items: center; cursor: row-resize; touch-action: none; outline: none; }
+.panel-splitter .grip { width: 36px; height: 4px; border-radius: 2px; background: var(--panel-border); transition: background .12s, width .12s; }
+.panel-splitter:hover .grip, .panel-splitter:focus-visible .grip, .panel-splitter.dragging .grip { background: var(--selection); width: 48px; }
+.panel-splitter:focus-visible { box-shadow: inset 0 0 0 2px var(--selection); border-radius: 4px; }
+@media (pointer: coarse) { .panel-splitter { height: 44px; margin: -12px 0; } .panel-splitter .grip { width: 44px; height: 5px; } }
+
+/* ---------- property pickers (shape, status, priority) ---------- */
+.picker-btn {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; height: 32px; padding: 0 8px 0 9px; cursor: pointer; text-align: left;
+  background: var(--panel-2); border: 1px solid var(--panel-border); border-radius: var(--ui-radius); color: var(--text); font: inherit; font-size: 12.5px;
+}
+.picker-btn:hover, .picker-btn.open { border-color: var(--selection); }
+.picker-btn:focus-visible { outline: 2px solid var(--selection); outline-offset: 1px; }
+.picker-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker-value.placeholder { color: var(--text-3); }
+.picker-chevron { flex: none; color: var(--text-3); }
+.picker-icon { flex: none; display: grid; place-items: center; color: var(--text-2); }
+.picker-icon .wfc-marker, .picker-option .wfc-marker { position: static; height: 18px; min-width: 18px; }
+.wfc-marker.none { color: var(--text-3); border-style: dashed; }
+.shape-icon { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
+.picker-backdrop { position: fixed; inset: 0; z-index: 90; }
+.picker-backdrop.dim { background: rgba(0,0,0,.42); animation: fadein .15s ease-out; }
+.picker-pop {
+  position: fixed; z-index: 91; padding: 6px; overflow-y: auto; overscroll-behavior: contain; color: var(--text);
+  background: var(--panel); border: 1px solid var(--panel-border); border-radius: calc(var(--ui-radius) + 2px); box-shadow: 0 12px 32px rgba(0,0,0,.3);
+}
+.picker-options { display: flex; flex-direction: column; gap: 2px; }
+.picker-option { display: flex; align-items: center; gap: 9px; width: 100%; padding: 6px 8px; border: 0; border-radius: var(--ui-radius); background: transparent; color: var(--text-2); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; white-space: nowrap; }
+.picker-option:hover, .picker-option:focus-visible { background: var(--panel-2); color: var(--text); outline: none; }
+.picker-option.on { color: var(--text); }
+.picker-check { margin-left: auto; color: var(--selection); }
+.picker-pop.grid .picker-options { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.picker-pop.grid .picker-option { flex-direction: column; gap: 4px; padding: 8px 4px 6px; font-size: 11px; text-align: center; border: 1px solid transparent; }
+.picker-pop.grid .picker-option.on { border-color: var(--selection); background: var(--accent-soft); }
+.picker-pop.grid .picker-option .picker-icon { color: var(--text); }
+.picker-pop.sheet { left: 8px; right: 8px; bottom: 8px; top: auto; max-height: 70dvh; border-radius: 14px; padding: 8px; animation: slidein .18s ease-out; }
+.picker-title { padding: 4px 8px 8px; font-size: 10.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); }
+@keyframes fadein { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .picker-pop.sheet, .picker-backdrop.dim { animation: none; } }
+@media (pointer: coarse) {
+  .picker-btn { height: 44px; font-size: 16px; }
+  .picker-option { min-height: 44px; font-size: 15px; }
+  .picker-pop.grid .picker-option { min-height: 64px; font-size: 12px; }
 }

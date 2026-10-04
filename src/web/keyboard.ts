@@ -9,6 +9,14 @@ function isTyping(e: KeyboardEvent) {
   return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
 }
 
+/** Keys a focused button or bar in a side panel uses itself (move focus, press, adjust); other shortcuts still reach the canvas. */
+const PANEL_CONTROL_KEYS = new Set(['Tab', 'Enter', ' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End']);
+
+function onPanelControl(e: KeyboardEvent) {
+  const t = e.target as HTMLElement | null;
+  return !!t && PANEL_CONTROL_KEYS.has(e.key) && !!t.closest('.panel') && t.matches('button, a[href], [role="separator"], [tabindex]:not([tabindex="-1"])');
+}
+
 export function useKeyboard() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -21,7 +29,7 @@ export function useKeyboard() {
       if (mod && e.key.toLowerCase() === 'o') { e.preventDefault(); void files.openFile(); return; }
       if (e.altKey && e.code === 'KeyZ') { e.preventDefault(); actions.toggleZen(); return; }
       if (e.altKey && e.code === 'KeyR') { e.preventDefault(); actions.toggleViewMode(); return; }
-      if (isTyping(e) || s.editingId || s.editingEdgeId) return;
+      if (isTyping(e) || onPanelControl(e) || s.editingId || s.editingEdgeId) return;
       const one = s.selection.nodes.length === 1 ? s.selection.nodes[0] : undefined;
       const k = e.key;
       if (s.placing && k === 'Enter' && !mod) { e.preventDefault(); actions.placeAt(); return; }

@@ -7,6 +7,7 @@ import { set } from '../store';
 import { RoughShape, seedOf, strokePath, useSketch } from './sketch';
 import { InlineMarkdown, Markdown, toggleTask } from '../markdown';
 import { emojiUiOwns } from '../panels/EmojiAssist';
+import { STATUS_GLYPH } from '../panels/Picker';
 
 export interface NodeData extends Record<string, unknown> {
   node: CanvasNode;
@@ -71,11 +72,10 @@ function toggle(n: CanvasNode) {
 function Markers({ n }: { n: CanvasNode }) {
   const status = n.status && n.status !== 'none' ? n.status : null;
   if (!status && !n.priority) return null;
-  const glyph: Record<string, string> = { todo: '○', doing: '◐', done: '✓', blocked: '!' };
   return (
     <div className="wfc-markers">
       {n.priority ? <span className="wfc-marker prio" title={'Priority ' + n.priority}>{n.priority}</span> : null}
-      {status ? <span className={'wfc-marker st-' + status} title={status}>{glyph[status]}</span> : null}
+      {status ? <span className={'wfc-marker st-' + status} title={status}>{STATUS_GLYPH[status]}</span> : null}
     </div>
   );
 }

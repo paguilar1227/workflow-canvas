@@ -1,6 +1,7 @@
 import { useEffect, useState, type KeyboardEvent } from 'react';
 import { AlignLeft, AlignCenterHorizontal, AlignRight, AlignStartVertical, AlignCenterVertical, AlignEndVertical, Columns3, Rows3, Frame, Link as LinkIcon, Trash2, Copy, ArrowLeftRight } from 'lucide-react';
-import { useApp } from '../store';
+import { useApp, set } from '../store';
+import { Picker, priorityOptions, shapeOptions, statusOptions } from './Picker';
 import * as actions from '../actions';
 import { ColumnHeader } from './Chrome';
 import { COLOR_NAMES, NODE_SHAPES, NODE_STATUSES, EDGE_ROUTINGS, EDGE_STYLES, ARROW_MODES, type CanvasNode, type CanvasEdge, type ColorName } from '../../shared/types';
@@ -18,6 +19,9 @@ function Text({ label, value, onCommit, multiline, mono, testId, placeholder, no
   };
   return <div className="field"><label>{label}</label>{multiline ? <textarea {...common} /> : <input {...common} />}</div>;
 }
+
+/** No priority, then P1 (highest) to P5: the levels the canvas marker shows. */
+const PRIORITIES = [0, 1, 2, 3, 4, 5] as const;
 
 function Colors({ value, onPick }: { value?: string; onPick: (c: ColorName | null) => void }) {
   return (
@@ -54,12 +58,14 @@ function NodeInspector({ n }: { n: CanvasNode }) {
         </div>
       ) : null}
       <Colors value={n.color} onPick={(c) => actions.setColor(c)} />
-      {n.kind === 'topic' ? <Seg label="Shape" options={NODE_SHAPES} value={n.shape} onPick={(s) => actions.setShape(s)} testPrefix="shape-" /> : null}
-      {n.kind === 'topic' ? <Seg label="Status" options={NODE_STATUSES} value={n.status ?? 'none'} onPick={(s) => actions.setStatus(s)} testPrefix="status-" /> : null}
       {n.kind === 'topic' ? (
-        <div className="field"><label>Priority</label>
-          <div className="seg">{[0, 1, 2, 3, 4, 5].map((p) => <button key={p} className={(n.priority ?? 0) === p ? 'on' : ''} onClick={() => up({ priority: p })}>{p === 0 ? '—' : 'P' + p}</button>)}</div>
-        </div>
+        <>
+          <div className="field"><label>Shape</label><Picker id="insp-shape" label="Shape" grid value={n.shape ?? 'card'} options={shapeOptions(NODE_SHAPES)} onPick={(s) => actions.setShape(s)} testId="shape-picker" /></div>
+          <div className="field-row">
+            <div className="field"><label>Status</label><Picker id="insp-status" label="Status" value={n.status ?? 'none'} options={statusOptions(NODE_STATUSES)} onPick={(s) => actions.setStatus(s)} testId="status-picker" /></div>
+            <div className="field"><label>Priority</label><Picker id="insp-priority" label="Priority" value={n.priority ?? 0} options={priorityOptions(PRIORITIES)} onPick={(p) => up({ priority: p })} testId="priority-picker" /></div>
+          </div>
+        </>
       ) : null}
       {n.kind !== 'frame' ? <Text label="Tags (comma separated)" value={(n.tags ?? []).join(', ')} onCommit={(v) => up({ tags: v.split(',').map((t) => t.trim()).filter(Boolean) })} testId="insp-tags" /> : null}
       <Text label="Link" value={n.link} onCommit={(v) => up({ link: v })} testId="insp-link" placeholder="https://" noEmoji />
@@ -84,7 +90,7 @@ function MultiInspector({ ids }: { ids: string[] }) {
     <div data-testid="inspector-multi">
       <div className="panel-title"><span>{ids.length} selected</span></div>
       <Colors onPick={(c) => actions.setColor(c)} />
-      <Seg label="Shape" options={NODE_SHAPES} onPick={(s) => actions.setShape(s)} />
+      <div className="field"><label>Shape</label><Picker id="multi-shape" label="Shape" grid placeholder="Set shape for all…" options={shapeOptions(NODE_SHAPES)} onPick={(s) => actions.setShape(s)} testId="shape-picker" /></div>
       <div className="field"><label>Align</label>
         <div className="seg">
           <button title="Align left" aria-label="Align left" data-testid="align-left" onClick={() => actions.align('left')}><AlignLeft size={13} /></button>
@@ -170,7 +176,7 @@ export function Inspector() {
   const nodes = selection.nodes.map((id) => doc?.nodes.find((n) => n.id === id)).filter(Boolean) as CanvasNode[];
   const edge = selection.edges.length === 1 && !nodes.length ? doc?.edges.find((e) => e.id === selection.edges[0]) : undefined;
   return (
-    <aside className="panel right" data-testid="inspector">
+    <aside className="panel right" data-testid="inspector" onClick={() => set({ openMenu: null })}>
       <ColumnHeader panel="inspector" title="Inspector" />
       <div className="panel-section grow">
         {nodes.length === 1 ? <NodeInspector key={nodes[0].id} n={nodes[0]} /> : nodes.length > 1 ? <MultiInspector ids={nodes.map((n) => n.id)} /> : edge ? <EdgeInspector key={edge.id} e={edge} /> : <DocInspector />}

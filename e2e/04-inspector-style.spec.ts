@@ -1,7 +1,7 @@
 import { test, expect } from './support/journey';
 
 test('style a topic in the inspector', async ({ page, app, ev }) => {
-  ev.proves('A user selects a topic and, from the inspector, gives it a subtitle, badge, emoji icon, colour, diamond and cylinder shapes, a status, a priority, tags, notes and a link; each change is rendered on the canvas node (text, markers, tag chips, indicators, shape outline) and saved to the document.');
+  ev.proves('A user selects a topic and, from the inspector, gives it a subtitle, badge, emoji icon, colour, diamond and cylinder shapes, a status, a priority, tags, notes and a link; shape, status and priority are compact pickers that open their choices, close on a pick (or on a click outside, changing nothing) and show the same icon as the canvas marker. Each change is rendered on the canvas node (text, markers, tag chips, indicators, shape outline) and saved to the document.');
   const docId = await app.newDoc('Styled topic');
   await app.open(docId);
   await page.keyboard.press('n');
@@ -18,6 +18,16 @@ test('style a topic in the inspector', async ({ page, app, ev }) => {
     await f.click();
     await f.fill(value);
     await f.press(testId === 'insp-notes' ? 'Tab' : 'Enter');
+    await app.settled();
+  };
+  /** Open a compact picker, choose one option, and check the choices close again. */
+  const pick = async (picker: string, option: string, snapLabel?: string) => {
+    await page.getByTestId(picker).click();
+    const options = page.getByTestId(picker + '-options');
+    await expect(options, picker + ' opens its choices').toBeVisible();
+    if (snapLabel) await ev.snap(snapLabel);
+    await page.getByTestId(option).click();
+    await expect(options, 'picking closes the ' + picker).toHaveCount(0);
     await app.settled();
   };
 
@@ -40,24 +50,44 @@ test('style a topic in the inspector', async ({ page, app, ev }) => {
   });
 
   await test.step('diamond and cylinder shapes', async () => {
+    await expect(page.getByTestId('shape-diamond'), 'shapes are behind the picker, not a row of buttons').toHaveCount(0);
+    await expect(page.getByTestId('shape-picker')).toContainText('Card');
+    await page.getByTestId('shape-picker').click();
+    const tiles = page.getByTestId('shape-picker-options').getByRole('option');
+    await expect(tiles, 'the shape picker is a grid of 8 shape tiles').toHaveCount(8);
+    await expect(page.getByTestId('shape-card'), 'the current shape is marked').toHaveAttribute('aria-selected', 'true');
+    const cols = await tiles.evaluateAll((els) => new Set(els.map((e) => Math.round(e.getBoundingClientRect().x))).size);
+    const rows = await tiles.evaluateAll((els) => new Set(els.map((e) => Math.round(e.getBoundingClientRect().y))).size);
+    expect({ cols, rows }, 'shape tiles are laid out 4 x 2').toEqual({ cols: 4, rows: 2 });
+    await ev.snap('shape-picker-open');
     await page.getByTestId('shape-diamond').click();
+    await expect(page.getByTestId('shape-picker-options'), 'picking a shape closes the picker').toHaveCount(0);
     await expect(node).toHaveClass(/shape-diamond/);
+    await expect(page.getByTestId('shape-picker')).toContainText('Diamond');
     await expect(node.locator('svg.wfc-shape-svg polygon')).toHaveAttribute('points', '50,1 99,50 50,99 1,50');
     await expect(node.locator('.wfc-inline-icon'), 'non-card shapes show the icon inline').toHaveText('💳');
     await ev.snap('diamond');
-    await page.getByTestId('shape-cylinder').click();
+    await pick('shape-picker', 'shape-cylinder');
     await expect(node).toHaveClass(/shape-cylinder/);
     await expect(node.locator('svg.wfc-shape-svg path')).toHaveCount(2);
     await ev.snap('cylinder');
-    await page.getByTestId('shape-card').click();
+    await pick('shape-picker', 'shape-card');
     await expect(node).toHaveClass(/shape-card/);
   });
 
   await test.step('status, priority, tags, notes and link', async () => {
-    await page.getByTestId('status-doing').click();
+    await pick('status-picker', 'status-doing', 'status-picker-open');
     await expect(node.locator('.wfc-marker.st-doing')).toHaveText('◐');
-    await insp.getByRole('button', { name: 'P2', exact: true }).click();
+    await expect(page.getByTestId('status-picker').locator('.wfc-marker.st-doing'), 'the status picker shows the canvas marker').toHaveText('◐');
+    await pick('priority-picker', 'priority-2');
     await expect(node.locator('.wfc-marker.prio')).toHaveText('2');
+    await expect(page.getByTestId('priority-picker').locator('.wfc-marker.prio'), 'the priority picker shows the canvas marker').toHaveText('2');
+    await expect(page.getByTestId('priority-picker')).toContainText('P2');
+    await page.getByTestId('priority-picker').click();
+    await expect(page.getByTestId('priority-picker-options')).toBeVisible();
+    await page.getByTestId('picker-backdrop').click({ position: { x: 500, y: 450 } });
+    await expect(page.getByTestId('priority-picker-options'), 'a click outside closes the picker').toHaveCount(0);
+    await expect(page.getByTestId('priority-picker'), 'closing without a pick changes nothing').toContainText('P2');
     await fill('insp-tags', 'billing, core');
     await expect(node.locator('.wfc-tag')).toHaveText(['#billing', '#core']);
     await fill('insp-notes', 'Idempotency keys are required on every charge.');
