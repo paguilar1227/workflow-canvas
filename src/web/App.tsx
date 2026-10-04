@@ -7,6 +7,7 @@ import { LeftPanel } from './panels/LeftPanel';
 import { Inspector } from './panels/Inspector';
 import { Toolbar, ZoomBar, SearchBar, ActivityFeed, Toast, ContextMenu, HelpModal, AiModal, ImportModal, ModePill, SelectionBar } from './panels/Chrome';
 import { useKeyboard } from './keyboard';
+import { EmojiAssist } from './panels/EmojiAssist';
 import { getTheme, THEMES } from '../shared/themes';
 
 const ALL_TOKEN_KEYS = [...new Set(THEMES.flatMap((t) => Object.keys(t.tokens)))];
@@ -145,6 +146,7 @@ export function App() {
         <HelpModal />
         <AiModal />
         <ImportModal />
+        <EmojiAssist />
       </div>
     </ReactFlowProvider>
   );

@@ -35,6 +35,7 @@ export const SERVER_INSTRUCTIONS = [
   'Fast path for a whole diagram: create_diagram with nodes (give each a short id) + edges referencing those ids + layout. Frames: create frame nodes and set frameId on members, then layout lanes.',
   'Read state with get_document (format summary), get_canvas_state, find_nodes. Verify visually with capture_screenshot (needs a browser tab open).',
   'View & UI: control_view (fit/focus/zoom), select, set_theme / list_themes (includes hand-drawn Excalidraw-style themes in light and dark), set_ui (panels, minimap, snap, search, zen/view mode, pen mode, inline edit), open_document. undo/redo are shared with the human.',
+  'Text: sticky and text nodes render GitHub-flavoured Markdown (task lists toggle with a click); topic/frame titles and connector labels render inline Markdown. :shortcodes: (GitHub names, e.g. :rocket: :white_check_mark:) are converted to emoji in every text field, for people and AI alike.',
   'Interop: import_content/export_document support Mermaid, Markdown outlines and Excalidraw (.excalidraw) scenes.',
   'Files: when the person has pressed Save, the open document autosaves to their .excalidraw file after every change; save_to_file forces a save and reports the file.',
 ].join('\n');

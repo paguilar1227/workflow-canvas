@@ -230,7 +230,7 @@ async function main() {
   for (const sc of scenarios) {
     sc.dir = path.join(OUT, sc.slug);
     fs.rmSync(path.join(sc.dir, 'steps'), { recursive: true, force: true });
-    if (fs.existsSync(sc.dir)) for (const f of fs.readdirSync(sc.dir)) if (/^(ai-capture-.*\.png|final.*\.png|video.*\.mp4|attached-file.*\.excalidraw)$/.test(f)) fs.rmSync(path.join(sc.dir, f));
+    if (fs.existsSync(sc.dir)) for (const f of fs.readdirSync(sc.dir)) if (/^(ai-capture-.*\.png|final.*\.png|person-.*\.png|video.*\.mp4|attached-file.*\.excalidraw)$/.test(f)) fs.rmSync(path.join(sc.dir, f));
     fs.mkdirSync(path.join(sc.dir, 'steps'), { recursive: true });
     Object.assign(sc, await sc.setup({ tool, http }));
     sc.cwdDir = sc.cwd === 'repo' ? REPO : fs.mkdtempSync(path.join(os.tmpdir(), 'wfc-ai-' + sc.id + '-'));

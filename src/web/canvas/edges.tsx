@@ -6,6 +6,7 @@ import { InlineEdit } from './nodes';
 import { useApp, set } from '../store';
 import { roughPath, seedOf, useSketch } from './sketch';
 import * as actions from '../actions';
+import { InlineMarkdown } from '../markdown';
 
 type Rect = { x: number; y: number; w: number; h: number };
 const POS: Record<Side, Position> = { top: Position.Top, right: Position.Right, bottom: Position.Bottom, left: Position.Left };
@@ -84,7 +85,7 @@ export const SmartEdge = memo(function SmartEdge({ id, source, target, data, sel
           >
             {editing ? (
               <InlineEdit className="wfc-edge-edit" value={e.label ?? ''} onDone={(v) => { set({ editingEdgeId: null }); if (v !== null && v !== (e.label ?? '')) actions.updateEdge(id, { label: v }); }} />
-            ) : e.label}
+            ) : <InlineMarkdown source={e.label ?? ''} />}
           </div>
         </EdgeLabelRenderer>
       ) : null}

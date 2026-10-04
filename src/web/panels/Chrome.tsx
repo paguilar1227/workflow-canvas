@@ -74,7 +74,7 @@ export function SearchBar() {
   if (!open) return null;
   return (
     <div className="searchbar" data-testid="searchbar">
-      <input autoFocus placeholder="Find topics, notes, tags…" aria-label="Search canvas" data-testid="search-input" value={q}
+      <input autoFocus data-no-emoji placeholder="Find topics, notes, tags…" aria-label="Search canvas" data-testid="search-input" value={q}
         onChange={(e) => { set({ searchIndex: 0 }); updateSession({ search: e.target.value }); }}
         onKeyDown={(e) => {
           e.stopPropagation();
@@ -181,8 +181,14 @@ export function ContextMenu() {
 const TOUCH_ROWS: [string, string][] = [
   ['Pan / zoom', 'Drag empty canvas / pinch'], ['Box-select', 'Area tool, then drag'],
   ['Select / move', 'Tap / drag a node'], ['Edit, add child or sibling, style, delete', 'Action bar above the toolbar'],
-  ['Context menu', 'Long-press'], ['Add a topic', 'Double-tap empty canvas, or Topic then tap'], ['Connect', 'Tap a dot on the selected node, then the target'],
+  ['Context menu', 'Long-press'], ['Add a topic', 'Double-tap empty canvas, or Topic then tap'], ['Connect', 'Tap a dot on the selected node, then the target'], ['Tick a task', 'Tap its box, or select the note and tap the task'],
   ['Outline / inspector', '☰ and Style; close with × or tap outside'],
+];
+
+const FORMAT_ROWS: [string, string][] = [
+  ['Bold / italic / strikethrough', '**bold** *italic* ~~strike~~'], ['Code / link', '\u0060code\u0060 [text](https://…)'],
+  ['Heading / quote (sticky & text)', '# Heading  > quote'], ['List / task list (sticky & text)', '- item  1. item  - [ ] task'],
+  ['Table / code block (sticky & text)', '| a | b |  \u0060\u0060\u0060'], ['Emoji by name', ':rocket: or :ro… then ↑↓ Enter'], ['Emoji picker', '☺ button above the field you are typing in'],
 ];
 
 export function HelpModal() {
@@ -204,6 +210,9 @@ export function HelpModal() {
         {touch ? <><h3>Touch</h3><div className="shortcut-grid" data-testid="touch-help">{TOUCH_ROWS.map(([a, b]) => <div className="shortcut" key={a}><span>{a}</span><span className="kbd">{b}</span></div>)}</div><h3>Keyboard</h3></> : null}
         <p className="lead">XMind-style editing on an infinite canvas. Everything here is also available to AI agents as MCP tools.</p>
         <div className="shortcut-grid">{rows.map(([a, b]) => <div className="shortcut" key={a}><span>{a}</span><span className="kbd">{b}</span></div>)}</div>
+        <h3>Markdown & emoji</h3>
+        <p className="lead">Sticky notes and text take full Markdown, including clickable task lists. Topic and frame titles and connector labels take inline styling. Every text field accepts emoji.</p>
+        <div className="shortcut-grid" data-testid="format-help">{FORMAT_ROWS.map(([a, b]) => <div className="shortcut" key={a}><span>{a}</span><span className="kbd">{b}</span></div>)}</div>
         <div className="modal-actions"><button className="btn primary" onClick={() => set({ helpOpen: false })}>Got it</button></div>
       </div>
     </div>
@@ -267,7 +276,7 @@ export function ImportModal() {
           {(['mermaid', 'markdown', 'excalidraw', 'json'] as const).map((f) => <button key={f} className={format === f ? 'on' : ''} data-testid={'import-format-' + f} onClick={() => pick(f)}>{f}</button>)}
           <label className="btn outline small" data-testid="import-load-file">Load file…<input type="file" hidden accept=".mmd,.md,.markdown,.json,.txt,.excalidraw" data-testid="import-file" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; const t = await f.text(); if (/\.excalidraw$/i.test(f.name) || t.includes('"type": "excalidraw"') || t.includes('"type":"excalidraw"')) setFormat('excalidraw'); setText(t); }} /></label>
         </div>
-        <textarea className="import-text" data-testid="import-text" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.stopPropagation()} />
+        <textarea className="import-text" data-no-emoji data-testid="import-text" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.stopPropagation()} />
         {err ? <p style={{ color: 'var(--c-red)' }}>{err}</p> : null}
         <div className="modal-actions">
           <div className="seg" style={{ marginRight: 'auto' }}>

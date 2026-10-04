@@ -5,6 +5,8 @@ import type { CanvasNode } from '../../shared/types';
 import * as actions from '../actions';
 import { set } from '../store';
 import { RoughShape, seedOf, strokePath, useSketch } from './sketch';
+import { InlineMarkdown, Markdown, toggleTask } from '../markdown';
+import { emojiUiOwns } from '../panels/EmojiAssist';
 
 export interface NodeData extends Record<string, unknown> {
   node: CanvasNode;
@@ -45,7 +47,7 @@ export function InlineEdit({ value, multiline, onDone, onTab, className = 'wfc-e
       rows={1}
       aria-label="Edit text"
       onChange={(e) => setText(e.target.value)}
-      onBlur={() => finish(text)}
+      onBlur={(e) => { if (!emojiUiOwns(e.relatedTarget)) finish(text); }}
       onMouseDown={(e) => e.stopPropagation()}
       onKeyDown={(e) => {
         e.stopPropagation();
@@ -60,6 +62,10 @@ export function InlineEdit({ value, multiline, onDone, onTab, className = 'wfc-e
 function commitTitle(n: CanvasNode, v: string | null) {
   set({ editingId: null });
   if (v !== null && v !== n.title) actions.updateNode(n.id, { title: v });
+}
+
+function toggle(n: CanvasNode) {
+  return (line: number) => actions.updateNode(n.id, { title: toggleTask(n.title, line) });
 }
 
 function Markers({ n }: { n: CanvasNode }) {
@@ -124,7 +130,7 @@ export const TopicNode = memo(function TopicNode({ data, selected, width, height
           {d.editing ? (
             <InlineEdit value={n.title} onDone={(v) => commitTitle(n, v)} onTab={(v) => { commitTitle(n, v); actions.addChild(n.id); }} />
           ) : (
-            <div className={'wfc-title' + (n.title ? '' : ' placeholder')}>{shape !== 'card' && n.icon ? <span className="wfc-inline-icon">{n.icon}</span> : null}{n.title || 'Untitled'}</div>
+            <div className={'wfc-title' + (n.title ? '' : ' placeholder')}>{shape !== 'card' && n.icon ? <span className="wfc-inline-icon">{n.icon}</span> : null}{n.title ? <InlineMarkdown source={n.title} /> : 'Untitled'}</div>
           )}
           {n.subtitle ? <div className="wfc-sub">{n.subtitle}</div> : null}
         </div>
@@ -155,7 +161,7 @@ export const FrameNode = memo(function FrameNode({ data, selected }: NodeProps) 
           {d.editing ? (
             <InlineEdit className="wfc-frame-edit" value={n.title} onDone={(v) => commitTitle(n, v)} />
           ) : (
-            <span>{n.title || 'Frame'}{n.subtitle ? ' · ' + n.subtitle : ''}</span>
+            <span><InlineMarkdown source={n.title || 'Frame'} />{n.subtitle ? ' · ' + n.subtitle : ''}</span>
           )}
         </div>
       </div>
@@ -173,7 +179,7 @@ export const StickyNode = memo(function StickyNode({ data, selected, width, heig
       <div className={'wfc-sticky' + (n.color && n.color !== 'default' ? ' has-color' : '') + (d.flashing ? ' flash' : '')} key={d.flashing} style={{ ['--nc' as string]: colorVar(n.color) }} data-testid={'node-' + n.id}>
         {sketch ? <RoughShape shape="sticky" w={width ?? n.width} h={height ?? n.height} seed={seedOf(n.id)} filled={false} /> : null}
         <Handles />
-        {d.editing ? <InlineEdit multiline value={n.title} onDone={(v) => commitTitle(n, v)} /> : n.title ? <span className="sticky-text">{n.title}</span> : <span className="placeholder">Double-click to write…</span>}
+        {d.editing ? <InlineEdit multiline value={n.title} onDone={(v) => commitTitle(n, v)} /> : n.title ? <Markdown className="sticky-text" source={n.title} onToggleTask={toggle(n)} rowTaps={!!selected} /> : <span className="placeholder">Double-click to write…</span>}
       </div>
     </>
   );
@@ -187,7 +193,7 @@ export const TextNode = memo(function TextNode({ data, selected }: NodeProps) {
       <NodeResizer isVisible={!!selected && !n.locked} minWidth={40} minHeight={24} onResizeEnd={(_e, p) => actions.updateNode(n.id, { x: Math.round(p.x), y: Math.round(p.y), width: Math.round(p.width), height: Math.round(p.height) })} />
       <div className={'wfc-text-node' + (n.color && n.color !== 'default' ? ' has-color' : '')} style={{ ['--nc' as string]: colorVar(n.color) }} data-testid={'node-' + n.id}>
         <Handles />
-        {d.editing ? <InlineEdit value={n.title} onDone={(v) => commitTitle(n, v)} /> : n.title || 'Text'}
+        {d.editing ? <InlineEdit value={n.title} onDone={(v) => commitTitle(n, v)} /> : n.title ? <Markdown source={n.title} onToggleTask={toggle(n)} rowTaps={!!selected} /> : 'Text'}
       </div>
     </>
   );

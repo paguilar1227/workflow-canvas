@@ -7,6 +7,8 @@ import { childrenMap } from '../../shared/graph';
 import type { CanvasNode } from '../../shared/types';
 import { Menu, MenuItem } from './TopBar';
 import { ColumnHeader } from './Chrome';
+import { InlineMarkdown, firstLine } from '../markdown';
+import { emojiUiOwns } from './EmojiAssist';
 
 function OutlineNode({ n, depth, kids }: { n: CanvasNode; depth: number; kids: Map<string, CanvasNode[]> }) {
   const selected = useApp((s) => s.selection.nodes.includes(n.id));
@@ -29,9 +31,9 @@ function OutlineNode({ n, depth, kids }: { n: CanvasNode; depth: number; kids: M
         {n.color && n.color !== 'default' ? <span className="swatch" style={{ background: 'var(--c-' + n.color + ')' }} /> : null}
         {editing ? (
           <input autoFocus defaultValue={n.title} style={{ flex: 1, background: 'var(--panel-2)', border: '1px solid var(--selection)', borderRadius: 4, padding: '1px 4px' }}
-            onBlur={(e) => { setEditing(false); if (e.target.value !== n.title) actions.updateNode(n.id, { title: e.target.value }); }}
+            onBlur={(e) => { if (emojiUiOwns(e.relatedTarget)) return; setEditing(false); if (e.target.value !== n.title) actions.updateNode(n.id, { title: e.target.value }); }}
             onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur(); }} />
-        ) : <span className="label">{n.icon ? n.icon + ' ' : ''}{n.title || (n.kind === 'sticky' ? 'Sticky note' : n.kind === 'drawing' ? '✏️ Freehand drawing' : 'Untitled')}</span>}
+        ) : <span className="label">{n.icon ? n.icon + ' ' : ''}{n.title ? <InlineMarkdown source={firstLine(n.title)} /> : (n.kind === 'sticky' ? 'Sticky note' : n.kind === 'drawing' ? '✏️ Freehand drawing' : 'Untitled')}</span>}
       </div>
       {!n.collapsed && children.map((c) => <OutlineNode key={c.id} n={c} depth={depth + 1} kids={kids} />)}
     </>
@@ -81,7 +83,7 @@ export function LeftPanel() {
         {!doc || !doc.nodes.length ? <div className="outline-empty">Empty canvas. Double-click the canvas or press N to add a topic.</div> : null}
         {frames.map((f) => (
           <div key={f.id}>
-            <div className="outline-row frame-row" onClick={() => { actions.select([f.id]); actions.focusNodes([f.id]); actions.revealCanvas(); }} data-testid={'outline-' + f.id}>{f.title || 'Frame'}</div>
+            <div className="outline-row frame-row" onClick={() => { actions.select([f.id]); actions.focusNodes([f.id]); actions.revealCanvas(); }} data-testid={'outline-' + f.id}><InlineMarkdown source={f.title || 'Frame'} /></div>
             {roots.filter((n) => n.frameId === f.id).sort(byPos).map((n) => <OutlineNode key={n.id} n={n} depth={0} kids={kids} />)}
           </div>
         ))}

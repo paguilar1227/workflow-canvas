@@ -6,7 +6,7 @@ export const sideSchema = z.enum(SIDES as [string, ...string[]]);
 
 export const nodeFieldShape = {
   kind: z.enum(NODE_KINDS as [string, ...string[]]).optional().describe("'topic' (default box/card), 'frame' (lane/boundary container drawn behind nodes), 'sticky' (sticky note), 'text' (free text label), 'drawing' (freehand pen stroke; give points)"),
-  title: z.string().optional().describe('Main label. For frames this is the lane/boundary heading; for stickies the note text.'),
+  title: z.string().optional().describe('Main label. For frames this is the lane/boundary heading; for stickies the note text. Sticky and text titles render GitHub-flavoured Markdown (headings, lists, - [ ] task lists, tables, code, links); topic and frame titles render inline Markdown (**bold**, *italic*, `code`, ~~strike~~, links). :shortcodes: such as :rocket: become emoji.'),
   subtitle: z.string().nullable().optional().describe('Secondary monospace line under the title (e.g. file path, owner, example).'),
   notes: z.string().nullable().optional().describe('Long-form notes shown in the inspector (markdown-ish plain text).'),
   badge: z.string().nullable().optional().describe('Small pill label on the top-right edge (e.g. "Proposed", "v2", "Owner: API").'),
@@ -32,7 +32,7 @@ export const nodeInputSchema = z.object({ id: z.string().min(1).optional().descr
 export const nodePatchSchema = z.object({ id: z.string().min(1), ...nodeFieldShape });
 
 export const edgeFieldShape = {
-  label: z.string().nullable().optional().describe('Text shown in a pill on the connector.'),
+  label: z.string().nullable().optional().describe('Text shown in a pill on the connector (inline Markdown and :shortcode: emoji).'),
   style: z.enum(EDGE_STYLES as [string, ...string[]]).optional(),
   arrow: z.enum(ARROW_MODES as [string, ...string[]]).optional().describe("Arrowheads: 'end' (default), 'start', 'both', 'none'."),
   routing: z.enum(EDGE_ROUTINGS as [string, ...string[]]).optional().describe("'smooth' orthogonal with rounded corners (default), 'bezier', 'straight', 'step'."),

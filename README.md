@@ -31,6 +31,13 @@ There is no login, so by default the app only listens on this machine (`127.0.0.
 
 Press **?** in the app for the full shortcut list.
 
+## Markdown and emoji
+
+- **Sticky notes and text** render GitHub-flavoured Markdown: headings, **bold**, *italic*, ~~strike~~, `code`, code blocks, lists, tables, quotes, links, and task lists. Click a `- [ ]` checkbox on the canvas to tick it (on a touch screen you can also select the note, then tap the task's words); the source line flips to `- [x]`. Editing shows the raw Markdown.
+- **Topic and frame titles, connector labels and outline rows** render inline Markdown (bold, italic, code, strike, links).
+- **Emoji in every text field.** Type `:rocket:` and it becomes 🚀 as you type the closing colon; type `:ro` for suggestions (↑↓, Enter/Tab, Esc), or use the ☺ button docked above the field for a searchable picker (a bottom sheet with 44px targets on touch screens). Shortcodes are GitHub's names.
+- **AI parity.** The server converts `:shortcodes:` in every write (UI or MCP), so agents can write `:white_check_mark: Ship it` and Markdown task lists and the person sees the same result. Raw HTML is shown as text and `javascript:` links are dropped.
+
 ## Saving to a file
 
 Press **Save** (⌘S) to pick where to save the drawing in the Finder save dialog. From then on every change, including AI edits, is autosaved to that `.excalidraw` file. **File → Open** (⌘O) loads a `.excalidraw` file and keeps autosaving to it; **Save as** (⇧⌘S) picks a new file. Files are standard Excalidraw scenes, so they open in Excalidraw too; Workflow Canvas stores everything Excalidraw has no native field for (mind-map structure, collapse state, statuses, connector routing, document settings) in Excalidraw's `customData`, so reopening a saved file in Workflow Canvas is lossless. Saving to disk uses the browser's File System Access API (Chrome, Edge and other Chromium browsers); after a reload one click on **Resume autosave** re-grants access. In other browsers Save downloads a copy instead. Documents are also kept on the server as before.

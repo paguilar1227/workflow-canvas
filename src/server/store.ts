@@ -6,6 +6,8 @@ import { nanoid } from 'nanoid';
 import type { CanvasDocument, DocumentSummary, SessionState } from '../shared/types';
 import { DEFAULT_SESSION, DEFAULT_SETTINGS } from '../shared/types';
 import { applyCommand, diffDocs, normalizeCommand, summarizeCommand, touchedNodeIds, type Command, type CommandInput } from '../shared/commands';
+import { emojify, emojifyCommand } from '../shared/emoji';
+import { SHORTCODES } from './emoji';
 import { createFromTemplate, seedDocuments, type TemplateId } from '../shared/templates';
 
 type Patch = Extract<Command, { type: 'patch' }>;
@@ -59,6 +61,8 @@ export class Store extends EventEmitter {
   canRedo(id: string) { return !!this.docs.get(id)?.redo.length; }
 
   create(title: string, template: TemplateId = 'blank', description?: string, id = genId()): CanvasDocument {
+    title = emojify(title, SHORTCODES);
+    if (description) description = emojify(description, SHORTCODES);
     if (this.docs.has(id)) throw new Error('Document id "' + id + '" already exists');
     const doc = createFromTemplate(id, title || 'Untitled', template, genId);
     if (description) doc.description = description;
@@ -72,7 +76,7 @@ export class Store extends EventEmitter {
     const src = this.get(id);
     if (!src) throw new Error('Document not found: ' + id);
     const now = new Date().toISOString();
-    const doc: CanvasDocument = { ...structuredClone(src), id: genId(), title: title ?? src.title + ' (copy)', createdAt: now, updatedAt: now };
+    const doc: CanvasDocument = { ...structuredClone(src), id: genId(), title: title !== undefined ? emojify(title, SHORTCODES) : src.title + ' (copy)', createdAt: now, updatedAt: now };
     this.docs.set(doc.id, { doc, version: 1, undo: [], redo: [] });
     this.persist(doc.id);
     this.emit('documents', this.list());
@@ -94,7 +98,7 @@ export class Store extends EventEmitter {
   apply(docId: string, input: CommandInput | Command, opts: { origin: string; opId?: string; normalized?: boolean; anchor?: { x: number; y: number } }): OpEvent {
     const entry = this.docs.get(docId);
     if (!entry) throw new Error('Document not found: ' + docId);
-    const cmd = opts.normalized ? (input as Command) : normalizeCommand(entry.doc, input as CommandInput, { genId, anchor: opts.anchor });
+    const cmd = emojifyCommand(opts.normalized ? (input as Command) : normalizeCommand(entry.doc, input as CommandInput, { genId, anchor: opts.anchor }), SHORTCODES);
     const next = applyCommand(entry.doc, cmd);
     const redo = diffDocs(entry.doc, next);
     if (redo) {

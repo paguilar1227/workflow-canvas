@@ -5,12 +5,12 @@ import * as actions from '../actions';
 import { ColumnHeader } from './Chrome';
 import { COLOR_NAMES, NODE_SHAPES, NODE_STATUSES, EDGE_ROUTINGS, EDGE_STYLES, ARROW_MODES, type CanvasNode, type CanvasEdge, type ColorName } from '../../shared/types';
 
-function Text({ label, value, onCommit, multiline, mono, testId, placeholder }: { label: string; value?: string; onCommit: (v: string) => void; multiline?: boolean; mono?: boolean; testId?: string; placeholder?: string }) {
+function Text({ label, value, onCommit, multiline, mono, testId, placeholder, noEmoji }: { label: string; value?: string; onCommit: (v: string) => void; multiline?: boolean; mono?: boolean; testId?: string; placeholder?: string; noEmoji?: boolean }) {
   const [v, setV] = useState(value ?? '');
   useEffect(() => setV(value ?? ''), [value]);
   const commit = () => { if (v !== (value ?? '')) onCommit(v); };
   const common = {
-    value: v, 'data-testid': testId, placeholder, 'aria-label': label,
+    value: v, 'data-testid': testId, placeholder, 'aria-label': label, 'data-no-emoji': noEmoji || undefined,
     style: mono ? { fontFamily: 'var(--font-mono)', fontSize: 12 } : undefined,
     onChange: (e: { target: { value: string } }) => setV(e.target.value),
     onBlur: commit,
@@ -45,7 +45,7 @@ function NodeInspector({ n }: { n: CanvasNode }) {
   return (
     <div data-testid="inspector-node">
       <div className="panel-title"><span>{n.kind === 'frame' ? 'Frame' : n.kind === 'sticky' ? 'Sticky note' : n.kind === 'text' ? 'Text' : n.kind === 'drawing' ? 'Drawing' : 'Topic'}</span><span className="kbd">{n.id}</span></div>
-      <Text label="Title" value={n.title} onCommit={(v) => up({ title: v })} testId="insp-title" multiline={n.kind === 'sticky'} />
+      <Text label="Title" value={n.title} onCommit={(v) => up({ title: v })} testId="insp-title" multiline={n.kind === 'sticky' || n.kind === 'text'} placeholder={n.kind === 'sticky' || n.kind === 'text' ? 'Markdown and :emoji: supported' : undefined} />
       {n.kind !== 'sticky' ? <Text label={n.kind === 'frame' ? 'Subtitle' : 'Subtitle (monospace line)'} value={n.subtitle} mono onCommit={(v) => up({ subtitle: v })} testId="insp-subtitle" /> : null}
       {n.kind === 'topic' ? (
         <div className="field-row">
@@ -62,11 +62,11 @@ function NodeInspector({ n }: { n: CanvasNode }) {
         </div>
       ) : null}
       {n.kind !== 'frame' ? <Text label="Tags (comma separated)" value={(n.tags ?? []).join(', ')} onCommit={(v) => up({ tags: v.split(',').map((t) => t.trim()).filter(Boolean) })} testId="insp-tags" /> : null}
-      <Text label="Link" value={n.link} onCommit={(v) => up({ link: v })} testId="insp-link" placeholder="https://" />
+      <Text label="Link" value={n.link} onCommit={(v) => up({ link: v })} testId="insp-link" placeholder="https://" noEmoji />
       <Text label="Notes" value={n.notes} multiline onCommit={(v) => up({ notes: v })} testId="insp-notes" />
       <div className="field-row">
-        <Text label="Width" value={String(n.width)} onCommit={(v) => Number(v) > 0 && up({ width: Number(v) })} />
-        <Text label="Height" value={String(n.height)} onCommit={(v) => Number(v) > 0 && up({ height: Number(v) })} />
+        <Text label="Width" value={String(n.width)} onCommit={(v) => Number(v) > 0 && up({ width: Number(v) })} noEmoji />
+        <Text label="Height" value={String(n.height)} onCommit={(v) => Number(v) > 0 && up({ height: Number(v) })} noEmoji />
       </div>
       <div className="toggle-row"><span>Locked</span><button className={'switch' + (n.locked ? ' on' : '')} aria-label="Toggle lock" onClick={() => up({ locked: !n.locked })} /></div>
       {n.link ? <a className="btn outline" href={n.link} target="_blank" rel="noreferrer"><LinkIcon size={14} />Open link</a> : null}

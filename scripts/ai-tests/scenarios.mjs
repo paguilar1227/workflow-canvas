@@ -7,6 +7,7 @@ import { getInternalNodesBounds, getViewportForBounds } from '@xyflow/system';
 import { tsImport } from 'tsx/esm/api';
 
 const { documentFromExcalidraw } = await tsImport('../../src/shared/excalidraw.ts', import.meta.url);
+const { SHORTCODES } = await tsImport('../../src/server/emoji.ts', import.meta.url);
 
 const SRC_DIR = new URL('../../src', import.meta.url).pathname;
 
@@ -150,6 +151,63 @@ function hiddenIds(doc) {
   const hide = (id) => { for (const k of kids.get(id) ?? []) { hidden.add(k); hide(k); } };
   for (const n of doc.nodes) if (n.collapsed) hide(n.id);
   return hidden;
+}
+
+// Scenario G: Markdown + :shortcode: emoji. The person ticks "Order the cake"; the AI must find that and tick "Book the venue".
+const G_SHORTCODES = ['tada', 'rocket', 'zap'];
+const G_DONE = /order the cake/i;
+const G_OPEN = /book the venue/i;
+const G_READ_TOOLS = ['get_document', 'find_nodes', 'get_canvas_state', 'export_document'];
+const MD_CODE = /(\x60{3,}[\s\S]*?(?:\x60{3,}|$)|\x60[^\x60\n]*\x60)/g;
+const noVs = (s) => String(s ?? '').replace(/\uFE0F/g, '');
+const hasEmoji = (t, code) => noVs(t).includes(noVs(SHORTCODES.get(code)));
+/** :name: tokens outside Markdown code that are GitHub shortcodes (the server should have converted every one of them). */
+function rawShortcodes(text) {
+  const outside = String(text ?? '').split(MD_CODE).filter((_, i) => i % 2 === 0).join('\n');
+  return [...outside.matchAll(/:([a-z0-9_+-]+):/gi)].filter((m) => SHORTCODES.has(m[1].toLowerCase())).map((m) => m[0]);
+}
+const docTexts = (d) => [d?.title, ...(d?.nodes ?? []).flatMap((n) => [n.title, n.subtitle, n.notes, n.badge, n.icon, ...(n.tags ?? [])]), ...(d?.edges ?? []).map((e) => e.label)].filter((t) => typeof t === 'string' && t);
+const docRawShortcodes = (d) => docTexts(d).flatMap(rawShortcodes);
+function taskLines(src) {
+  return String(src ?? '').split('\n').map((l) => /^\s*(?:[-*+]|\d+[.)])\s+\[([ xX])\]\s+(.*)$/.exec(l)).filter(Boolean).map((m) => ({ checked: m[1] !== ' ', text: m[2] }));
+}
+function mdShape(src) {
+  const s = String(src ?? '');
+  return { heading: /^\s{0,3}#{1,6}\s+\S/m.test(s), bold: /(\*\*|__)(?=\S)[^\n]*?\S\1/.test(s), tasks: taskLines(s) };
+}
+const gTask = (tasks, re) => (tasks ?? []).find((t) => re.test(t.text));
+function gFind(d) {
+  const stickies = (d?.nodes ?? []).filter((n) => n.kind === 'sticky');
+  return {
+    sticky: stickies.find((n) => G_OPEN.test(n.title) && G_DONE.test(n.title)) ?? stickies[0] ?? null,
+    edge: (d?.edges ?? []).find((e) => e.source === 'step-1' && e.target === 'done') ?? null,
+  };
+}
+/** In the page: what the person's tab shows for the sticky and the connector label. */
+function gRendered({ stickyId, edgeId }) {
+  const node = stickyId ? document.querySelector('[data-testid="node-' + CSS.escape(stickyId) + '"]') : null;
+  const label = edgeId ? document.querySelector('[data-testid="edge-label-' + CSS.escape(edgeId) + '"]') : null;
+  const outsideCode = (el) => { const c = el.cloneNode(true); c.querySelectorAll('code, pre').forEach((x) => x.remove()); return c.textContent; };
+  return {
+    sticky: node && {
+      headings: [...node.querySelectorAll('.md h1, .md h2, .md h3, .md h4, .md h5, .md h6')].map((h) => h.tagName + ' ' + h.textContent),
+      strong: [...node.querySelectorAll('.md strong')].map((x) => x.textContent),
+      tasks: [...node.querySelectorAll('input.md-task')].map((i) => ({ checked: i.checked, disabled: i.disabled, text: i.closest('li')?.textContent.trim() ?? '' })),
+      text: node.innerText,
+      textOutsideCode: outsideCode(node),
+    },
+    label: label && { strong: [...label.querySelectorAll('strong')].map((x) => x.textContent), text: label.innerText, textOutsideCode: outsideCode(label) },
+  };
+}
+async function gWaitStored(p, stickyId, ok) {
+  const deadline = Date.now() + 10_000;
+  let title = null;
+  for (;;) {
+    const d = await p.http('/api/documents/' + encodeURIComponent(p.docId));
+    title = d.nodes.find((n) => n.id === stickyId)?.title ?? null;
+    if (ok(taskLines(title)) || Date.now() > deadline) return title;
+    await p.page.waitForTimeout(250);
+  }
 }
 
 export const SCENARIOS = [
@@ -482,6 +540,107 @@ export const SCENARIOS = [
       const bad = (race?.results ?? []).map((r, i) => ({ i, r })).filter(({ r }) => r?.ok !== true || r?.ui?.file !== data.picked);
       check('save race: every edit-then-immediate save_to_file returned ok:true and the file has the last edit', !!race && race.results.length === race.edits && bad.length === 0 && race.file === data.picked && race.fileStartNotes === race.lastEdit,
         { edits: race?.edits, ok: race ? race.results.length - bad.length : 0, failures: bad.slice(0, 5), lastEdit: race?.lastEdit, fileStartNotes: race?.fileStartNotes, parseError: race?.parseError, extraTabsDuringRace: data.extraTabsAfterRace ?? null });
+    },
+  },
+  {
+    id: 'G',
+    slug: 'G-markdown-emoji-tasks',
+    title: 'Markdown sticky + :shortcode: emoji: AI writes it, the person ticks a task in the tab, the AI reads it back and ticks the other',
+    model: 'gpt-6-sol',
+    environmentNote: "Between the AI turns the harness acts as the person in the recorded tab: it fits the view, reads what the tab renders for the AI's sticky and connector label, then clicks the rendered \"Order the cake\" checkbox (input.md-task) with a real Playwright click and waits for the server copy to show that line as - [x].",
+    async setup(h) {
+      const r = await h.tool('create_document', { title: 'AI test G · Launch party', template: 'workflow', open: false });
+      return { docId: r.json.documentId };
+    },
+    turns: [
+      {
+        prompt: (c) => 'In my Workflow Canvas document ' + c.docId + ', add a sticky note next to "Done" for the launch party, written in Markdown: a heading "Launch party :tada:", ' +
+          'a line with "Owner:" in bold followed by "Sam :rocket:", and a task list with two unchecked tasks, "Book the venue" and "Order the cake". ' +
+          'Also connect "Do the work" to "Done" with a connector labeled "fast path" in bold followed by :zap:. Type the emoji as the shortcodes :tada:, :rocket: and :zap:.',
+      },
+      {
+        async before(p) {
+          const doc1 = await p.http('/api/documents/' + encodeURIComponent(p.docId));
+          const { sticky, edge } = gFind(doc1);
+          await p.caption("person looks at the AI's sticky and connector");
+          await p.page.locator('[data-testid="fit-view"]').click().catch(() => {});
+          await p.page.waitForTimeout(800);
+          if (sticky) await p.page.waitForSelector('[data-testid="node-' + sticky.id + '"] .md', { timeout: 15_000 }).catch(() => {});
+          const ids = { stickyId: sticky?.id ?? '', edgeId: edge?.id ?? '' };
+          const rendered1 = await p.page.evaluate(gRendered, ids);
+          await p.page.screenshot({ path: path.join(p.dir, 'person-1-rendered.png') });
+          p.log('tab renders ' + JSON.stringify(rendered1));
+          const tick = { clicked: false };
+          if (sticky) {
+            await p.caption('person ticks "Order the cake" in the sticky');
+            await p.page.waitForTimeout(800);
+            await p.page.locator('[data-testid="node-' + sticky.id + '"] li', { hasText: G_DONE }).locator('input.md-task').first().click({ timeout: 10_000 });
+            tick.clicked = true;
+            tick.storedAfter = await gWaitStored(p, sticky.id, (t) => gTask(t, G_DONE)?.checked === true);
+            await p.page.waitForTimeout(400);
+            tick.renderedAfter = await p.page.evaluate(gRendered, ids);
+            await p.page.screenshot({ path: path.join(p.dir, 'person-2-ticked.png') });
+            p.log('ticked "Order the cake": stored ' + JSON.stringify(taskLines(tick.storedAfter)) + ', tab ' + JSON.stringify(tick.renderedAfter?.sticky?.tasks));
+            await p.caption('person ticked "Order the cake" · asking the AI which task is done');
+          }
+          return { doc1, sticky1: sticky, edge1: edge, rendered1, tick };
+        },
+        prompt: (c) => 'I just ticked one of the tasks on the launch party sticky in my Workflow Canvas document ' + c.docId + '. Which task did I mark as done? Please tick the remaining task for me as well.',
+      },
+    ],
+    async collect(p) {
+      const d = await p.http('/api/documents/' + encodeURIComponent(p.docId));
+      const { sticky, edge } = gFind(d);
+      if (sticky) await gWaitStored(p, sticky.id, (t) => t.length > 0 && t.every((x) => x.checked));
+      await p.page.waitForTimeout(600);
+      const renderedFinal = await p.page.evaluate(gRendered, { stickyId: sticky?.id ?? '', edgeId: edge?.id ?? '' });
+      await p.page.screenshot({ path: path.join(p.dir, 'person-3-after-ai-tick.png') });
+      p.log('after the AI turn the tab shows ' + JSON.stringify(renderedFinal?.sticky?.tasks));
+      return { renderedFinal, evidenceFiles: ['person-1-rendered.png', 'person-2-ticked.png', 'person-3-after-ai-tick.png'] };
+    },
+    verify(c, check) {
+      const { doc, data } = c;
+      const s1 = data.sticky1;
+      const e1 = data.edge1;
+      const shape1 = mdShape(s1?.title);
+      check('turn 1: the stored sticky is Markdown with a heading, bold text and two unchecked tasks ("Book the venue", "Order the cake")',
+        !!s1 && shape1.heading && shape1.bold && shape1.tasks.length === 2 && shape1.tasks.every((t) => !t.checked) && !!gTask(shape1.tasks, G_OPEN) && !!gTask(shape1.tasks, G_DONE),
+        { stickyId: s1?.id ?? null, title: s1?.title ?? null, ...shape1 });
+      check('turn 1: connector "Do the work" -> "Done" has an inline-Markdown bold label', !!e1 && /(\*\*|__)(?=\S)[^\n]*?\S\1/.test(e1.label ?? ''), e1 ?? null);
+      const t1Args = JSON.stringify(c.calls.filter((x) => x.turn === 1 && x.ok && DOC_EDIT_TOOLS.includes(x.tool)).map((x) => x.args));
+      const sent = G_SHORTCODES.filter((k) => t1Args.includes(':' + k + ':'));
+      const fin = doc.nodes.find((n) => n.id === s1?.id);
+      const raw1 = docRawShortcodes(data.doc1);
+      const rawFinal = docRawShortcodes(doc);
+      check('AI sent :tada: :rocket: :zap: and the stored text has the emoji (sticky 🎉 🚀, label ⚡) with no raw :shortcodes: outside code, after both turns',
+        sent.length === G_SHORTCODES.length && hasEmoji(s1?.title, 'tada') && hasEmoji(s1?.title, 'rocket') && hasEmoji(e1?.label, 'zap') && hasEmoji(fin?.title, 'tada') && hasEmoji(fin?.title, 'rocket') && raw1.length === 0 && rawFinal.length === 0,
+        { shortcodesInAiArgs: sent, stickyAfterTurn1: s1?.title ?? null, labelAfterTurn1: e1?.label ?? null, stickyFinal: fin?.title ?? null, rawAfterTurn1: raw1, rawFinal });
+      const r1 = data.rendered1;
+      check("person's tab rendered the sticky: a heading, <strong>, two unchecked task checkboxes and the emoji (no raw shortcodes)",
+        !!r1?.sticky && r1.sticky.headings.length > 0 && r1.sticky.strong.length > 0 && r1.sticky.tasks.length === 2 && r1.sticky.tasks.every((t) => !t.checked && !t.disabled)
+          && hasEmoji(r1.sticky.text, 'tada') && hasEmoji(r1.sticky.text, 'rocket') && rawShortcodes(r1.sticky.textOutsideCode).length === 0,
+        r1?.sticky ?? null);
+      check("person's tab rendered the connector label with <strong> and ⚡ (no raw shortcodes)",
+        !!r1?.label && r1.label.strong.length > 0 && hasEmoji(r1.label.text, 'zap') && rawShortcodes(r1.label.textOutsideCode).length === 0, r1?.label ?? null);
+      const tk = data.tick ?? {};
+      const stored = taskLines(tk.storedAfter);
+      const shown = tk.renderedAfter?.sticky?.tasks;
+      check('person clicked "Order the cake" in the tab: it shows checked, the stored line became "- [x]", and "Book the venue" stayed open',
+        tk.clicked === true && gTask(stored, G_DONE)?.checked === true && gTask(stored, G_OPEN)?.checked === false && gTask(shown, G_DONE)?.checked === true && gTask(shown, G_OPEN)?.checked === false,
+        { clicked: !!tk.clicked, stored, shown: shown ?? null, personError: data.personError });
+      const t2 = c.calls.filter((x) => x.turn === 2);
+      const firstWrite = t2.findIndex((x) => DOC_EDIT_TOOLS.includes(x.tool));
+      const reads = t2.slice(0, firstWrite < 0 ? t2.length : firstWrite).filter((x) => x.ok && G_READ_TOOLS.includes(x.tool));
+      const m2 = c.finalMessages[1] ?? '';
+      check('turn 2: AI read the document before editing and reported "Order the cake" as the task the person ticked', reads.length > 0 && G_DONE.test(m2),
+        { readsBeforeFirstEdit: reads.map((x) => x.tool), finalMessage: m2 });
+      const ticks = t2.filter((x) => x.tool === 'update_nodes' && x.ok && x.resultJson?.ok !== false && (x.args?.updates ?? []).some((u) => u.id === s1?.id));
+      const finShape = mdShape(fin?.title);
+      check('turn 2: AI ticked "Book the venue" with update_nodes; the stored sticky has both tasks "- [x]" and kept its heading and bold text',
+        ticks.length > 0 && finShape.tasks.length === 2 && finShape.tasks.every((t) => t.checked) && finShape.heading && finShape.bold,
+        { updateNodes: ticks.map((x) => x.args), stickyFinal: fin?.title ?? null, tasks: finShape.tasks, sequence: t2.map((x) => x.tool + (x.ok ? '' : ' ✗')) });
+      const rf = data.renderedFinal?.sticky;
+      check("person's tab shows both tasks checked", !!rf && rf.tasks.length === 2 && rf.tasks.every((t) => t.checked), rf?.tasks ?? null);
     },
   },
 ];

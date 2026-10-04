@@ -450,3 +450,78 @@ input, textarea, select { font: inherit; color: var(--text); }
 .topbar.fit-2 .doc-title { flex: 1 1 auto; max-width: none; min-width: 0; }
 .topbar.fit-2 .save-btn .menu-label-text { display: none; }
 .menu { max-height: calc(100dvh - 64px); overflow-y: auto; overscroll-behavior: contain; }
+
+/* ---------- Markdown in sticky notes, text, titles and labels ---------- */
+.md { white-space: normal; overflow-wrap: anywhere; position: relative; }
+.wfc-text-node { align-items: safe center; }
+.wfc-text-node > .md { width: 100%; }
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+.md p, .md ul, .md ol, .md blockquote, .md pre, .md table { margin: 0 0 .45em; }
+.md h1, .md h2, .md h3, .md h4, .md h5, .md h6 { margin: .15em 0 .35em; line-height: 1.2; font-weight: 700; }
+.md h1 { font-size: 1.45em; }
+.md h2 { font-size: 1.25em; }
+.md h3 { font-size: 1.1em; }
+.md h4, .md h5, .md h6 { font-size: 1em; }
+.md ul, .md ol { padding-left: 1.3em; }
+.md li + li { margin-top: .1em; }
+.md li.task-list-item { list-style: none; margin-left: -1.25em; }
+.md li.task-list-item:has(> .md-task:checked, > p > .md-task:checked) { opacity: .62; }
+.md-task { width: 1em; height: 1em; margin: 0 .4em 0 0; vertical-align: -.14em; accent-color: var(--selection); cursor: pointer; }
+.md-task:disabled { cursor: default; }
+.md code, .md-inline code { font-family: var(--font-mono); font-size: .86em; padding: .06em .35em; border-radius: 4px; background: color-mix(in srgb, currentColor 13%, transparent); }
+.md pre { padding: .5em .65em; border-radius: 6px; background: color-mix(in srgb, currentColor 10%, transparent); overflow: auto; white-space: pre; }
+.md pre code { padding: 0; background: none; font-size: .8em; }
+.md blockquote { padding-left: .7em; border-left: 3px solid color-mix(in srgb, currentColor 35%, transparent); opacity: .85; }
+.md table { border-collapse: collapse; font-size: .88em; }
+.md th, .md td { border: 1px solid color-mix(in srgb, currentColor 25%, transparent); padding: .15em .45em; text-align: left; }
+.md th { background: color-mix(in srgb, currentColor 8%, transparent); }
+.md hr { border: 0; border-top: 1px solid color-mix(in srgb, currentColor 30%, transparent); margin: .5em 0; }
+.md img { max-width: 100%; }
+.md a, .md-inline a { color: inherit; text-decoration: underline; text-decoration-color: var(--selection); text-decoration-thickness: 2px; text-underline-offset: 2px; cursor: pointer; }
+.md-inline strong, .md strong { font-weight: 700; }
+
+/* ---------- emoji: docked button, :shortcode: suggestions, picker ---------- */
+.emoji-dock {
+  position: fixed; z-index: 220; display: grid; place-items: center; padding: 0; border-radius: 999px; cursor: pointer;
+  background: var(--panel); border: 1px solid var(--panel-border); color: var(--text-2); box-shadow: 0 4px 12px rgba(0,0,0,.22);
+}
+.emoji-dock:hover { color: var(--text); border-color: var(--selection); }
+.emoji-suggest {
+  position: fixed; z-index: 230; width: 260px; overflow-y: auto; overscroll-behavior: contain; padding: 4px; max-height: 240px;
+  background: var(--panel); border: 1px solid var(--panel-border); border-radius: calc(var(--ui-radius) + 2px); box-shadow: 0 12px 32px rgba(0,0,0,.3);
+}
+.emoji-option { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 8px; border: 0; border-radius: var(--ui-radius); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.emoji-option.active { background: var(--accent-soft); }
+.emoji-option .glyph { width: 24px; font-size: 19px; text-align: center; }
+.emoji-option .emoji-code { font-family: var(--font-mono); font-size: 12px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.emoji-backdrop { position: fixed; inset: 0; z-index: 225; }
+.emoji-picker {
+  position: fixed; z-index: 230; width: 328px; height: 380px; display: flex; flex-direction: column; overflow: hidden; color: var(--text);
+  background: var(--panel); border: 1px solid var(--panel-border); border-radius: calc(var(--ui-radius) + 4px); box-shadow: 0 16px 40px rgba(0,0,0,.35);
+}
+.emoji-picker.sheet { left: 0; right: 0; bottom: 0; width: auto; height: min(420px, 62vh); border-radius: 16px 16px 0 0; padding-bottom: env(safe-area-inset-bottom); }
+.emoji-picker-head { display: flex; gap: 6px; padding: 8px; border-bottom: 1px solid var(--panel-border); }
+.emoji-picker-head input { flex: 1; min-width: 0; padding: 6px 9px; font: inherit; font-size: 13px; color: var(--text); background: var(--panel-2); border: 1px solid var(--panel-border); border-radius: var(--ui-radius); outline: none; }
+.emoji-picker-head input:focus { border-color: var(--selection); }
+.emoji-close { display: grid; place-items: center; width: 30px; flex: none; padding: 0; border: 0; border-radius: var(--ui-radius); background: transparent; color: var(--text-2); cursor: pointer; }
+.emoji-close:hover { background: var(--panel-2); color: var(--text); }
+.emoji-tabs { display: flex; gap: 2px; padding: 4px 6px; border-bottom: 1px solid var(--panel-border); overflow-x: auto; }
+.emoji-tabs button { flex: 1 0 auto; min-width: 30px; height: 30px; padding: 0; border: 0; border-radius: var(--ui-radius); background: transparent; font-size: 17px; cursor: pointer; }
+.emoji-tabs button:hover { background: var(--panel-2); }
+.emoji-grid-wrap { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 8px 8px; }
+.emoji-grid-wrap h4 { position: sticky; top: 0; z-index: 1; margin: 0; padding: 8px 2px 4px; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); background: var(--panel); }
+.emoji-grid { display: grid; }
+.emoji-cell { aspect-ratio: 1; padding: 0; border: 0; border-radius: 6px; background: transparent; font-size: 22px; line-height: 1; cursor: pointer; }
+.emoji-cell:hover, .emoji-cell:focus-visible { background: var(--accent-soft); outline: none; }
+.emoji-empty { padding: 18px 6px; color: var(--text-3); font-size: 12.5px; text-align: center; }
+.emoji-cell, .emoji-option .glyph, .emoji-tabs button { font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
+@media (pointer: coarse) {
+  .emoji-cell { min-height: 44px; font-size: 26px; }
+  .emoji-tabs button { min-width: 44px; height: 44px; font-size: 21px; }
+  .emoji-option { min-height: 44px; font-size: 15px; }
+  .emoji-option .emoji-code { font-size: 14px; }
+  .emoji-picker-head input { min-height: 44px; font-size: 16px; }
+  .emoji-close { width: 44px; }
+  .md-task { width: 1.15em; height: 1.15em; }
+}

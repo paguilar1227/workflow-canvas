@@ -35,6 +35,17 @@ export class Phone {
     await this.page.waitForTimeout(150);
   }
 
+  /** Two taps on one spot, well inside the browser's 500 ms multi-click interval: a double-tap. */
+  async doubleTap(at: Pt) {
+    const wait = TAP_GAP_MS - (Date.now() - this.lastTap);
+    if (wait > 0) await this.page.waitForTimeout(wait);
+    await this.page.touchscreen.tap(at.x, at.y);
+    await this.page.waitForTimeout(120);
+    await this.page.touchscreen.tap(at.x, at.y);
+    this.lastTap = Date.now();
+    await this.page.waitForTimeout(400);
+  }
+
   async longPress(at: Pt) {
     await this.touch('touchStart', [at]);
     await this.page.waitForTimeout(LONG_PRESS_MS);
