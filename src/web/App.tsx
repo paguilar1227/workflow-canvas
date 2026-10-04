@@ -22,6 +22,7 @@ function useTheme() {
       if (v === undefined) root.style.removeProperty(k); else root.style.setProperty(k, v);
     }
     root.dataset.theme = t.id;
+    if (t.neon) root.dataset.neon = ''; else delete root.dataset.neon;
     root.dataset.mode = t.mode;
     root.style.colorScheme = t.mode;
   }, [id]);

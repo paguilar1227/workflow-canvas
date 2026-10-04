@@ -8,6 +8,8 @@ export interface ThemeDef {
   gap: number;
   /** Hand-drawn rendering (rough.js), as in Excalidraw. */
   sketch?: boolean;
+  /** Node-graph rendering: neon bezier wires with port dots, a spark while snapping to a port and a light sweep on connect. */
+  neon?: boolean;
   tokens: Record<string, string>;
 }
 
@@ -225,6 +227,29 @@ export const THEMES: ThemeDef[] = [
       '--sticky-bg': '#3d3418', '--sticky-text': '#f1e6b8',
       '--selection': '#a8a5ff', '--ui-radius': '8px',
       '--c-blue': '#4dabf7', '--c-green': '#51cf66', '--c-amber': '#fcc419', '--c-red': '#ff6b6b', '--c-purple': '#da77f2', '--c-pink': '#f06595', '--c-teal': '#22b8cf', '--c-gray': '#adb5bd',
+    },
+  },
+  {
+    id: 'neon-flow',
+    name: 'Neon Flow',
+    mode: 'dark',
+    description: 'Node-graph look from Omer Assa’s connector demo: charcoal cards with port dots, thick neon wires with a soft glow, an electric spark when a wire snaps to a port, and a light sweep around the card it connects to.',
+    source: { label: 'Omer Assa (@omer_assa) connector demo on X', url: 'https://x.com/omer_assa/status/2106758938926391416' },
+    background: 'dots', gap: 22, neon: true,
+    tokens: {
+      '--font-ui': INTER, '--font-display': INTER, '--font-mono': GEISTMONO,
+      '--bg': '#111214', '--grid': 'rgba(255,255,255,.06)',
+      '--panel': '#18191c', '--panel-2': '#202125', '--panel-border': '#2a2b30',
+      '--text': '#f2f2f3', '--text-2': '#9a9ba1', '--text-3': '#62636a',
+      '--accent': '#8b7bff', '--accent-text': '#ffffff', '--accent-soft': 'rgba(139,123,255,.16)',
+      '--node-bg': '#1b1c1f', '--node-border': '#26272b', '--node-icon-bg': 'rgba(255,255,255,.04)', '--node-title': '#f5f5f6', '--node-sub': '#8d8e95',
+      '--node-radius': '14px', '--node-shadow': '0 14px 34px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.035)',
+      '--badge-bg': '#1b1c1f', '--badge-border': '#34353b', '--badge-text': '#b9bac0',
+      '--frame-bg': 'rgba(255,255,255,.02)', '--frame-border': 'rgba(255,255,255,.06)', '--frame-label': '#8d8e95',
+      '--edge': '#e9e9ec', '--edge-label-bg': '#1b1c1f', '--edge-label-border': '#34353b', '--edge-label-text': '#e9e9ec',
+      '--sticky-bg': '#2a2616', '--sticky-text': '#f3e9c0',
+      '--selection': '#8b7bff', '--ui-radius': '10px',
+      '--c-blue': '#4d9dff', '--c-green': '#3ee08f', '--c-amber': '#ffd23f', '--c-red': '#ff7043', '--c-purple': '#b36bff', '--c-pink': '#ff4fae', '--c-teal': '#3ef2ff', '--c-gray': '#a0a1a8',
     },
   },
 ];

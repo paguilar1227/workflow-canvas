@@ -7,6 +7,8 @@
 // A scenario may have several turns (separate codex exec runs on the same document); a turn's before() hook acts as
 // the person in the recorded tab (e.g. clicking Save) between AI turns.
 // A turn may point the agent at the fallback server (server: 'fallback') and give it a writable sandbox (sandbox, addDirs).
+// A scenario marked runAfterOthers runs alone after the parallel batch (it changes something global, like the theme, that the
+// batch's checks would see); its watcher tab and video start only when it starts.
 //
 //   node scripts/ai-tests/run.mjs [--base http://localhost:8790] [--out <dir>] [--only A,C] [--timeout-min 25] [--headed]
 //                                 [--container wfc-ai-test] [--expect-tools 35]
@@ -219,8 +221,10 @@ async function main() {
   const health = await http('/health');
   const scenarios = SCENARIOS.filter((s) => !ONLY || ONLY.includes(s.id));
   if (!scenarios.length) throw new Error('No scenarios selected');
+  const batch = scenarios.filter((s) => !s.runAfterOthers);
+  const afterwards = scenarios.filter((s) => s.runAfterOthers);
   const themeChangers = scenarios.filter((s) => s.changesTheme);
-  if (themeChangers.length > 1) throw new Error('Only one scenario may change the global theme');
+  if (batch.filter((s) => s.changesTheme).length > 1) throw new Error('Only one scenario of the parallel batch may change the global theme');
   fs.mkdirSync(OUT, { recursive: true });
   const toolList = (await http('/api/tools')).tools;
   const serverTools = toolList.map((t) => t.name);
@@ -240,13 +244,13 @@ async function main() {
   const videoTmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wfc-ai-video-'));
   const runStarted = new Date();
 
-  for (const sc of scenarios) {
+  const prepare = async (sc) => {
     sc.dir = path.join(OUT, sc.slug);
     fs.rmSync(path.join(sc.dir, 'steps'), { recursive: true, force: true });
     fs.rmSync(path.join(sc.dir, 'ai-saved-elsewhere'), { recursive: true, force: true });
     if (fs.existsSync(sc.dir)) for (const f of fs.readdirSync(sc.dir)) if (/^(ai-capture-.*\.png|final.*\.png|person-.*\.png|video.*\.mp4|attached-file.*\.excalidraw|file\..*\.excalidraw)$/.test(f)) fs.rmSync(path.join(sc.dir, f));
     fs.mkdirSync(path.join(sc.dir, 'steps'), { recursive: true });
-    Object.assign(sc, await sc.setup({ tool, http, dir: sc.dir, fallback }));
+    Object.assign(sc, await sc.setup({ tool, http, dir: sc.dir, fallback, baselineTheme: BASELINE_THEME }));
     sc.cwdDir = sc.cwd === 'repo' ? REPO : fs.mkdtempSync(path.join(os.tmpdir(), 'wfc-ai-' + sc.id + '-'));
     sc.turns = sc.turns ?? [{ prompt: sc.prompt }];
     sc.promptTexts = sc.turns.map((t) => t.prompt(sc));
@@ -265,14 +269,11 @@ async function main() {
     for (const w of sc.watch ?? []) sc.pages.push({ docId: w.docId, page: await openWatcher(sc.context, w.docId, sc.initScript, w.base) });
     sc.label = sc.id + ' · ' + sc.title + ' — codex ' + sc.model;
     for (const p of sc.pages) await setCaption(p.page, sc.label, 'waiting for the AI…');
-    sc.calls = []; sc.transcript = []; sc.finalMessage = null; sc.finalMessages = []; sc.usage = null; sc.usages = []; sc.createdDocIds = []; sc.step = 0; sc.shots = Promise.resolve(); sc.aiImages = 0; sc.turn = 0; sc.data = {};
+    sc.calls = []; sc.callStarts = new Map(); sc.transcript = []; sc.finalMessage = null; sc.finalMessages = []; sc.usage = null; sc.usages = []; sc.createdDocIds = []; sc.step = 0; sc.shots = Promise.resolve(); sc.aiImages = 0; sc.turn = 0; sc.data = {};
     console.log(sc.id + ': doc ' + sc.docId + ' ready');
-  }
+  };
 
-  const t0 = Date.now();
-  await Promise.all(scenarios.map((sc) => runScenario(sc, { t0, readOnly, serverTools })));
-
-  for (const sc of scenarios) {
+  const finish = async (sc) => {
     await sc.context.close();
     for (const r of sc.data.relocated ?? []) {
       if (!r.moved || !fs.existsSync(r.from)) continue;
@@ -292,6 +293,17 @@ async function main() {
     }
     sc.result.evidence.videos = videos;
     fs.writeFileSync(path.join(sc.dir, 'result.json'), JSON.stringify(sc.result, null, 2));
+  };
+
+  for (const sc of batch) await prepare(sc);
+  const t0 = Date.now();
+  await Promise.all(batch.map((sc) => runScenario(sc, { t0, readOnly, serverTools })));
+  for (const sc of batch) await finish(sc);
+  for (const sc of afterwards) {
+    console.log(sc.id + ': runs alone after the parallel batch');
+    await prepare(sc);
+    await runScenario(sc, { t0: Date.now(), readOnly, serverTools });
+    await finish(sc);
   }
   await browser.close();
   fs.rmSync(videoTmp, { recursive: true, force: true });
@@ -313,16 +325,18 @@ async function main() {
         image: fallbackImageAtStart && { ...fallbackImageAtStart, sameContainerThroughout: !!fallbackImageAtEnd && fallbackImageAtEnd.id === fallbackImageAtStart.id && fallbackImageAtEnd.containerStartedAt === fallbackImageAtStart.containerStartedAt },
         note: 'Second server from the same image with no WFC_SAVE_ROOTS and no shared folder (like a hosted preview); only turns marked server: fallback talk to it.' },
     } : {}),
-    parallel: true,
+    parallel: { batch: batch.map((s) => s.id), afterwardsAlone: afterwards.map((s) => s.id) },
     aiClient: { name: 'codex exec', version: codexVersion, flags: codexArgv({ model: '<model>' }, '<prompt>').slice(0, -1), ignoreUserConfig: true, reasoningEffort: REASONING },
     pass: scenarios.every((s) => s.result.pass),
-    scenarios: scenarios.map((s) => ({ id: s.id, slug: s.slug, title: s.title, model: s.model, turns: s.turns.length, documentId: s.docId, createdDocuments: s.result.createdDocuments, pass: s.result.pass, passed: s.result.checks.filter((c) => c.pass).length, failed: s.result.checks.filter((c) => !c.pass).map((c) => c.name), ...(s.result.observations ? { informational: s.result.observations.map((o) => ({ name: o.name, pass: o.pass })) } : {}), durationSec: s.result.durationSec, toolCalls: s.result.toolCalls.total, exit: s.result.exit, dir: s.dir })),
+    scenarios: scenarios.map((s) => ({ id: s.id, slug: s.slug, title: s.title, model: s.model, phase: s.runAfterOthers ? 'alone, after the parallel batch' : 'parallel batch', turns: s.turns.length, documentId: s.docId, createdDocuments: s.result.createdDocuments, pass: s.result.pass, passed: s.result.checks.filter((c) => c.pass).length, failed: s.result.checks.filter((c) => !c.pass).map((c) => c.name), ...(s.result.observations ? { informational: s.result.observations.map((o) => ({ name: o.name, pass: o.pass })) } : {}), durationSec: s.result.durationSec, toolCalls: s.result.toolCalls.total, exit: s.result.exit, dir: s.dir })),
     environmentNotes: [
       { topic: 'Claude Code', probe: claude, note: 'Claude Code connects to the workflow-canvas MCP server, but cannot run a turn unless it is logged in; when not logged in, the cross-client scenario runs through codex exec with a different model instead.' },
       { topic: 'codex config', note: 'codex exec runs with --ignore-user-config --disable apps so only this MCP server is attached; MCP tools are auto-approved via mcp_servers.workflow_canvas.default_tools_approval_mode="approve" because exec has no interactive approvals.' },
       { topic: 'MCP tool exposure', note: 'Each agent reaches ' + BASE + '/mcp through its own local pass-through (127.0.0.1, random port) that records the tools/list responses delivered to that agent. Every scenario checks that the agent stderr has zero "Skipping MCP tool" lines and that the delivered list holds all ' + EXPECTED_TOOL_COUNT + ' server tools (the server lists ' + toolList.length + '), including ' + REQUIRED_AI_TOOLS.join(', ') + ', with none skipped. codex does not print its model-visible tool list, so delivered tools minus skipped tools is the exposed set.' },
       ...scenarios.filter((s) => s.environmentNote).map((s) => ({ topic: 'scenario ' + s.id, note: s.environmentNote })),
-      { topic: 'global theme', note: themeChangers.length ? 'Theme is global (shared by every tab). Only scenario ' + themeChangers[0].id + ' changes it (to ' + themeChangers[0].changesTheme + ') near its end, so screenshots/videos of other scenarios taken after that moment show that theme. The run starts from ' + BASELINE_THEME + '.' : 'No scenario changes the theme.' },
+      { topic: 'global theme', note: themeChangers.length ? 'Theme is global (shared by every tab). The run starts from ' + BASELINE_THEME + '. ' + themeChangers.map((s) => s.runAfterOthers
+        ? 'Scenario ' + s.id + ' changes it (to ' + s.changesTheme + ') and runs alone after the parallel batch; it starts from ' + BASELINE_THEME + ' and the harness restores ' + BASELINE_THEME + ' at its end.'
+        : 'Scenario ' + s.id + ' changes it (to ' + s.changesTheme + ') near its end, so screenshots/videos of other batch scenarios taken after that moment show that theme.').join(' ') : 'No scenario changes the theme.' },
       { topic: 'shared session', note: 'Panels and snap-to-grid live in one shared session and selection is kept per document (session.selections[docId]); only scenario C changes them, and the watcher tabs of other documents are unaffected.' },
     ],
   };
@@ -357,6 +371,7 @@ async function runScenario(sc, { t0, readOnly, serverTools }) {
   const onEvent = (ev) => {
     const it = ev.item;
     if (ev.type === 'item.started' && it?.type === 'mcp_tool_call') {
+      sc.callStarts.set(it.id, Date.now());
       for (const p of sc.pages) if (p.page) setCaption(p.page, sc.label, 'AI → ' + it.tool + ' ' + clip(it.arguments, 160));
       return;
     }
@@ -364,11 +379,12 @@ async function runScenario(sc, { t0, readOnly, serverTools }) {
       if (it.type === 'mcp_tool_call') {
         const { textOut, json, images } = resultParts(it.result);
         const isErr = !!(it.error || it.result?.is_error || it.result?.isError || it.status === 'failed');
-        const call = { n: sc.calls.length + 1, turn: sc.turn, at: Math.round((Date.now() - t0) / 100) / 10, endedMs: Date.now(), server: it.server, tool: it.tool, args: it.arguments, ok: !isErr, error: it.error?.message ?? (isErr ? clip(textOut, 400) : undefined), resultJson: json, resultText: textOut };
+        const call = { n: sc.calls.length + 1, turn: sc.turn, at: Math.round((Date.now() - t0) / 100) / 10, startedMs: sc.callStarts.get(it.id) ?? null, endedMs: Date.now(), server: it.server, tool: it.tool, args: it.arguments, ok: !isErr, error: it.error?.message ?? (isErr ? clip(textOut, 400) : undefined), resultJson: json, resultText: textOut, images: [] };
         if (it.server === MCP_NAME) sc.calls.push(call);
         for (const img of images) {
           const file = 'ai-capture-' + String(++sc.aiImages).padStart(2, '0') + '.png';
           fs.writeFileSync(path.join(sc.dir, file), Buffer.from(img.data, 'base64'));
+          call.images.push(file);
           log('    (the AI received a ' + (img.mimeType ?? img.mime_type ?? 'image') + ' screenshot, saved as ' + file + ')');
         }
         log('→ mcp ' + it.server + '/' + it.tool + ' ' + clip(it.arguments, 400) + (call.ok ? '  ✓ ' + clip(textOut.replace(/\s+/g, ' '), 300) : '  ✗ ' + call.error));
@@ -418,7 +434,7 @@ async function runScenario(sc, { t0, readOnly, serverTools }) {
     child.on('error', (e) => { clearTimeout(timer); log('! could not start codex: ' + e.message); resolve({ code: -1, signal: null, timedOut }); });
     child.on('close', (code, signal) => { clearTimeout(timer); handle(buf); resolve({ code, signal, timedOut }); });
   });
-  const person = { page: main, docId: sc.docId, log: (line) => log('PERSON: ' + line), caption: (line) => setCaption(main, sc.label, line), tool, http, dir: sc.dir, fallback, pages: sc.pages };
+  const person = { page: main, docId: sc.docId, log: (line) => log('PERSON: ' + line), caption: (line) => setCaption(main, sc.label, line), tool, http, dir: sc.dir, fallback, pages: sc.pages, baselineTheme: BASELINE_THEME };
   const exits = [];
   for (const [i, turn] of sc.turns.entries()) {
     sc.turn = i + 1;
@@ -441,7 +457,7 @@ async function runScenario(sc, { t0, readOnly, serverTools }) {
   await sc.shots;
   await sleep(SETTLE_MS);
   if (sc.collect) {
-    try { Object.assign(sc.data, await sc.collect({ ...person, log: (line) => log('HARNESS: ' + line) })); } catch (e) { log('! harness collection failed: ' + e.message); sc.data.collectError = String(e.stack ?? e); }
+    try { Object.assign(sc.data, await sc.collect({ ...person, log: (line) => log('HARNESS: ' + line), calls: sc.calls })); } catch (e) { log('! harness collection failed: ' + e.message); sc.data.collectError = String(e.stack ?? e); }
   }
   // Files the server wrote for the AI outside this scenario's evidence folder (save_to_file with a path the AI chose) are moved into
   // <evidence>/ai-saved-elsewhere/ so test runs leave nothing behind in the shared folder. Only files created during this scenario are moved.
@@ -478,6 +494,10 @@ async function runScenario(sc, { t0, readOnly, serverTools }) {
   const markdown = await http('/api/documents/' + encodeURIComponent(sc.docId) + '?format=markdown');
   const createdDocs = [];
   for (const id of sc.createdDocIds) { try { createdDocs.push(await http('/api/documents/' + encodeURIComponent(id))); } catch { /* deleted by the AI */ } }
+  // After the final screenshots and state reads: undo what the scenario changed globally (e.g. restore the baseline theme).
+  if (sc.cleanup) {
+    try { Object.assign(sc.data, await sc.cleanup({ ...person, log: (line) => log('HARNESS: ' + line) })); } catch (e) { log('! harness cleanup failed: ' + e.message); sc.data.cleanupError = String(e.stack ?? e); }
+  }
 
   const checks = [];
   const observations = [];

@@ -294,13 +294,14 @@ input, textarea, select { font: inherit; color: var(--text); }
 .wfc-text-node.has-color { color: var(--nc); }
 .react-flow__node:hover .wfc-text-node { border-color: var(--panel-border); }
 
-.wfc-handle.react-flow__handle { width: 10px; height: 10px; border-radius: 50%; background: var(--panel); border: 1.5px solid var(--selection); opacity: 0; transition: opacity .12s; }
+.wfc-handle.react-flow__handle { --hb: 1.5px; width: 10px; height: 10px; border-radius: 50%; background: var(--panel); border: var(--hb) solid var(--selection); opacity: 0; transition: opacity .12s; }
 .wfc-handle.react-flow__handle { pointer-events: none; }
 .react-flow__node:hover .wfc-handle, .react-flow__node.selected .wfc-handle { opacity: 1; pointer-events: auto; }
 .react-flow__handle.connectingto, .react-flow__handle.valid { background: var(--selection); }
 
 /* ---------- edges ---------- */
-.wfc-edge-path { fill: none; stroke: var(--ec, var(--edge)); stroke-width: 1.5; }
+/* React Flow's base.css colours selected or focused edges from --xy-edge-stroke-selected (#555 by default) with a more specific rule. */
+.wfc-edge-path { fill: none; stroke: var(--ec, var(--edge)); stroke-width: 1.5; --xy-edge-stroke-selected: var(--selection); }
 .wfc-edge-path.selected { stroke: var(--selection); stroke-width: 2.4; }
 .wfc-edge-path.dashed { stroke-dasharray: 6 5; }
 .wfc-edge-path.dotted { stroke-dasharray: 1.5 4.5; stroke-linecap: round; }
@@ -430,12 +431,13 @@ input, textarea, select { font: inherit; color: var(--text); }
   input, textarea, select, .doc-title { font-size: 16px; }
   .doc-title, .field input, .field select, .searchbar input { min-height: 44px; }
   .wfc-handle.react-flow__handle { width: 16px; height: 16px; }
-  /* 44px touch targets that grow outward from the node edge, so the node body itself stays tappable at any zoom */
+  /* 44px touch targets that grow outward from the node edge, so the node body itself stays tappable at any zoom.
+     Insets are measured from the padding box, so each one also adds back the handle border (--hb). */
   .wfc-handle.react-flow__handle::after { content: ''; position: absolute; }
-  .wfc-handle.react-flow__handle-top::after { inset: -28px -14px 0 -14px; }
-  .wfc-handle.react-flow__handle-bottom::after { inset: 0 -14px -28px -14px; }
-  .wfc-handle.react-flow__handle-left::after { inset: -14px 0 -14px -28px; }
-  .wfc-handle.react-flow__handle-right::after { inset: -14px -28px -14px 0; }
+  .wfc-handle.react-flow__handle-top::after { inset: calc(-28px - var(--hb)) calc(-14px - var(--hb)) calc(0px - var(--hb)) calc(-14px - var(--hb)); }
+  .wfc-handle.react-flow__handle-bottom::after { inset: calc(0px - var(--hb)) calc(-14px - var(--hb)) calc(-28px - var(--hb)) calc(-14px - var(--hb)); }
+  .wfc-handle.react-flow__handle-left::after { inset: calc(-14px - var(--hb)) calc(0px - var(--hb)) calc(-14px - var(--hb)) calc(-28px - var(--hb)); }
+  .wfc-handle.react-flow__handle-right::after { inset: calc(-14px - var(--hb)) calc(-28px - var(--hb)) calc(-14px - var(--hb)) calc(0px - var(--hb)); }
   .react-flow__resize-control.handle { width: 10px; height: 10px; }
   .wfc-collapse::after { content: ''; position: absolute; inset: -12px; border-radius: 999px; }
   .react-flow__resize-control.handle::after { content: ''; position: absolute; inset: -17px; }
@@ -571,4 +573,72 @@ input, textarea, select { font: inherit; color: var(--text); }
   .picker-btn { height: 44px; font-size: 16px; }
   .picker-option { min-height: 44px; font-size: 15px; }
   .picker-pop.grid .picker-option { min-height: 64px; font-size: 12px; }
+}
+
+/* ---------- Neon Flow: node-graph cards, neon wires, connect spark and light sweep ---------- */
+:root[data-neon] .wfc-node.shape-card { padding-right: 26px; }
+:root[data-neon] .wfc-node.shape-card::after {
+  content: ''; position: absolute; top: 11px; right: 10px; width: 8px; height: 12px; pointer-events: none;
+  background: radial-gradient(circle, var(--text-3) 1px, transparent 1.4px) 0 0 / 4px 4px;
+}
+:root[data-neon] .wfc-handle.react-flow__handle { --hb: 2px; background: #f4f4f5; border: var(--hb) solid var(--node-bg); box-shadow: 0 0 0 1px rgba(255,255,255,.16); }
+:root[data-neon] .react-flow__handle.connectingto, :root[data-neon] .react-flow__handle.valid { background: #fff; box-shadow: 0 0 0 1px rgba(255,255,255,.5), 0 0 12px rgba(255,255,255,.55); }
+.wfc-edge-path.neon { --xy-edge-stroke-selected: var(--ec); stroke-width: 3; stroke-linecap: round; filter: drop-shadow(0 0 3px color-mix(in srgb, var(--ec) 70%, transparent)); }
+.wfc-edge-path.neon.selected { stroke: var(--ec); stroke-width: 4; }
+.wfc-edge-path.neon.dashed { stroke-dasharray: 8 9; }
+.wfc-edge-path.neon.dotted { stroke-dasharray: .1 7; }
+.wfc-edge-path.neon.animated { stroke-dasharray: 8 9; animation: neon-dash .9s linear infinite; }
+@keyframes neon-dash { to { stroke-dashoffset: -17; } }
+.wfc-edge-path.neon.born:not(.animated) { animation: neon-born .9s ease-out; }
+@keyframes neon-born { 0%, 30% { stroke: #fff; } }
+.wfc-neon-halo { fill: none; stroke: var(--ec); stroke-width: 10; stroke-opacity: .1; stroke-linecap: round; pointer-events: none; }
+.wfc-neon-halo.selected { stroke: var(--selection); stroke-opacity: .38; stroke-width: 12; }
+.wfc-branch.neon { stroke-linecap: round; filter: drop-shadow(0 0 3px color-mix(in srgb, var(--ec) 65%, transparent)); }
+
+.wfc-neon-drag .wire { fill: none; stroke: #fff; stroke-width: 3; stroke-linecap: round; filter: drop-shadow(0 0 3px rgba(255,255,255,.45)); }
+.wfc-neon-drag .src { fill: #fff; stroke: var(--node-bg); stroke-width: 2.5; }
+.wfc-neon-drag .tip, .wfc-neon-drag .port { fill: #fff; }
+.wfc-neon-drag .spark { fill: none; stroke: var(--zc); stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; filter: drop-shadow(0 0 2px var(--zc)) drop-shadow(0 0 6px var(--zc)); }
+.wfc-neon-drag .ring {
+  fill: color-mix(in srgb, var(--zc) 14%, transparent); stroke: var(--zc); stroke-width: 1.8; filter: drop-shadow(0 0 5px var(--zc));
+  transform-box: fill-box; transform-origin: center; animation: neon-ring .7s ease-in-out infinite alternate;
+}
+@keyframes neon-ring { from { transform: scale(.85); } to { transform: scale(1.12); } }
+
+@property --wfc-sweep { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+.wfc-neon-burst {
+  position: absolute !important; inset: -1px; border-radius: inherit; pointer-events: none; z-index: 3; --a0: 270deg;
+  filter: drop-shadow(0 0 4px var(--bc)) drop-shadow(0 0 10px var(--bc)); animation: neon-fade 1.5s ease-out forwards;
+}
+.wfc-neon-burst.from-top { --a0: 0deg; }
+.wfc-neon-burst.from-right { --a0: 90deg; }
+.wfc-neon-burst.from-bottom { --a0: 180deg; }
+.wfc-neon-burst > i {
+  position: absolute; inset: 0; border-radius: inherit; padding: 2px;
+  background: conic-gradient(from calc(var(--a0) + var(--wfc-sweep)), var(--bc) 0deg, transparent 60deg, transparent 300deg, var(--bc) 360deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
+  animation: neon-sweep 1.1s cubic-bezier(.25,.7,.35,1) forwards;
+}
+.wfc-neon-burst > i + i { animation-name: neon-sweep-back; }
+@keyframes neon-sweep { to { --wfc-sweep: 180deg; } }
+@keyframes neon-sweep-back { to { --wfc-sweep: -180deg; } }
+@keyframes neon-fade { 0% { opacity: 0; } 8%, 65% { opacity: 1; } 100% { opacity: 0; } }
+.wfc-neon-burst > b {
+  position: absolute; left: 0; top: 50%; width: 20px; height: 20px; margin: -10px 0 0 -10px; border-radius: 50%; border: 2px solid var(--bc);
+  animation: neon-ripple .9s ease-out forwards;
+}
+.wfc-neon-burst.from-right > b { left: 100%; }
+.wfc-neon-burst.from-top > b { left: 50%; top: 0; }
+.wfc-neon-burst.from-bottom > b { left: 50%; top: 100%; }
+@keyframes neon-ripple { from { opacity: 1; transform: scale(.4); } to { opacity: 0; transform: scale(2.4); } }
+@media (prefers-reduced-motion: reduce) {
+  .wfc-neon-burst { display: none; }
+  .wfc-edge-path.neon.born:not(.animated), .wfc-neon-drag .ring { animation: none; }
+}
+/* Port dots live in React Flow's viewport portal; cards are z-index 1 and the connection line 1001, so 2 puts the dots on the card edge. */
+:root[data-neon] .react-flow__viewport-portal { z-index: 2; pointer-events: none; }
+.wfc-port-dot {
+  position: absolute; left: -5px; top: -5px; width: 10px; height: 10px; border-radius: 50%; pointer-events: none;
+  background: var(--ec); box-shadow: 0 0 0 2px var(--node-bg), 0 0 8px color-mix(in srgb, var(--ec) 80%, transparent);
 }

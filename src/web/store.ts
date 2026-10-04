@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { CanvasDocument, CanvasNode, DocumentSummary, NodeKind, SessionState } from '../shared/types';
+import type { CanvasDocument, CanvasNode, ColorName, DocumentSummary, NodeKind, SessionState, Side } from '../shared/types';
 import { DEFAULT_SESSION } from '../shared/types';
 import { applyCommand, type Command } from '../shared/commands';
 
@@ -38,6 +38,9 @@ export interface AppState {
   dropTargetId: string | null;
   activity: Activity[];
   flashing: Record<string, number>;
+  /** Neon Flow: connectors that just appeared (edge id → time) and the cards they landed on, for the one-off connect animation. */
+  newEdges: Record<string, number>;
+  bursts: Record<string, { color: ColorName; side: Side; at: number }>;
   searchOpen: boolean;
   searchIndex: number;
   helpOpen: boolean;
@@ -74,6 +77,8 @@ export const useApp = create<AppState>(() => ({
   dropTargetId: null,
   activity: [],
   flashing: {},
+  newEdges: {},
+  bursts: {},
   searchOpen: false,
   searchIndex: 0,
   helpOpen: false,

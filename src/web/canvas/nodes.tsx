@@ -8,6 +8,7 @@ import { RoughShape, seedOf, strokePath, useSketch } from './sketch';
 import { InlineMarkdown, Markdown, toggleTask } from '../markdown';
 import { emojiUiOwns } from '../panels/EmojiAssist';
 import { STATUS_GLYPH } from '../panels/Picker';
+import { NeonBurst } from './neon';
 
 export interface NodeData extends Record<string, unknown> {
   node: CanvasNode;
@@ -121,6 +122,7 @@ export const TopicNode = memo(function TopicNode({ data, selected, width, height
         {svg ? <ShapeSvg shape={shape} /> : null}
         {sketch ? <RoughShape shape={shape} w={width ?? n.width} h={height ?? n.height} seed={seedOf(n.id)} filled={!!n.color && n.color !== 'default'} strong={d.isRoot} /> : null}
         <Handles />
+        <NeonBurst id={n.id} />
         {n.badge ? <span className="wfc-badge">{n.badge}</span> : null}
         <Markers n={n} />
         {shape === 'card' ? (
@@ -157,6 +159,7 @@ export const FrameNode = memo(function FrameNode({ data, selected }: NodeProps) 
       <NodeResizer isVisible={!!selected && !n.locked} minWidth={160} minHeight={100} onResizeEnd={(_e, p) => actions.updateNode(n.id, { x: Math.round(p.x), y: Math.round(p.y), width: Math.round(p.width), height: Math.round(p.height) })} />
       <div className={'wfc-frame' + (n.color && n.color !== 'default' ? ' has-color' : '') + (d.flashing ? ' flash' : '')} key={d.flashing} style={{ ['--nc' as string]: colorVar(n.color) }} data-testid={'frame-' + n.id}>
         <Handles />
+        <NeonBurst id={n.id} />
         <div className="wfc-frame-label">
           {d.editing ? (
             <InlineEdit className="wfc-frame-edit" value={n.title} onDone={(v) => commitTitle(n, v)} />
@@ -179,6 +182,7 @@ export const StickyNode = memo(function StickyNode({ data, selected, width, heig
       <div className={'wfc-sticky' + (n.color && n.color !== 'default' ? ' has-color' : '') + (d.flashing ? ' flash' : '')} key={d.flashing} style={{ ['--nc' as string]: colorVar(n.color) }} data-testid={'node-' + n.id}>
         {sketch ? <RoughShape shape="sticky" w={width ?? n.width} h={height ?? n.height} seed={seedOf(n.id)} filled={false} /> : null}
         <Handles />
+        <NeonBurst id={n.id} />
         {d.editing ? <InlineEdit multiline value={n.title} onDone={(v) => commitTitle(n, v)} /> : n.title ? <Markdown className="sticky-text" source={n.title} onToggleTask={toggle(n)} rowTaps={!!selected} /> : <span className="placeholder">Double-click to write…</span>}
       </div>
     </>
@@ -193,6 +197,7 @@ export const TextNode = memo(function TextNode({ data, selected }: NodeProps) {
       <NodeResizer isVisible={!!selected && !n.locked} minWidth={40} minHeight={24} onResizeEnd={(_e, p) => actions.updateNode(n.id, { x: Math.round(p.x), y: Math.round(p.y), width: Math.round(p.width), height: Math.round(p.height) })} />
       <div className={'wfc-text-node' + (n.color && n.color !== 'default' ? ' has-color' : '')} style={{ ['--nc' as string]: colorVar(n.color) }} data-testid={'node-' + n.id}>
         <Handles />
+        <NeonBurst id={n.id} />
         {d.editing ? <InlineEdit value={n.title} onDone={(v) => commitTitle(n, v)} /> : n.title ? <Markdown source={n.title} onToggleTask={toggle(n)} rowTaps={!!selected} /> : 'Text'}
       </div>
     </>

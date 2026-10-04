@@ -5,7 +5,8 @@ import {
 } from '@xyflow/react';
 import { useApp, get, set } from '../store';
 import { nodeTypes, type NodeData } from './nodes';
-import { edgeTypes, MarkerDefs } from './edges';
+import { autoSides, edgeTypes, MarkerDefs } from './edges';
+import { NEON_BURST_MS, NEON_SNAP_RADIUS, NeonConnectionLine, neonWireColors } from './neon';
 import { strokePath } from './sketch';
 import { childrenMap, descendants, hiddenIds, depthOf, branchAncestor, isAncestor } from '../../shared/graph';
 import { containsPoint, defaultSize } from '../../shared/sizes';
@@ -30,6 +31,39 @@ function childSideOf(n: CanvasNode, kids: CanvasNode[]): NodeData['childSide'] {
   return 'bottom';
 }
 
+/** Neon Flow: connectors that appear in the open document (from the UI, an AI or undo) play the connect animation once. */
+function useNeonBursts(neon: boolean) {
+  const doc = useApp((s) => s.doc);
+  const prev = useRef<{ docId: string | null; ids: Set<string> }>({ docId: null, ids: new Set() });
+  useEffect(() => {
+    if (!doc) return;
+    const before = prev.current;
+    prev.current = { docId: doc.id, ids: new Set(doc.edges.map((e) => e.id)) };
+    if (!neon || before.docId !== doc.id) return;
+    const born = doc.edges.filter((e) => !before.ids.has(e.id));
+    if (!born.length) return;
+    const at = Date.now();
+    const nodes = new Map(doc.nodes.map((n) => [n.id, n]));
+    const rect = (n: CanvasNode) => ({ x: n.x, y: n.y, w: n.width, h: n.height });
+    const wires = neonWireColors(doc.edges);
+    const newEdges = { ...get().newEdges };
+    const bursts = { ...get().bursts };
+    for (const e of born) {
+      newEdges[e.id] = at;
+      const s = nodes.get(e.source), t = nodes.get(e.target);
+      if (s && t) bursts[e.target] = { color: wires.get(e.id)!, side: (e.targetSide as Side) || autoSides(rect(s), rect(t))[1], at };
+    }
+    set({ newEdges, bursts });
+    setTimeout(() => {
+      const s = get();
+      set({
+        newEdges: Object.fromEntries(Object.entries(s.newEdges).filter(([, v]) => v !== at)),
+        bursts: Object.fromEntries(Object.entries(s.bursts).filter(([, v]) => v.at !== at)),
+      });
+    }, NEON_BURST_MS);
+  }, [doc, neon]);
+}
+
 export function Canvas() {
   useLongPressMenu();
   useTouchPinch();
@@ -46,6 +80,8 @@ export function Canvas() {
   const searchOpen = useApp((s) => s.searchOpen);
   const searchIndex = useApp((s) => s.searchIndex);
   const theme = getTheme(session.theme);
+  const neon = !!theme.neon;
+  useNeonBursts(neon);
   const drag = useRef<{ start: Map<string, { x: number; y: number }>; companions: string[]; anchorId: string } | null>(null);
 
   const matches = useMemo(() => {
@@ -91,8 +127,9 @@ export function Canvas() {
     for (const n of doc.nodes) {
       if (!n.parentId || !ids.has(n.parentId) || hidden.has(n.id)) continue;
       const branch = branchAncestor(doc, n.id);
-      out.push({ id: 'tree:' + n.id, source: n.parentId, target: n.id, type: 'branch', selectable: false, focusable: false, data: { color: branch?.color, depth: depthOf(doc, n.id) } });
+      out.push({ id: 'tree:' + n.id, source: n.parentId, target: n.id, type: 'branch', selectable: false, focusable: false, data: { color: branch?.color, branchId: branch?.id, depth: depthOf(doc, n.id) } });
     }
+    const wires = neon ? neonWireColors(doc.edges) : null;
     const lanes = new Map<string, string[]>();
     for (const e of doc.edges) {
       const key = [e.source, e.target].sort().join('|');
@@ -103,10 +140,10 @@ export function Canvas() {
       const group = lanes.get([e.source, e.target].sort().join('|'))!;
       const i = group.indexOf(e.id);
       const offset = group.length > 1 ? (i - (group.length - 1) / 2) * PARALLEL_EDGE_GAP : 0;
-      out.push({ id: e.id, source: e.source, target: e.target, type: 'smart', data: { edge: e, offset }, selected: sel.has(e.id), zIndex: 0 });
+      out.push({ id: e.id, source: e.source, target: e.target, type: 'smart', data: { edge: e, offset, wire: wires?.get(e.id) }, selected: sel.has(e.id), zIndex: 0 });
     }
     return out;
-  }, [doc, selection.edges]);
+  }, [doc, selection.edges, neon]);
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     const s = get();
@@ -240,6 +277,8 @@ export function Canvas() {
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       onConnect={onConnect}
+      connectionLineComponent={theme.neon ? NeonConnectionLine : undefined}
+      connectionRadius={theme.neon ? NEON_SNAP_RADIUS : undefined}
       onConnectEnd={(event, state) => {
         if (state.isValid || !state.fromNode) return;
         const pt = 'changedTouches' in event ? event.changedTouches[0] : (event as MouseEvent);

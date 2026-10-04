@@ -1,5 +1,5 @@
 import { memo, type CSSProperties } from 'react';
-import { BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath, getStraightPath, Position, useInternalNode, type EdgeProps } from '@xyflow/react';
+import { BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath, getStraightPath, Position, useInternalNode, ViewportPortal, type EdgeProps } from '@xyflow/react';
 import type { CanvasEdge, Side } from '../../shared/types';
 import { COLOR_NAMES } from '../../shared/types';
 import { InlineEdit } from './nodes';
@@ -7,6 +7,7 @@ import { useApp, set } from '../store';
 import { roughPath, seedOf, useSketch } from './sketch';
 import * as actions from '../actions';
 import { InlineMarkdown } from '../markdown';
+import { neonBranch, useNeon } from './neon';
 
 type Rect = { x: number; y: number; w: number; h: number };
 const POS: Record<Side, Position> = { top: Position.Top, right: Position.Right, bottom: Position.Bottom, left: Position.Left };
@@ -41,34 +42,46 @@ export function autoSides(s: Rect, t: Rect): [Side, Side] {
 const markerUrl = (c: string | undefined, selected: boolean) => 'url(#wfc-arrow-' + (selected ? 'selected' : c && c !== 'default' ? c : 'default') + ')';
 
 export const SmartEdge = memo(function SmartEdge({ id, source, target, data, selected }: EdgeProps) {
-  const e = (data as { edge: CanvasEdge; offset?: number }).edge;
+  const e = (data as { edge: CanvasEdge; offset?: number; wire?: string }).edge;
+  const wire = (data as { wire?: string }).wire;
   const offset = (data as { offset?: number }).offset ?? 0;
   const s = useRect(source);
   const t = useRect(target);
   const editing = useApp((st) => st.editingEdgeId === id);
   const sketch = useSketch();
+  const neon = useNeon();
+  const born = useApp((st) => !!st.newEdges[id]);
   if (!s || !t) return null;
   const [as, at] = autoSides(s, t);
   const ss = (e.sourceSide as Side) || as;
   const ts = (e.targetSide as Side) || at;
   const a = shift(anchor(s, ss), ss, offset), b = shift(anchor(t, ts), ts, offset);
   const params = { sourceX: a.x, sourceY: a.y, sourcePosition: POS[ss], targetX: b.x, targetY: b.y, targetPosition: POS[ts] };
-  const [path, lx, ly] = e.routing === 'bezier' ? getBezierPath(params)
-    : e.routing === 'straight' ? getStraightPath(params)
-    : getSmoothStepPath({ ...params, borderRadius: e.routing === 'step' ? 0 : 10, offset: 18 });
-  const cls = ['wfc-edge-path', selected ? 'selected' : '', e.animated ? 'animated' : e.style !== 'solid' ? e.style : '', sketch ? 'sk-base' : ''].join(' ');
-  const color = e.color && e.color !== 'default' ? 'var(--c-' + e.color + ')' : undefined;
+  const routing = neon && e.routing === 'smooth' ? 'bezier' : e.routing;
+  const [path, lx, ly] = routing === 'bezier' ? getBezierPath(params)
+    : routing === 'straight' ? getStraightPath(params)
+    : getSmoothStepPath({ ...params, borderRadius: routing === 'step' ? 0 : 10, offset: 18 });
+  const cls = ['wfc-edge-path', selected ? 'selected' : '', e.animated ? 'animated' : e.style !== 'solid' ? e.style : '', sketch ? 'sk-base' : '', neon ? 'neon' : '', neon && born ? 'born' : ''].join(' ');
+  const colorName = neon && wire ? wire : e.color;
+  const color = colorName && colorName !== 'default' ? 'var(--c-' + colorName + ')' : undefined;
+  const ecStyle = color ? ({ ['--ec' as string]: color } as CSSProperties) : undefined;
   return (
     <>
+      {neon ? <path d={path} className={'wfc-neon-halo' + (selected ? ' selected' : '')} style={ecStyle} /> : null}
       <BaseEdge
         id={id}
         path={path}
         className={cls}
         interactionWidth={18}
-        style={color ? ({ ['--ec' as string]: color } as CSSProperties) : undefined}
-        markerEnd={e.arrow === 'end' || e.arrow === 'both' ? markerUrl(e.color, !!selected) : undefined}
-        markerStart={e.arrow === 'start' || e.arrow === 'both' ? markerUrl(e.color, !!selected) : undefined}
+        style={ecStyle}
+        markerEnd={!neon && (e.arrow === 'end' || e.arrow === 'both') ? markerUrl(e.color, !!selected) : undefined}
+        markerStart={!neon && (e.arrow === 'start' || e.arrow === 'both') ? markerUrl(e.color, !!selected) : undefined}
       />
+      {neon ? (
+        <ViewportPortal>
+          {[a, b].map((p, i) => <span key={i} className="wfc-port-dot" style={{ ...ecStyle, transform: 'translate(' + p.x + 'px,' + p.y + 'px)' }} />)}
+        </ViewportPortal>
+      ) : null}
       {sketch ? (
         <g className={'wfc-sk-edge' + (selected ? ' selected' : '') + (e.animated ? ' animated' : e.style !== 'solid' ? ' ' + e.style : '')} style={color ? ({ ['--ec' as string]: color } as CSSProperties) : undefined}>
           {roughPath(path, seedOf(id)).map((p, i) => <path key={i} d={p.d} />)}
@@ -94,10 +107,11 @@ export const SmartEdge = memo(function SmartEdge({ id, source, target, data, sel
 });
 
 export const BranchEdge = memo(function BranchEdge({ id, source, target, data }: EdgeProps) {
-  const d = data as { color?: string; depth: number };
+  const d = data as { color?: string; depth: number; branchId?: string };
   const s = useRect(source);
   const t = useRect(target);
   const sketch = useSketch();
+  const neon = useNeon();
   if (!s || !t) return null;
   const tc = t.x + t.w / 2;
   let ss: Side, ts: Side;
@@ -108,8 +122,10 @@ export const BranchEdge = memo(function BranchEdge({ id, source, target, data }:
   void tc;
   const a = anchor(s, ss), b = anchor(t, ts);
   const [path] = getBezierPath({ sourceX: a.x, sourceY: a.y, sourcePosition: POS[ss], targetX: b.x, targetY: b.y, targetPosition: POS[ts], curvature: 0.35 });
-  const stroke = d.color && d.color !== 'default' ? 'var(--c-' + d.color + ')' : 'var(--edge)';
+  const colorName = neon ? neonBranch(d.branchId ?? target, d.color) : d.color;
+  const stroke = colorName && colorName !== 'default' ? 'var(--c-' + colorName + ')' : 'var(--edge)';
   if (sketch) return <g className="wfc-branch" style={{ stroke }}>{roughPath(path, seedOf(id), d.depth <= 1 ? 2.2 : 1.5).map((p, i) => <path key={i} d={p.d} style={{ strokeWidth: p.strokeWidth }} />)}</g>;
+  if (neon) return <path d={path} className="wfc-branch neon" style={{ stroke, strokeWidth: d.depth <= 1 ? 3 : 2.2, ['--ec' as string]: stroke } as CSSProperties} />;
   return <path d={path} className="wfc-branch" style={{ stroke, strokeWidth: d.depth <= 1 ? 2.4 : 1.6 }} />;
 });
 
