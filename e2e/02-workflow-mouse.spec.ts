@@ -22,6 +22,8 @@ async function connectByHandle(app: App, ev: Evidence, from: string, fromSide: s
 test('sketch a workflow with the mouse', async ({ page, app, ev }) => {
   ev.proves('A mouse user adds topics from the toolbar (arm the Topic button, click the canvas to place) and by double-clicking empty canvas, drags a topic to a new spot, draws connectors by dragging from a node handle to another node, labels connectors by double-clicking the line and via the inspector, and restyles a connector (bezier routing, dashed, arrows at both ends, animated flow) with visible results.');
   const docId = await app.newDoc('Order workflow');
+  await app.pinTheme('lens-dark');
+  ev.note('Pinned to Lens Dark: this journey checks connector looks that Neon Flow (the default theme) draws differently on purpose: the live connector line, smooth routing redrawn as a curve, and arrowheads.');
   await app.open(docId);
   const pane = await app.paneBox();
 

@@ -3,6 +3,8 @@ import { test, expect } from '../support/journey';
 test('sketch a workflow with the mouse', async ({ page, app, ev, phone }) => {
   ev.proves('Phone version: instead of mouse clicks and double-clicks, a person taps Topic and then a spot to place each topic, drags a topic with one finger, connects topics by dragging a connection dot of the selected topic and with Area select + Connect in the selection bar, labels a connector from the selection bar, then labels and restyles a connector in the inspector drawer (Style). Ergonomics are measured on each screen; the inspector drawer opens, expands, and closes from × and the backdrop.');
   const docId = await app.newDoc('Order workflow');
+  await app.pinTheme('lens-dark');
+  ev.note('Pinned to Lens Dark: this journey checks arrowheads on a restyled connector, which Neon Flow (the default theme) leaves out on purpose.');
   await app.open(docId);
   const pane = await app.paneBox();
   await phone.ergonomics('empty canvas');

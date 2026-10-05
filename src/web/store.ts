@@ -40,7 +40,7 @@ export interface AppState {
   flashing: Record<string, number>;
   /** Neon Flow: connectors that just appeared (edge id → time) and the cards they landed on, for the one-off connect animation. */
   newEdges: Record<string, number>;
-  bursts: Record<string, { color: ColorName; side: Side; at: number }>;
+  bursts: Record<string, { color: ColorName; side: Side; pos: number; at: number }>;
   searchOpen: boolean;
   searchIndex: number;
   helpOpen: boolean;

@@ -123,7 +123,7 @@ export function NeonBurst({ id }: { id: string }) {
   const b = useApp((s) => s.bursts[id]);
   if (!neon || !b) return null;
   return (
-    <span key={b.at} className={'wfc-neon-burst from-' + b.side} style={{ ['--bc' as string]: 'var(--c-' + b.color + ')' } as CSSProperties} data-testid={'neon-burst-' + id} aria-hidden>
+    <span key={b.at} className={'wfc-neon-burst from-' + b.side} style={{ ['--bc' as string]: 'var(--c-' + b.color + ')', ['--p' as string]: b.pos * 100 + '%' } as CSSProperties} data-testid={'neon-burst-' + id} aria-hidden>
       <i /><i /><b />
     </span>
   );

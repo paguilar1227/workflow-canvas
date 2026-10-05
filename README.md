@@ -66,7 +66,8 @@ Themes are token sets (CSS variables) swappable at runtime by humans or AI. Dire
 
 | Theme | Mode | Source |
 | --- | --- | --- |
-| Lens Dark (default) | dark | Your pr-lens `mapping-web-dark.svg` reference |
+| Neon Flow (default) | dark | [Omer Assa’s node-connector demo](https://x.com/omer_assa/status/2106758938926391416) |
+| Lens Dark | dark | Your pr-lens `mapping-web-dark.svg` reference |
 | Warp Graphite | dark | Refero style: Warp |
 | Paper Blueprint | light | Refero style: Paper |
 | Whimsical Studio | light | Refero style: Whimsical |
@@ -75,9 +76,8 @@ Themes are token sets (CSS variables) swappable at runtime by humans or AI. Dire
 | Hyperstudio Amber | dark | Refero style: Hyperstudio |
 | Excalidraw Sketch | light | Excalidraw (MIT) · rough.js hand-drawn rendering |
 | Excalidraw Sketch Dark | dark | Excalidraw (MIT) dark mode · rough.js hand-drawn rendering |
-| Neon Flow | dark | [Omer Assa’s node-connector demo](https://x.com/omer_assa/status/2106758938926391416) |
 
-**Neon Flow** is a node-graph look: charcoal cards with a grip and port dots, thick neon bezier wires with a soft glow (connectors without a colour get one of yellow, pink, purple, orange or cyan from the pair they join). While you drag a connector the wire is white; near a port it snaps with an electric spark and a ring in the colour the wire will take, and when it lands the wire flashes from white to its colour while light sweeps around the card from that port. Connectors added by an AI or by undo play the same animation. In this theme “smooth” routing draws as a bezier curve and ends show port dots instead of arrowheads. Motion is skipped when the system asks for reduced motion.
+**Neon Flow** is a node-graph look: charcoal cards with a grip and port dots, thick neon bezier wires with a soft glow (connectors without a colour get one of yellow, pink, purple, orange or cyan from the pair they join). While you drag a connector the wire is white; near a port it snaps with an electric spark and a ring in the colour the wire will take, and when it lands the wire flashes from white to its colour while light sweeps around the card from that port. Connectors added by an AI or by undo play the same animation. Wires that share a side of a card each get their own port, spaced evenly and ordered so they don’t cross. In this theme “smooth” routing draws as a bezier curve and ends show port dots instead of arrowheads. Motion is skipped when the system asks for reduced motion.
 
 Fonts are bundled open-source substitutes (Inter, Manrope, Space Grotesk, Fraunces, JetBrains Mono, Geist Mono, Patrick Hand).
 

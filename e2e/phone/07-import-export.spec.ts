@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { test, expect } from '../support/journey';
+import { getTheme } from '../../src/shared/themes';
 
 test('import diagrams and export them in every format', async ({ page, app, ev, phone, browser }, info) => {
   ev.proves('Phone version: from the More sheet a person imports a Mermaid flowchart (subgraphs become frames, labels/dashed links/database shapes kept) and a Markdown outline (becomes a mind map) through the Import dialog (tapping the format and Import buttons), then downloads, again from the More sheet, PNG, SVG, Markdown, Mermaid, JSON and Excalidraw exports from the Export menu; every file is non-empty and has the expected content, the PNG is a real picture without black (unthemed) shapes, and the SVG contains every connector.');
@@ -133,7 +134,10 @@ test('import diagrams and export them in every format', async ({ page, app, ev, 
     ev.note('Exported PNG: ' + stats.width + 'x' + stats.height + ', ' + stats.colors + ' distinct colours, ' + stats.black + ' opaque pure-black pixels.');
     expect(stats.width).toBeGreaterThan(0);
     expect(stats.colors, 'the PNG is not a blank image').toBeGreaterThan(1);
-    expect(stats.black, 'Lens Dark has no pure-black colour, so no shape may render pure black (unthemed fill)').toBe(0);
+    const theme = getTheme((await app.state()).session.theme);
+    const blackTokens = Object.entries(theme.tokens).filter(([, v]) => /#000(000)?\b|rgb\(\s*0\s*,\s*0\s*,\s*0\s*\)|\bblack\b/i.test(v));
+    expect(blackTokens, theme.name + ', the active theme, has no pure-black colour').toEqual([]);
+    expect(stats.black, theme.name + ' has no pure-black colour, so no shape may render pure black (unthemed fill)').toBe(0);
     await ev.snap('exported-png-opened', { page: viewer });
     await viewerCtx.close();
     await info.attach('exported-png', { path: files.png, contentType: 'image/png' });

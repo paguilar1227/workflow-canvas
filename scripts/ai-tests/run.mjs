@@ -32,7 +32,7 @@ const VIEW = { width: 1280, height: 800 };
 const SETTLE_MS = 400; // the web client animates view changes for 350 ms (src/web/sync.ts DURATION)
 const REASONING = 'medium';
 const MCP_NAME = 'workflow_canvas';
-const BASELINE_THEME = 'lens-dark';
+const BASELINE_THEME = 'neon-flow';
 const REQUIRED_AI_TOOLS = ['add_nodes', 'update_nodes', 'create_diagram', 'save_to_file'];
 const EXPECTED_TOOL_COUNT = Number(args['expect-tools'] ?? 35);
 const CONTAINER = args.container ? String(args.container) : null;
@@ -190,6 +190,14 @@ async function dockerImage(container) {
   return { container, image, id, containerStartedAt: startedAt, ports: bindings };
 }
 
+/** Theme state a server reports before the harness or any AI changes it (list_themes and the shared session). */
+async function themesAtStart(t, h, image) {
+  const at = new Date().toISOString();
+  const j = (await t('list_themes'))?.json ?? {};
+  const session = (await h('/api/session')).session;
+  return { at, active: j.active ?? null, listedFirst: j.themes?.[0]?.id ?? null, themes: (j.themes ?? []).map((x) => x.id), sessionTheme: session?.theme ?? null, container: image?.container ?? null, containerStartedAt: image?.containerStartedAt ?? null };
+}
+
 async function openWatcher(context, docId, initScript, base = BASE) {
   const page = await context.newPage();
   if (initScript) await page.addInitScript(initScript);
@@ -234,8 +242,11 @@ async function main() {
   const fallbackHealth = fallback ? await fallback.http('/health') : null;
   const fallbackTools = fallback ? (await fallback.http('/api/tools')).tools.map((t) => t.name) : null;
   const fallbackImageAtStart = FALLBACK_CONTAINER ? await dockerImage(FALLBACK_CONTAINER) : null;
+  const startThemes = { server: await themesAtStart(tool, http, imageAtStart), ...(fallback ? { fallbackServer: await themesAtStart(fallback.tool, fallback.http, fallbackImageAtStart) } : {}) };
+  for (const sc of scenarios) sc.themesAtStart = startThemes;
   console.log('Workflow Canvas ' + BASE + ' (' + health.name + ' ' + health.version + ', ' + toolList.length + ' tools' + (imageAtStart ? ', ' + CONTAINER + ' on ' + imageAtStart.id : '') + ') · ' + codexVersion + ' · scenarios ' + scenarios.map((s) => s.id).join(','));
   if (fallback) console.log('Fallback server ' + FALLBACK_BASE + ' (' + fallbackTools.length + ' tools' + (fallbackImageAtStart ? ', ' + FALLBACK_CONTAINER + ' on ' + fallbackImageAtStart.id : '') + ')');
+  console.log('Themes before any set_theme or AI turn: ' + Object.entries(startThemes).map(([k, v]) => k + ' active ' + v.active + ', listed first ' + v.listedFirst + ', session ' + v.sessionTheme).join(' · '));
 
   const claudeProbe = probeClaude().catch((e) => ({ error: String(e) }));
   if (themeChangers.length) await tool('set_theme', { themeId: BASELINE_THEME });
@@ -320,6 +331,7 @@ async function main() {
     expectedToolCount: EXPECTED_TOOL_COUNT,
     tools: serverTools,
     serverImage: imageAtStart && { ...imageAtStart, sameContainerThroughout: !!imageAtEnd && imageAtEnd.id === imageAtStart.id && imageAtEnd.containerStartedAt === imageAtStart.containerStartedAt, note: 'docker inspect ' + CONTAINER + ' at the start and the end of the run; the whole run executed against this image.' },
+    themesAtStart: { ...startThemes, note: 'list_themes and /api/session read from each server at the start of the run, before the harness sets the baseline theme and before any scenario setup or AI turn.' },
     ...(fallback ? {
       fallbackServer: { base: FALLBACK_BASE, health: fallbackHealth, toolCount: fallbackTools.length, sameToolsAsServer: JSON.stringify([...fallbackTools].sort()) === JSON.stringify([...serverTools].sort()),
         image: fallbackImageAtStart && { ...fallbackImageAtStart, sameContainerThroughout: !!fallbackImageAtEnd && fallbackImageAtEnd.id === fallbackImageAtStart.id && fallbackImageAtEnd.containerStartedAt === fallbackImageAtStart.containerStartedAt },
@@ -328,15 +340,17 @@ async function main() {
     parallel: { batch: batch.map((s) => s.id), afterwardsAlone: afterwards.map((s) => s.id) },
     aiClient: { name: 'codex exec', version: codexVersion, flags: codexArgv({ model: '<model>' }, '<prompt>').slice(0, -1), ignoreUserConfig: true, reasoningEffort: REASONING },
     pass: scenarios.every((s) => s.result.pass),
-    scenarios: scenarios.map((s) => ({ id: s.id, slug: s.slug, title: s.title, model: s.model, phase: s.runAfterOthers ? 'alone, after the parallel batch' : 'parallel batch', turns: s.turns.length, documentId: s.docId, createdDocuments: s.result.createdDocuments, pass: s.result.pass, passed: s.result.checks.filter((c) => c.pass).length, failed: s.result.checks.filter((c) => !c.pass).map((c) => c.name), ...(s.result.observations ? { informational: s.result.observations.map((o) => ({ name: o.name, pass: o.pass })) } : {}), durationSec: s.result.durationSec, toolCalls: s.result.toolCalls.total, exit: s.result.exit, dir: s.dir })),
+    scenarios: scenarios.map((s) => ({ id: s.id, slug: s.slug, title: s.title, model: s.model, phase: s.runAfterOthers ? 'alone, after the parallel batch' : 'parallel batch', turns: s.turns.length, documentId: s.docId, createdDocuments: s.result.createdDocuments, pass: s.result.pass, passed: s.result.checks.filter((c) => c.pass).length, failed: s.result.checks.filter((c) => !c.pass).map((c) => c.name), ...(s.result.observations ? { informational: s.result.observations.map((o) => ({ name: o.name, pass: o.pass })) } : {}), uiThemeWhenAiFinished: s.result.uiThemeWhenAiFinished, durationSec: s.result.durationSec, toolCalls: s.result.toolCalls.total, exit: s.result.exit, dir: s.dir })),
     environmentNotes: [
       { topic: 'Claude Code', probe: claude, note: 'Claude Code connects to the workflow-canvas MCP server, but cannot run a turn unless it is logged in; when not logged in, the cross-client scenario runs through codex exec with a different model instead.' },
       { topic: 'codex config', note: 'codex exec runs with --ignore-user-config --disable apps so only this MCP server is attached; MCP tools are auto-approved via mcp_servers.workflow_canvas.default_tools_approval_mode="approve" because exec has no interactive approvals.' },
       { topic: 'MCP tool exposure', note: 'Each agent reaches ' + BASE + '/mcp through its own local pass-through (127.0.0.1, random port) that records the tools/list responses delivered to that agent. Every scenario checks that the agent stderr has zero "Skipping MCP tool" lines and that the delivered list holds all ' + EXPECTED_TOOL_COUNT + ' server tools (the server lists ' + toolList.length + '), including ' + REQUIRED_AI_TOOLS.join(', ') + ', with none skipped. codex does not print its model-visible tool list, so delivered tools minus skipped tools is the exposed set.' },
       ...scenarios.filter((s) => s.environmentNote).map((s) => ({ topic: 'scenario ' + s.id, note: s.environmentNote })),
-      { topic: 'global theme', note: themeChangers.length ? 'Theme is global (shared by every tab). The run starts from ' + BASELINE_THEME + '. ' + themeChangers.map((s) => s.runAfterOthers
-        ? 'Scenario ' + s.id + ' changes it (to ' + s.changesTheme + ') and runs alone after the parallel batch; it starts from ' + BASELINE_THEME + ' and the harness restores ' + BASELINE_THEME + ' at its end.'
-        : 'Scenario ' + s.id + ' changes it (to ' + s.changesTheme + ') near its end, so screenshots/videos of other batch scenarios taken after that moment show that theme.').join(' ') : 'No scenario changes the theme.' },
+      { topic: 'global theme', note: 'Theme is global (shared by every tab). The baseline is ' + BASELINE_THEME + ', the app default (see themesAtStart). '
+        + (themeChangers.length ? 'The harness sets it at the start of the run. ' + themeChangers.map((s) => s.runAfterOthers
+          ? 'Scenario ' + s.id + ' changes it (to ' + s.changesTheme + ') and runs alone after the parallel batch, so no other scenario sees that theme; it starts from ' + BASELINE_THEME + (s.cleanup ? ' and the harness restores ' + BASELINE_THEME + ' at its end.' : '.')
+          : 'Scenario ' + s.id + ' changes it (to ' + s.changesTheme + ') near its end, so screenshots/videos of other batch scenarios taken after that moment show that theme.').join(' ') : 'No scenario changes the theme.')
+        + afterwards.filter((s) => !s.changesTheme).map((s) => ' Scenario ' + s.id + ' runs alone after the parallel batch; its setup sets ' + BASELINE_THEME + ' again and the harness restores it at its end.').join('') },
       { topic: 'shared session', note: 'Panels and snap-to-grid live in one shared session and selection is kept per document (session.selections[docId]); only scenario C changes them, and the watcher tabs of other documents are unaffected.' },
     ],
   };
@@ -529,6 +543,7 @@ async function runScenario(sc, { t0, readOnly, serverTools }) {
     scenario: sc.id, slug: sc.slug, title: sc.title,
     client: { name: 'codex exec', model: sc.model, reasoningEffort: REASONING, ignoreUserConfig: true, argv: ['codex', ...sc.argv.slice(0, -1), '<prompt>'], ...(multi ? { argvByTurn: sc.argvs.map((a) => ['codex', ...a.slice(0, -1), '<prompt>']), serverByTurn: sc.turnOpts.map((o) => o.server) } : {}), mcpPassThrough: sc.mcpUrl, toolsListed: [...new Set(sc.toolLists.flat())] },
     server: BASE, documentId: sc.docId, createdDocuments: createdDocs.map((d) => ({ id: d.id, title: d.title, nodes: d.nodes.length, edges: d.edges.length })),
+    uiThemeWhenAiFinished: page.dataTheme ?? null,
     prompt: multi ? sc.promptTexts : sc.promptTexts[0], startedAt: started.toISOString(), durationSec, exit, ...(multi ? { turns: exits, usages: sc.usages } : {}), usage: sc.usage,
     toolCalls: { total: sc.calls.length, failed: sc.calls.filter((c) => !c.ok).map((c) => ({ n: c.n, turn: c.turn, tool: c.tool, error: c.error })), byTool, sequence: sc.calls.map((c) => (multi ? 't' + c.turn + ':' : '') + c.tool + (c.ok ? '' : ' ✗')) },
     finalDocument: { title: doc.title, nodes: doc.nodes.length, edges: doc.edges.length, frames: doc.nodes.filter((n) => n.kind === 'frame').length, settings: doc.settings },

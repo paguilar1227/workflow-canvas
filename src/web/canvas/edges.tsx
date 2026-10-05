@@ -9,7 +9,7 @@ import * as actions from '../actions';
 import { InlineMarkdown } from '../markdown';
 import { neonBranch, useNeon } from './neon';
 
-type Rect = { x: number; y: number; w: number; h: number };
+export type Rect = { x: number; y: number; w: number; h: number };
 const POS: Record<Side, Position> = { top: Position.Top, right: Position.Right, bottom: Position.Bottom, left: Position.Left };
 
 function useRect(id: string): Rect | null {
@@ -32,6 +32,47 @@ function shift(p: { x: number; y: number }, side: Side, offset: number) {
   return side === 'left' || side === 'right' ? { x: p.x, y: p.y + offset } : { x: p.x + offset, y: p.y };
 }
 
+/** A point a fraction of the way along one side of a node (0.5 is the side's middle). */
+function alongSide(r: Rect, side: Side, f: number) {
+  switch (side) {
+    case 'top': return { x: r.x + r.w * f, y: r.y };
+    case 'bottom': return { x: r.x + r.w * f, y: r.y + r.h };
+    case 'left': return { x: r.x, y: r.y + r.h * f };
+    case 'right': return { x: r.x + r.w, y: r.y + r.h * f };
+  }
+}
+
+export type PortSlot = { s: number; t: number; side: Side };
+
+/**
+ * Neon Flow ports: wires that share a side of a node are spread evenly along it, ordered by where their other end sits
+ * so they don't cross. Returns, per edge, the fraction along the source side (s) and target side (t), and the target side.
+ */
+export function portSlots(rects: Map<string, Rect>, edges: CanvasEdge[]): Map<string, PortSlot> {
+  const ends = new Map<string, { edge: string; end: 's' | 't'; key: number }[]>();
+  const out = new Map<string, PortSlot>();
+  for (const e of edges) {
+    const s = rects.get(e.source), t = rects.get(e.target);
+    if (!s || !t) continue;
+    const [as, at] = autoSides(s, t);
+    const ss = (e.sourceSide as Side) || as, ts = (e.targetSide as Side) || at;
+    out.set(e.id, { s: 0.5, t: 0.5, side: ts });
+    const add = (node: string, side: Side, end: 's' | 't', other: Rect) => {
+      const k = node + ':' + side;
+      const key = side === 'top' || side === 'bottom' ? other.x + other.w / 2 : other.y + other.h / 2;
+      if (!ends.has(k)) ends.set(k, []);
+      ends.get(k)!.push({ edge: e.id, end, key });
+    };
+    add(e.source, ss, 's', t);
+    add(e.target, ts, 't', s);
+  }
+  for (const list of ends.values()) {
+    list.sort((a, b) => a.key - b.key || (a.edge < b.edge ? -1 : a.edge > b.edge ? 1 : 0));
+    list.forEach((p, i) => { out.get(p.edge)![p.end] = (i + 1) / (list.length + 1); });
+  }
+  return out;
+}
+
 export function autoSides(s: Rect, t: Rect): [Side, Side] {
   if (t.x >= s.x + s.w + 8) return ['right', 'left'];
   if (t.x + t.w <= s.x - 8) return ['left', 'right'];
@@ -44,6 +85,7 @@ const markerUrl = (c: string | undefined, selected: boolean) => 'url(#wfc-arrow-
 export const SmartEdge = memo(function SmartEdge({ id, source, target, data, selected }: EdgeProps) {
   const e = (data as { edge: CanvasEdge; offset?: number; wire?: string }).edge;
   const wire = (data as { wire?: string }).wire;
+  const slot = (data as { slot?: PortSlot }).slot;
   const offset = (data as { offset?: number }).offset ?? 0;
   const s = useRect(source);
   const t = useRect(target);
@@ -55,7 +97,8 @@ export const SmartEdge = memo(function SmartEdge({ id, source, target, data, sel
   const [as, at] = autoSides(s, t);
   const ss = (e.sourceSide as Side) || as;
   const ts = (e.targetSide as Side) || at;
-  const a = shift(anchor(s, ss), ss, offset), b = shift(anchor(t, ts), ts, offset);
+  const a = neon && slot ? alongSide(s, ss, slot.s) : shift(anchor(s, ss), ss, offset);
+  const b = neon && slot ? alongSide(t, ts, slot.t) : shift(anchor(t, ts), ts, offset);
   const params = { sourceX: a.x, sourceY: a.y, sourcePosition: POS[ss], targetX: b.x, targetY: b.y, targetPosition: POS[ts] };
   const routing = neon && e.routing === 'smooth' ? 'bezier' : e.routing;
   const [path, lx, ly] = routing === 'bezier' ? getBezierPath(params)

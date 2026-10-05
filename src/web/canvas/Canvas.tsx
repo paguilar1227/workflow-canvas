@@ -5,7 +5,7 @@ import {
 } from '@xyflow/react';
 import { useApp, get, set } from '../store';
 import { nodeTypes, type NodeData } from './nodes';
-import { autoSides, edgeTypes, MarkerDefs } from './edges';
+import { edgeTypes, MarkerDefs, portSlots, type Rect } from './edges';
 import { NEON_BURST_MS, NEON_SNAP_RADIUS, NeonConnectionLine, neonWireColors } from './neon';
 import { strokePath } from './sketch';
 import { childrenMap, descendants, hiddenIds, depthOf, branchAncestor, isAncestor } from '../../shared/graph';
@@ -43,15 +43,16 @@ function useNeonBursts(neon: boolean) {
     const born = doc.edges.filter((e) => !before.ids.has(e.id));
     if (!born.length) return;
     const at = Date.now();
-    const nodes = new Map(doc.nodes.map((n) => [n.id, n]));
-    const rect = (n: CanvasNode) => ({ x: n.x, y: n.y, w: n.width, h: n.height });
     const wires = neonWireColors(doc.edges);
+    const hidden = hiddenIds(doc);
+    const visible = doc.edges.filter((e) => !hidden.has(e.source) && !hidden.has(e.target));
+    const slots = portSlots(new Map(doc.nodes.map((n) => [n.id, { x: n.x, y: n.y, w: n.width, h: n.height }])), visible);
     const newEdges = { ...get().newEdges };
     const bursts = { ...get().bursts };
     for (const e of born) {
       newEdges[e.id] = at;
-      const s = nodes.get(e.source), t = nodes.get(e.target);
-      if (s && t) bursts[e.target] = { color: wires.get(e.id)!, side: (e.targetSide as Side) || autoSides(rect(s), rect(t))[1], at };
+      const slot = slots.get(e.id);
+      if (slot) bursts[e.target] = { color: wires.get(e.id)!, side: slot.side, pos: slot.t, at };
     }
     set({ newEdges, bursts });
     setTimeout(() => {
@@ -130,6 +131,8 @@ export function Canvas() {
       out.push({ id: 'tree:' + n.id, source: n.parentId, target: n.id, type: 'branch', selectable: false, focusable: false, data: { color: branch?.color, branchId: branch?.id, depth: depthOf(doc, n.id) } });
     }
     const wires = neon ? neonWireColors(doc.edges) : null;
+    const visible = doc.edges.filter((e) => !hidden.has(e.source) && !hidden.has(e.target));
+    const slots = neon ? portSlots(new Map<string, Rect>(doc.nodes.map((n) => { const o = overlay[n.id]; return [n.id, { x: o?.x ?? n.x, y: o?.y ?? n.y, w: o?.width ?? n.width, h: o?.height ?? n.height }]; })), visible) : null;
     const lanes = new Map<string, string[]>();
     for (const e of doc.edges) {
       const key = [e.source, e.target].sort().join('|');
@@ -140,10 +143,10 @@ export function Canvas() {
       const group = lanes.get([e.source, e.target].sort().join('|'))!;
       const i = group.indexOf(e.id);
       const offset = group.length > 1 ? (i - (group.length - 1) / 2) * PARALLEL_EDGE_GAP : 0;
-      out.push({ id: e.id, source: e.source, target: e.target, type: 'smart', data: { edge: e, offset, wire: wires?.get(e.id) }, selected: sel.has(e.id), zIndex: 0 });
+      out.push({ id: e.id, source: e.source, target: e.target, type: 'smart', data: { edge: e, offset, wire: wires?.get(e.id), slot: slots?.get(e.id) }, selected: sel.has(e.id), zIndex: 0 });
     }
     return out;
-  }, [doc, selection.edges, neon]);
+  }, [doc, selection.edges, neon, neon ? overlay : null]);
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     const s = get();

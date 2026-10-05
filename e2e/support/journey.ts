@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { test as base, expect, type APIRequestContext, type Download, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { DEFAULT_SESSION } from '../../src/shared/types';
 import { EVIDENCE_DIR, slugOf } from './evidence';
 import { Phone } from './phone';
 
@@ -62,10 +63,15 @@ export class App {
     return (await this.tool<{ documentId: string }>('create_document', { title, template, open: false })).documentId;
   }
 
-  /** Theme, panels, modes and background are server-global session settings; every journey starts from the defaults. */
+  /** Theme, panels, modes and background are server-global session settings; every journey starts from the defaults (the product's default theme). */
   async resetSession() {
-    await this.tool('set_theme', { themeId: 'lens-dark' });
+    await this.tool('set_theme', { themeId: DEFAULT_SESSION.theme });
     await this.tool('set_ui', { inspector: true, outline: true, minimap: true, snapToGrid: false, mode: 'select', zenMode: false, viewMode: false, background: 'theme', search: '' });
+  }
+
+  /** For a journey that asserts one theme's look (arrowheads, edge colours, exported pixels): run it in that theme, whatever the default is. */
+  async pinTheme(themeId: string) {
+    await this.tool('set_theme', { themeId });
   }
 
   async open(docId: string) {

@@ -113,7 +113,7 @@ export interface SessionState {
 
 export const DEFAULT_SESSION: SessionState = {
   activeDocumentId: null,
-  theme: 'lens-dark',
+  theme: 'neon-flow',
   selection: { nodes: [], edges: [] },
   viewport: { x: 0, y: 0, zoom: 1 },
   viewportSize: { width: 0, height: 0 },

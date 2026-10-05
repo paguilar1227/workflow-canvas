@@ -1,13 +1,14 @@
 import { test, expect, type Pt } from '../support/journey';
 import { MIN_TARGET } from '../support/phone';
 import {
-  BURST_MS, SNAP_RADIUS, colourGap, connecting, farFromPorts, isBezier, neonEdges, paletteName, pixel, portDistances, portDots, rgbOf, rgbParts, timeBurst,
+  BURST_MS, SNAP_RADIUS, colourGap, connecting, farFromPorts, isBezier, neonEdges, paletteName, pixel, portDistances, portDots, portTouch, rgbOf, rgbParts, timeBurst,
 } from '../support/neon';
 
 const PROMPT = 'nf-prompt', NOISE = 'nf-noise', SAMPLER = 'nf-sampler', PROC = 'nf-proc', PREVIEW = 'nf-preview';
+const NOTE = 'nf-note', CAPTION = 'nf-caption';
 
 test('connect a pipeline in the Neon Flow theme', async ({ page, app, ev, phone }) => {
-  ev.proves('Phone version: a person picks Neon Flow from the More sheet (10 themes) and the pipeline renders cleanly at phone size: 3px neon bezier wires without arrowheads, a dot in the wire colour on both ends drawn above the cards, no sideways overflow and an ergonomic phone chrome. Once a card is selected its white ports keep their enlarged 44px touch areas. A one-finger drag from a port draws a white wire to the finger, then a spark and ring near Processing\'s port in the colour (--zc) the new wire ends up with; lifting the finger connects the cards, the three wires into Processing all differ in colour, and the burst on Processing is gone after about 1.6 s.');
+  ev.proves('Phone version: a person picks Neon Flow from the More sheet (10 themes) and the pipeline renders cleanly at phone size: 3px neon bezier wires without arrowheads, a dot in the wire colour on both ends drawn above the cards, no sideways overflow and an ergonomic phone chrome. Once a card is selected its white ports keep their enlarged 44px touch areas. A one-finger drag from a port draws a white wire to the finger, then a spark and ring near Processing\'s port in the colour (--zc) the new wire ends up with; lifting the finger connects the cards, the three wires into Processing all differ in colour, and the burst on Processing is gone after about 1.6 s. A sticky note\'s and a text label\'s four ports are drawn whole (not clipped by the note, not covered by the text) and keep touch areas of at least 44 card units on every side, in Lens Dark and in Neon Flow.');
   const docId = await app.newDoc('Neon pipeline');
   await app.tool('add_nodes', { documentId: docId, nodes: [
     { id: PROMPT, title: 'Prompt', subtitle: 'text', x: 0, y: 0 },
@@ -20,6 +21,13 @@ test('connect a pipeline in the Neon Flow theme', async ({ page, app, ev, phone 
     { id: 'nf-e1', source: PROMPT, target: PROC },
     { id: 'nf-e2', source: NOISE, target: PROC, color: 'blue' },
   ] });
+  const notesDoc = await app.newDoc('Pipeline notes');
+  await app.tool('add_nodes', { documentId: notesDoc, nodes: [
+    { id: NOTE, kind: 'sticky', title: 'Seed 42 looks best', x: 0, y: 0 },
+    { id: CAPTION, kind: 'text', title: 'Output 1024 x 1024', x: 260, y: 50 },
+  ] });
+  await app.pinTheme('neon-flow');
+  ev.note('Pinned to Neon Flow: this journey asserts Neon Flow visuals (neon wires, port dots, spark and burst), so it must not depend on which theme is the default. The note and text-label port checks run in Lens Dark and in Neon Flow.');
   await app.open(docId);
   await phone.fit();
 
@@ -53,10 +61,33 @@ test('connect a pipeline in the Neon Flow theme', async ({ page, app, ev, phone 
     }
     await phone.ergonomics(where);
   };
+  const notePorts = async (where: string, slug: string) => {
+    const zoom = (await app.viewport()).zoom;
+    const dpr = await page.evaluate(() => devicePixelRatio);
+    const step = 2 * (0.25 + 1 / dpr);
+    for (const [id, what, kind] of [[NOTE, 'sticky note', 'sticky'], [CAPTION, 'text label', 'text']] as const) {
+      await phone.tap(await app.emptyPoint({ x: 0.5, y: 0.15 }));
+      await phone.tap(await phone.grab(app.rfNode(id)));
+      await expect.poll(async () => (await app.selection()).nodes, 'tapping the ' + what + ' selects it').toEqual([id]);
+      await expect.poll(() => handle(id, 'top').evaluate((el) => getComputedStyle(el).opacity), where + ': the selected ' + what + ' shows its ports').toBe('1');
+      const ports = await portTouch(page, id);
+      ev.note(where + ', ' + what + ' at zoom ' + zoom.toFixed(3) + ': touch areas ' + ports.map((q) => q.side + ' ' + (q.w / zoom).toFixed(1) + '×' + (q.h / zoom).toFixed(1)).join(', ') + ' in card units');
+      expect(ports.map((q) => q.side).sort(), where + ': the ' + what + ' has a port on every side').toEqual(['bottom', 'left', 'right', 'top']);
+      for (const q of ports) {
+        expect(q.clippedBy, where + ': the ' + what + "'s " + q.side + ' port is not clipped').toBeNull();
+        expect([q.dot, q.inView], where + ': the whole ' + q.side + ' port of the ' + what + ' is on screen and nothing covers it').toEqual([true, true]);
+        expect(q.w, where + ': the ' + what + "'s " + q.side + ' touch area is at least ' + MIN_TARGET + ' wide (in card units)').toBeGreaterThanOrEqual(MIN_TARGET * zoom - step);
+        expect(q.h, where + ': the ' + what + "'s " + q.side + ' touch area is at least ' + MIN_TARGET + ' tall (in card units)').toBeGreaterThanOrEqual(MIN_TARGET * zoom - step);
+      }
+      await ev.snap(slug + '-' + kind + '-ports');
+    }
+    await phone.tap(await app.emptyPoint({ x: 0.5, y: 0.15 }));
+  };
 
   await test.step('pick Neon Flow from the More sheet', async () => {
     await phone.tap(page.getByTestId('menu-more'));
     await expect(page.locator('.theme-option'), 'the More sheet offers 10 themes').toHaveCount(10);
+    await expect(page.locator('.theme-option').first(), 'Neon Flow is listed first').toHaveAttribute('data-testid', 'theme-neon-flow');
     const item = page.getByTestId('theme-neon-flow');
     await item.scrollIntoViewIfNeeded();
     await expect(item).toContainText('Neon Flow');
@@ -155,5 +186,20 @@ test('connect a pipeline in the Neon Flow theme', async ({ page, app, ev, phone 
     for (const e of await neonEdges(page)) expect(e.markerEnd, e.id + ' has its arrowhead back').toMatch(/^url\(#wfc-arrow-/);
     await phone.ergonomics('back in Lens Dark');
     await ev.snap('back-to-lens-dark');
+  });
+
+  await test.step('a sticky note\'s and a text label\'s ports are whole and easy to touch in Lens Dark', async () => {
+    await app.open(notesDoc);
+    await phone.fit();
+    await notePorts('Lens Dark', 'lens-dark');
+  });
+
+  await test.step('the same ports are whole and easy to touch in Neon Flow', async () => {
+    await phone.more('theme-neon-flow');
+    if (await page.locator('.theme-option').first().isVisible()) await phone.tap(page.getByTestId('menu-more'));
+    await expect.poll(async () => (await app.state()).session.theme).toBe('neon-flow');
+    await expect(page.locator('html')).toHaveAttribute('data-neon', '');
+    await page.waitForTimeout(300);
+    await notePorts('Neon Flow', 'neon-flow');
   });
 });

@@ -181,10 +181,10 @@ export const StickyNode = memo(function StickyNode({ data, selected, width, heig
       <NodeResizer isVisible={!!selected && !n.locked} minWidth={80} minHeight={60} onResizeEnd={(_e, p) => actions.updateNode(n.id, { x: Math.round(p.x), y: Math.round(p.y), width: Math.round(p.width), height: Math.round(p.height) })} />
       <div className={'wfc-sticky' + (n.color && n.color !== 'default' ? ' has-color' : '') + (d.flashing ? ' flash' : '')} key={d.flashing} style={{ ['--nc' as string]: colorVar(n.color) }} data-testid={'node-' + n.id}>
         {sketch ? <RoughShape shape="sticky" w={width ?? n.width} h={height ?? n.height} seed={seedOf(n.id)} filled={false} /> : null}
-        <Handles />
-        <NeonBurst id={n.id} />
         {d.editing ? <InlineEdit multiline value={n.title} onDone={(v) => commitTitle(n, v)} /> : n.title ? <Markdown className="sticky-text" source={n.title} onToggleTask={toggle(n)} rowTaps={!!selected} /> : <span className="placeholder">Double-click to write…</span>}
       </div>
+      <Handles />
+      <NeonBurst id={n.id} />
     </>
   );
 });
@@ -196,9 +196,9 @@ export const TextNode = memo(function TextNode({ data, selected }: NodeProps) {
     <>
       <NodeResizer isVisible={!!selected && !n.locked} minWidth={40} minHeight={24} onResizeEnd={(_e, p) => actions.updateNode(n.id, { x: Math.round(p.x), y: Math.round(p.y), width: Math.round(p.width), height: Math.round(p.height) })} />
       <div className={'wfc-text-node' + (n.color && n.color !== 'default' ? ' has-color' : '')} style={{ ['--nc' as string]: colorVar(n.color) }} data-testid={'node-' + n.id}>
+        {d.editing ? <InlineEdit value={n.title} onDone={(v) => commitTitle(n, v)} /> : n.title ? <Markdown source={n.title} onToggleTask={toggle(n)} rowTaps={!!selected} /> : 'Text'}
         <Handles />
         <NeonBurst id={n.id} />
-        {d.editing ? <InlineEdit value={n.title} onDone={(v) => commitTitle(n, v)} /> : n.title ? <Markdown source={n.title} onToggleTask={toggle(n)} rowTaps={!!selected} /> : 'Text'}
       </div>
     </>
   );

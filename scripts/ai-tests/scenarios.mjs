@@ -1,6 +1,8 @@
 // User-perspective AI scenarios for scripts/ai-tests/run.mjs.
 // Prompts are phrased the way a person would ask: they name the document but never explain the tools.
-// Scenario E changes the (global) theme at its end; scenario I changes it too, so it runs alone after the parallel batch and the harness restores the baseline theme.
+// The theme is global. Every scenario runs in the baseline theme (neon-flow, the app default) except E, whose AI switches to the dark
+// sketch theme at its end: E runs alone after the parallel batch so that switch can't reach the others, then I runs alone (its setup sets
+// the baseline theme again and the harness restores it at the end).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -273,16 +275,22 @@ const hTab = (page) => page.evaluate(() => ({ pickerCalls: window.__wfcPickerCal
 const hNoClick = (t) => !!t && Array.isArray(t.pickerCalls) && t.pickerCalls.length === 0 && t.file?.state === 'none' && !t.file?.name && t.saveButton === 'none';
 const H_NOT_AUTOSAVED = /(\bnot\b|n['’]t\b|\bno\b|\bwithout\b)[^.\n]{0,60}\bauto-?(sav|updat|sync)|(\bnot\b|n['’]t\b)[^.\n]{0,40}\b(automatically|kept in sync|stay in sync|keep (it )?in sync|(kept|stay|keep it) up to date)|(\bnot\b|n['’]t\b)\s+(be\s+)?(update|updated|updating)\b/i;
 const clipText = (s) => { s = String(s ?? ''); return s.length > 300 ? s.slice(0, 300) + '…' : s; };
-// Scenario I (Neon Flow), as the build under test specifies it: list_themes has 10 themes including neon-flow (dark); uncoloured wires
-// take palette colours, distinct for wires into the same card and skipping colours that explicitly coloured wires into that card use;
+// Scenario I (Neon Flow), as the build under test specifies it: neon-flow is the default theme (a fresh server reports it active) and
+// list_themes lists it first among 10 themes; uncoloured wires take palette colours, distinct for wires into the same card and skipping
+// colours that explicitly coloured wires into that card use; wires that share a side of a card each get their own port along that side;
 // every new connector plays a connect burst ([data-testid=neon-burst-<card>]) on its target card.
 const { getTheme } = await tsImport('../../src/shared/themes.ts', import.meta.url);
 const { COLOR_NAMES } = await tsImport('../../src/shared/types.ts', import.meta.url);
 const NEON = { id: 'neon-flow', name: 'Neon Flow', themes: 10, wires: ['amber', 'pink', 'purple', 'red', 'teal'] };
 const I_INPUTS = ['Prompt', 'Random noise', 'Model loader'];
 const I_CHAIN = ['Sampler', 'Decode', 'Output image'];
+const PORT_TOL = 0.5; // flow px: a path end and a port dot closer than this are the same point (half a CSS pixel at zoom 1)
 const uncoloured = (e) => !e.color || e.color === 'default';
-/** Page init script: log when connectors and connect bursts enter and leave the DOM, which connectors are "born" at that moment, and when each burst animation finishes. */
+/**
+ * Page init script: log when connectors and connect bursts enter and leave the DOM, which connectors are "born" at that moment, and per
+ * burst animation its start time (Animation.startTime once ready) and how long it had played when the burst left the DOM. The finished
+ * promise only resolves at the next rendered frame, so it can trail a removal that comes after the animation ended; elapsed play time can't.
+ */
 export function neonLog() {
   const log = [];
   const track = new WeakMap();
@@ -290,7 +298,7 @@ export function neonLog() {
   const bursts = (n) => (n.nodeType !== 1 ? [] : [...(n.matches('[data-testid^="neon-burst-"]') ? [n] : []), ...n.querySelectorAll('[data-testid^="neon-burst-"]')]);
   const paths = (n) => (n.nodeType !== 1 ? [] : [...(n.matches('.wfc-edge-path') ? [n] : []), ...n.querySelectorAll('.wfc-edge-path')]);
   new MutationObserver((records) => {
-    const t = Date.now();
+    const t = Date.now(), pn = performance.now();
     for (const r of records) {
       if (r.type === 'attributes') {
         if (!r.target.classList?.contains('wfc-edge-path')) continue;
@@ -303,8 +311,9 @@ export function neonLog() {
         for (const b of bursts(n)) {
           const e = { kind: 'burst-add', target: b.dataset.testid.slice('neon-burst-'.length), t, classes: b.className, bornEdges: bornIds(), theme: document.documentElement.dataset.theme ?? null, anims: [] };
           for (const a of b.getAnimations({ subtree: true })) {
-            const rec = { name: a.animationName ?? null, endMs: a.effect?.getComputedTiming?.().endTime ?? null, finishedAt: null, cancelledAt: null };
+            const rec = { name: a.animationName ?? null, endMs: a.effect?.getComputedTiming?.().endTime ?? null, startTime: null, startLagMs: null, finishedAt: null, cancelledAt: null };
             e.anims.push(rec);
+            a.ready.then(() => { rec.startTime = a.startTime; rec.startLagMs = a.startTime == null ? null : a.startTime - pn; }, () => {});
             a.finished.then(() => { rec.finishedAt = Date.now(); }, () => { rec.cancelledAt = Date.now(); });
           }
           track.set(b, e);
@@ -313,7 +322,8 @@ export function neonLog() {
       }
       for (const n of r.removedNodes) for (const b of bursts(n)) {
         const a = track.get(b);
-        log.push({ kind: 'burst-remove', target: b.dataset.testid.slice('neon-burst-'.length), t, addedAt: a?.t ?? null, bornEdges: bornIds(), anims: (a?.anims ?? []).map((x) => ({ ...x })) });
+        log.push({ kind: 'burst-remove', target: b.dataset.testid.slice('neon-burst-'.length), t, addedAt: a?.t ?? null, bornEdges: bornIds(),
+          anims: (a?.anims ?? []).map((x) => ({ ...x, elapsedAtRemovalMs: x.startTime == null ? null : pn - x.startTime })) });
       }
     }
   }).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'], attributeOldValue: true });
@@ -337,6 +347,44 @@ export function neonDom(colorNames) {
   });
   return { theme: document.documentElement.dataset.theme ?? null, neon: 'neon' in document.documentElement.dataset, colors, edges,
     portDots: document.querySelectorAll('.wfc-port-dot').length, bursts: document.querySelectorAll('[data-testid^="neon-burst-"]').length, neonPaths: document.querySelectorAll('.wfc-edge-path.neon').length };
+}
+/**
+ * Page function: where each given connector meets the given card, in flow coordinates: the end point of its path, the card side it sits
+ * on, how far along that side (0..1), the port dot drawn at that point, and where the connector's other card sits along the same axis.
+ */
+export function neonPorts({ cardId, wires, tol }) {
+  const xy = (el) => { const m = new DOMMatrixReadOnly(el.style.transform || 'none'); return { x: m.e, y: m.f }; };
+  const rectOf = (id) => { const el = document.querySelector('.react-flow__node[data-id="' + CSS.escape(id) + '"]'); return el ? { ...xy(el), w: el.offsetWidth, h: el.offsetHeight } : null; };
+  const r = rectOf(cardId);
+  if (!r) return { card: null, wires: [] };
+  const dots = [...document.querySelectorAll('.wfc-port-dot')].map(xy);
+  return { card: r, dots: dots.length, wires: wires.map(({ id, other }) => {
+    const p = document.querySelector('.react-flow__edge[data-id="' + CSS.escape(id) + '"] .wfc-edge-path');
+    if (!p) return { id, path: false };
+    const pt = p.getPointAtLength(p.getTotalLength());
+    const end = { x: pt.x, y: pt.y };
+    const gaps = { left: Math.abs(end.x - r.x), right: Math.abs(end.x - r.x - r.w), top: Math.abs(end.y - r.y), bottom: Math.abs(end.y - r.y - r.h) };
+    const side = Object.keys(gaps).filter((k) => gaps[k] <= tol).sort((a, b) => gaps[a] - gaps[b])[0] ?? null;
+    const vertical = side === 'left' || side === 'right';
+    const near = dots.map((d, i) => ({ i, dist: Math.hypot(d.x - end.x, d.y - end.y) })).sort((a, b) => a.dist - b.dist)[0];
+    const o = rectOf(other);
+    return { id, end, side, along: side ? (vertical ? (end.y - r.y) / r.h : (end.x - r.x) / r.w) : null, dot: near && near.dist <= tol ? near.i : null, dotDistance: near?.dist ?? null,
+      otherCentre: o && side ? (vertical ? o.y + o.h / 2 : o.x + o.w / 2) : null };
+  }) };
+}
+/** The wires into the merge card: each sits on the card's edge with its own port dot, all on one side, at distinct points. */
+export function judgePorts(ports, expected) {
+  const wires = ports?.wires ?? [];
+  const sides = [...new Set(wires.map((w) => w.side))];
+  const dots = new Set(wires.map((w) => w.dot).filter((d) => d != null));
+  const distinct = wires.every((a, i) => wires.every((b, j) => i === j || (!!a.end && !!b.end && Math.hypot(a.end.x - b.end.x, a.end.y - b.end.y) > PORT_TOL)));
+  const byPort = [...wires].sort((a, b) => a.along - b.along).map((w) => w.from);
+  const byOther = [...wires].sort((a, b) => a.otherCentre - b.otherCentre).map((w) => w.from);
+  const ok = wires.length === expected && wires.every((w) => w.side && w.dot != null) && sides.length === 1 && dots.size === expected && distinct;
+  return { ok, card: ports?.card ?? null, side: sides.length === 1 ? sides[0] : sides, distinctPoints: distinct, ownDots: dots.size,
+    wires: wires.map((w) => ({ from: w.from, side: w.side, along: w.along == null ? null : Math.round(w.along * 1000) / 1000, end: w.end && { x: Math.round(w.end.x * 10) / 10, y: Math.round(w.end.y * 10) / 10 }, dotDistance: w.dotDistance == null ? null : Math.round(w.dotDistance * 1000) / 1000 })),
+    observed: { evenlySpaced: wires.length > 0 && [...wires].sort((a, b) => a.along - b.along).every((w, i) => Math.abs(w.along - (i + 1) / (wires.length + 1)) < 0.01), portOrder: byPort, otherCardOrder: byOther, ordersMatch: byPort.join() === byOther.join() },
+    tolerance: PORT_TOL + ' flow px' };
 }
 /**
  * Page function: decode a PNG and classify every non-background pixel to the opaque theme colour token it is a blend of over the
@@ -402,7 +450,7 @@ export function judgeWires(doc, dom) {
  * Per connector: it appeared in the tab as a new ("born") connector after an AI edit call started, a burst appeared on its target card
  * after that call started and before the connector stopped being new (with create_diagram the new card and its burst can render a
  * frame before the connector's path), and that burst (or a restart of it by a newer connector into the same card) left the DOM only
- * after every one of its animations had finished.
+ * after every one of its animations had played its full length (elapsed play time from the animation's own start >= its end time).
  */
 export function judgeBursts(doc, log, calls) {
   const edits = calls.filter((c) => c.ok && DOC_EDIT_TOOLS.includes(c.tool) && c.startedMs != null);
@@ -428,12 +476,13 @@ export function judgeBursts(doc, log, calls) {
     }
     const last = chain.at(-1);
     const anims = end?.anims ?? [];
-    const finished = anims.length > 0 && anims.every((a) => a.finishedAt != null && a.cancelledAt == null && a.finishedAt <= end.t);
+    const finished = anims.length > 0 && anims.every((a) => a.elapsedAtRemovalMs != null && a.endMs != null && a.elapsedAtRemovalMs >= a.endMs);
     return { ...out, ok: !!end && finished, call: call.n + ':' + call.tool, connectorAppearedMsAfterCallStart: add.t - call.startedMs, burstAppearedMsAfterConnector: first.t - add.t,
       burstAppearedMsAfterCallStart: first.t - call.startedMs, connectorStoppedBeingNewMsAfterBurst: Number.isFinite(bornOff) ? bornOff - first.t : null,
       restartedByLaterConnectors: chain.length - 1, burstRemovedMsAfterItAppeared: end ? end.t - last.t : null,
-      animations: (end?.anims ?? last.anims ?? []).map((a) => ({ name: a.name, durationMs: a.endMs, finishedMsAfterAppear: a.finishedAt != null ? a.finishedAt - last.t : null, cancelled: a.cancelledAt != null })),
-      ...(end ? {} : { why: 'burst never left the DOM' }), ...(end && !finished ? { why: 'burst left the DOM before its animations finished' } : {}) };
+      animations: (end?.anims ?? last.anims ?? []).map((a) => ({ name: a.name, durationMs: a.endMs, startLagMs: a.startLagMs == null ? null : Math.round(a.startLagMs * 10) / 10,
+        playedMsWhenRemoved: a.elapsedAtRemovalMs == null ? null : Math.round(a.elapsedAtRemovalMs * 10) / 10, finishedPromiseMsAfterAppear: a.finishedAt != null ? a.finishedAt - last.t : null })),
+      ...(end ? {} : { why: 'burst never left the DOM' }), ...(end && !finished ? { why: 'burst left the DOM before its animations had played their full length' } : {}) };
   });
 }
 
@@ -615,6 +664,7 @@ export const SCENARIOS = [
     title: 'Excalidraw interop: freehand pen highlight, export .excalidraw, import into a new document, dark hand-drawn theme',
     model: 'gpt-6-sol',
     changesTheme: 'excalidraw-sketch-dark',
+    runAfterOthers: true,
     async setup(h) {
       const r = await h.tool('create_document', { title: 'AI test E · Architecture to Excalidraw', template: 'architecture', open: false });
       return { docId: r.json.documentId };
@@ -1041,22 +1091,30 @@ export const SCENARIOS = [
     slug: 'I-neon-flow-pipeline',
     title: 'AI restyles the canvas to Neon Flow and wires a pipeline',
     model: 'gpt-6-sol',
-    changesTheme: NEON.id,
     runAfterOthers: true,
-    environmentNote: 'Runs alone after the parallel batch because the theme is global. Setup sets the baseline theme so the switch to Neon Flow is the AI\'s. A MutationObserver installed in the recorded tab before the app loads logs when each connector and each neon-burst-<card> element enters and leaves the DOM, which connectors carry the "born" class at that moment, and when each burst animation finishes (Web Animations API). After the final screenshots the harness restores the baseline theme.',
+    environmentNote: 'Runs alone after the parallel batch because the theme is global and scenario E leaves the dark sketch theme. Setup sets the baseline theme (neon-flow, the app default) again, so the AI finds Neon Flow active. The fresh-server check reads list_themes from both servers at the start of the run, before the harness or any AI changes the theme. A MutationObserver installed in the recorded tab before the app loads logs when each connector and each neon-burst-<card> element enters and leaves the DOM, which connectors carry the "born" class at that moment, and when each burst animation finishes (Web Animations API). After the final screenshots the harness restores the baseline theme.',
     initScript: neonLog,
     async setup(h) {
       const r = await h.tool('create_document', { title: 'AI test I · Neon pipeline', open: false });
       await h.tool('set_theme', { themeId: h.baselineTheme });
       return { docId: r.json.documentId };
     },
-    prompt: (c) => 'Which themes does Workflow Canvas have? I heard there is a Neon Flow one; if it is there, switch the app to it first. ' +
+    prompt: (c) => 'Which themes does Workflow Canvas have, and which one is active? I want the Neon Flow one; if it is not already active, switch the app to it first. ' +
       'Then, in my Workflow Canvas document ' + c.docId + ' (it is empty), draw a small image-generation pipeline: "Prompt", "Random noise" and "Model loader" all feed into "Sampler", "Sampler" feeds into "Decode", and "Decode" feeds into "Output image". ' +
       'Leave the connector colours to the theme. When you are done, take a screenshot of the document to check it looks right.',
     async collect(p) {
       await p.page.waitForFunction(() => !document.querySelector('[data-testid^="neon-burst-"]')).catch(() => {});
       const neonDomNow = await p.page.evaluate(neonDom, COLOR_NAMES);
       const log = await p.page.evaluate(readNeonLog);
+      const doc = await p.http('/api/documents/' + encodeURIComponent(p.docId));
+      const merge = doc.nodes.find((n) => hNorm(n.title) === hNorm(I_CHAIN[0]));
+      const into = merge ? doc.edges.filter((e) => e.target === merge.id) : [];
+      const ports = merge ? await p.page.evaluate(neonPorts, { cardId: merge.id, wires: into.map((e) => ({ id: e.id, other: e.source })), tol: PORT_TOL }) : { card: null, wires: [] };
+      for (const w of ports.wires) w.from = titleOf(doc, into.find((e) => e.id === w.id)?.source) ?? w.id;
+      if (merge) {
+        const box = await p.page.locator('[data-testid="node-' + merge.id + '"]').boundingBox().catch(() => null);
+        if (box) await p.page.screenshot({ path: path.join(p.dir, 'person-merge-card-ports.png'), clip: { x: Math.max(0, box.x - 60), y: Math.max(0, box.y - 40), width: box.width + 120, height: box.height + 80 } }).catch(() => {});
+      }
       const tokens = getTheme(NEON.id).tokens;
       const captures = [];
       for (const call of p.calls.filter((x) => x.tool === 'capture_screenshot' && x.ok)) for (const file of call.images ?? []) {
@@ -1064,28 +1122,37 @@ export const SCENARIOS = [
         captures.push({ n: call.n, file, stats: await p.page.evaluate(imageStats, { b64, tokens }) });
       }
       p.log('tab renders theme ' + neonDomNow.theme + ' (neon ' + neonDomNow.neon + '): ' + neonDomNow.edges.length + ' connectors, ' + neonDomNow.portDots + ' port dots, colours ' + JSON.stringify(neonDomNow.edges.map((x) => x.color)) +
+        '; wires into ' + I_CHAIN[0] + ' end at ' + JSON.stringify(ports.wires.map((w) => ({ from: w.from, side: w.side, along: w.along, dot: w.dot }))) +
         '; logged ' + (log?.filter((x) => x.kind === 'burst-add').length ?? 0) + ' bursts; AI captures ' + JSON.stringify(captures.map((x) => ({ file: x.file, mode: x.stats.mode, bg: x.stats.bg }))));
-      fs.writeFileSync(path.join(p.dir, 'neon-dom-log.json'), JSON.stringify({ neonDom: neonDomNow, neonLog: log, captures }, null, 1));
-      return { neonDom: neonDomNow, neonLog: log, captures };
+      fs.writeFileSync(path.join(p.dir, 'neon-dom-log.json'), JSON.stringify({ neonDom: neonDomNow, mergeCardPorts: ports, neonLog: log, captures }, null, 1));
+      return { neonDom: neonDomNow, ports, neonLog: log, captures };
     },
     async cleanup(p) {
+      const neon = !!getTheme(p.baselineTheme).neon;
       await p.tool('set_theme', { themeId: p.baselineTheme });
-      await p.page.waitForFunction((t) => document.documentElement.dataset.theme === t && !('neon' in document.documentElement.dataset) && !document.querySelector('.wfc-port-dot'), p.baselineTheme).catch(() => {});
+      await p.page.waitForFunction(([t, n]) => document.documentElement.dataset.theme === t && ('neon' in document.documentElement.dataset) === n, [p.baselineTheme, neon]).catch(() => {});
       const ui = await p.page.evaluate(neonDom, COLOR_NAMES);
       const session = (await p.http('/api/session')).session;
-      p.log('restored the baseline theme ' + p.baselineTheme + ': session ' + session.theme + ', tab ' + ui.theme + ', neon ' + ui.neon + ', port dots ' + ui.portDots);
-      return { restored: { baseline: p.baselineTheme, session: session.theme, ui: ui.theme, neon: ui.neon, portDots: ui.portDots, neonPaths: ui.neonPaths } };
+      p.log('restored the baseline theme ' + p.baselineTheme + ': session ' + session.theme + ', tab ' + ui.theme + ', neon ' + ui.neon + ' (expected ' + neon + '), port dots ' + ui.portDots);
+      return { restored: { baseline: p.baselineTheme, baselineIsNeon: neon, session: session.theme, ui: ui.theme, neon: ui.neon, portDots: ui.portDots, neonPaths: ui.neonPaths } };
     },
     verify(c, check) {
       const { doc, data } = c;
       const dom = data.neonDom;
       const log = data.neonLog ?? [];
+      const start = c.sc.themesAtStart ?? {};
+      const fresh = Object.values(start);
+      check('fresh servers report Neon Flow as the active theme, listed first, before the harness or any AI changed the theme (list_themes and the session)',
+        fresh.length > 0 && fresh.every((s) => s.active === NEON.id && s.listedFirst === NEON.id && s.sessionTheme === NEON.id), start);
       const lists = okCalls(c, 'list_themes');
-      const themes = lists.at(-1)?.resultJson?.themes ?? [];
+      const listed = lists.at(-1)?.resultJson ?? {};
+      const themes = listed.themes ?? [];
       const nf = themes.find((t) => t.id === NEON.id);
-      check('AI listed the themes: ' + NEON.themes + ' including Neon Flow (neon-flow, dark)', lists.length > 0 && themes.length === NEON.themes && nf?.name === NEON.name && nf?.mode === 'dark', { calls: lists.length, themes: themes.map((t) => t.id), neonFlow: nf ?? null });
-      check('AI switched the app to Neon Flow (set_theme neon-flow; the live UI renders it)', okCalls(c, 'set_theme').some((x) => x.args?.themeId === NEON.id) && dom?.theme === NEON.id && dom?.neon === true,
-        { setTheme: c.calls.filter((x) => x.tool === 'set_theme').map((x) => ({ themeId: x.args?.themeId, ok: x.ok })), ui: dom ? { theme: dom.theme, neon: dom.neon } : data.collectError ?? null });
+      check('AI listed the themes: ' + NEON.themes + ', Neon Flow (neon-flow, dark) first and active', lists.length > 0 && themes.length === NEON.themes && themes[0]?.id === NEON.id && nf?.name === NEON.name && nf?.mode === 'dark' && listed.active === NEON.id,
+        { calls: lists.length, active: listed.active ?? null, themes: themes.map((t) => t.id), neonFlow: nf ?? null });
+      const sets = c.calls.filter((x) => x.tool === 'set_theme');
+      check('the app stays in Neon Flow (the live UI renders it; any set_theme the AI made was neon-flow)', sets.every((x) => x.args?.themeId === NEON.id) && dom?.theme === NEON.id && dom?.neon === true,
+        { setTheme: sets.map((x) => ({ themeId: x.args?.themeId, ok: x.ok })), ui: dom ? { theme: dom.theme, neon: dom.neon } : data.collectError ?? null });
       const node = (t) => doc.nodes.find((n) => hNorm(n.title) === hNorm(t));
       const links = [...I_INPUTS.map((t) => [t, I_CHAIN[0]]), [I_CHAIN[0], I_CHAIN[1]], [I_CHAIN[1], I_CHAIN[2]]].map(([a, b]) => {
         const e = doc.edges.find((x) => x.source === node(a)?.id && x.target === node(b)?.id);
@@ -1100,6 +1167,8 @@ export const SCENARIOS = [
       });
       check('every connector renders as a 3px glowing neon wire (.wfc-edge-path.neon) with no arrowheads and 2 port dots per connector', doc.edges.length > 0 && rendered.length === doc.edges.length && notNeon.length === 0 && dom.portDots === 2 * rendered.length,
         { edges: doc.edges.length, rendered: rendered.length, portDots: dom?.portDots ?? null, notNeon: notNeon.map((e) => rendered.find((r) => r.id === e.id) ?? { id: e.id, rendered: false }), sample: rendered[0] ?? null });
+      const ports = judgePorts(data.ports, I_INPUTS.length);
+      check('the ' + I_INPUTS.length + ' wires into the merge card (' + I_CHAIN[0] + ') meet one side of it at ' + I_INPUTS.length + ' distinct ports, each with its own port dot (not one shared dot)', ports.ok, ports);
       const wires = judgeWires(doc, dom);
       check('uncoloured wires take palette colours (amber/pink/purple/red/teal) and wires into the same card are distinct (up to 5)', wires.ok && wires.cards.some((cd) => cd.auto.length >= 2), wires);
       const bursts = judgeBursts(doc, log, c.calls);
@@ -1116,7 +1185,7 @@ export const SCENARIOS = [
         { captures: caps.map((cp) => ({ n: cp.n, file: cp.file, documentId: cp.call?.args?.documentId ?? null, afterWiring: cp.call?.startedMs >= lastEdgeAt, text: cp.call?.resultText, size: cp.stats.w + 'x' + cp.stats.h, mode: cp.stats.mode, modeShare: cp.stats.modeShare, bg: cp.stats.bg })),
           judged: shot?.file ?? null, wireColours: used, wirePixels: s && Object.fromEntries(NEON.wires.map((u) => [u, { predominant: s.predominant['--c-' + u] ?? 0, blended: s.blend['--c-' + u] ?? 0 }])), absent });
       const r = data.restored;
-      check('harness restored the baseline theme at the end (session and live UI; no neon wires or port dots left)', !!r && r.session === r.baseline && r.ui === r.baseline && r.neon === false && r.portDots === 0 && r.neonPaths === 0, r ?? data.cleanupError ?? null);
+      check('harness restored the baseline theme at the end (session and live UI)', !!r && r.session === r.baseline && r.ui === r.baseline && r.neon === r.baselineIsNeon, r ?? data.cleanupError ?? null);
     },
   },
 ];

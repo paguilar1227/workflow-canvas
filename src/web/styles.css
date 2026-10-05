@@ -625,12 +625,12 @@ input, textarea, select { font: inherit; color: var(--text); }
 @keyframes neon-sweep-back { to { --wfc-sweep: -180deg; } }
 @keyframes neon-fade { 0% { opacity: 0; } 8%, 65% { opacity: 1; } 100% { opacity: 0; } }
 .wfc-neon-burst > b {
-  position: absolute; left: 0; top: 50%; width: 20px; height: 20px; margin: -10px 0 0 -10px; border-radius: 50%; border: 2px solid var(--bc);
+  position: absolute; left: 0; top: var(--p, 50%); width: 20px; height: 20px; margin: -10px 0 0 -10px; border-radius: 50%; border: 2px solid var(--bc);
   animation: neon-ripple .9s ease-out forwards;
 }
 .wfc-neon-burst.from-right > b { left: 100%; }
-.wfc-neon-burst.from-top > b { left: 50%; top: 0; }
-.wfc-neon-burst.from-bottom > b { left: 50%; top: 100%; }
+.wfc-neon-burst.from-top > b { left: var(--p, 50%); top: 0; }
+.wfc-neon-burst.from-bottom > b { left: var(--p, 50%); top: 100%; }
 @keyframes neon-ripple { from { opacity: 1; transform: scale(.4); } to { opacity: 0; transform: scale(2.4); } }
 @media (prefers-reduced-motion: reduce) {
   .wfc-neon-burst { display: none; }

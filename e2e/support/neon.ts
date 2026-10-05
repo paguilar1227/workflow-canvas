@@ -135,7 +135,7 @@ export const isBezier = (d: string) => /^M[^A-Za-z]+C[^A-Za-z]+$/.test(d.trim())
 
 /**
  * Times the connect burst on a card: waits for it to appear after \`releasedAt\`, then for it to be removed.
- * Returns when it was first seen and when it was gone, in ms after the release.
+ * Returns when it was first seen, where its ripple is centred on screen, and when it was gone, in ms after the release.
  */
 export async function timeBurst(page: Page, targetId: string, releasedAt: number) {
   const burst = page.getByTestId('neon-burst-' + targetId);
@@ -144,8 +144,9 @@ export async function timeBurst(page: Page, targetId: string, releasedAt: number
   const color = await burst.evaluate((el) => (el as HTMLElement).style.getPropertyValue('--bc').trim());
   const visible = await burst.isVisible();
   const display = await burst.evaluate((el) => getComputedStyle(el).display);
+  const ripple = await burst.locator('b').evaluate((el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
   return {
-    seen, color, visible, display,
+    seen, color, visible, display, ripple,
     gone: async () => {
       await expect(burst, 'the burst is removed after its animation').toHaveCount(0, { timeout: BURST_MS + 3000 });
       return Date.now() - releasedAt;
@@ -153,3 +154,96 @@ export async function timeBurst(page: Page, targetId: string, releasedAt: number
   };
 }
 
+
+export type Side = 'left' | 'right' | 'top' | 'bottom';
+export type SidePort = { id: string; end: 'start' | 'end'; f: number; at: Pt };
+
+/**
+ * The ports on one side of a card as a person sees them: every drawn wire end that lies on that side,
+ * as a fraction along it (0 = top or left end of the side), sorted along the side.
+ */
+export async function sidePorts(page: Page, nodeId: string, side: Side): Promise<SidePort[]> {
+  const r = (await page.locator('.react-flow__node[data-id="' + nodeId + '"]').boundingBox())!;
+  const tol = 1.5;
+  const out: SidePort[] = [];
+  for (const e of await neonEdges(page)) {
+    for (const [end, p] of [['start', e.start], ['end', e.end]] as const) {
+      const vertical = side === 'left' || side === 'right';
+      const edge = side === 'left' ? r.x : side === 'right' ? r.x + r.width : side === 'top' ? r.y : r.y + r.height;
+      const across = vertical ? p.x : p.y;
+      const along = vertical ? (p.y - r.y) / r.height : (p.x - r.x) / r.width;
+      if (Math.abs(across - edge) <= tol && along >= -0.01 && along <= 1.01) out.push({ id: e.id, end, f: along, at: p });
+    }
+  }
+  return out.sort((a, b) => a.f - b.f);
+}
+
+/** Pairs of drawn wires whose curves cross each other on screen (each curve sampled finely along its length). */
+export async function crossings(page: Page, ids: string[]) {
+  return page.evaluate((ids) => {
+    const poly = (id: string) => {
+      const g = [...document.querySelectorAll('.react-flow__edge')].find((x) => (x.getAttribute('data-id') ?? (x.getAttribute('data-testid') ?? '').replace('rf__edge-', '')) === id);
+      const p = g?.querySelector('path.wfc-edge-path') as SVGPathElement | null;
+      if (!p) return [];
+      const len = p.getTotalLength(), m = p.getScreenCTM()!, pts: { x: number; y: number }[] = [];
+      for (let i = 0; i <= 120; i++) { const q = p.getPointAtLength((len * i) / 120); const s = new DOMPoint(q.x, q.y).matrixTransform(m); pts.push({ x: s.x, y: s.y }); }
+      return pts;
+    };
+    type P = { x: number; y: number };
+    const o = (p: P, q: P, r: P) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+    const cross = (a: P, b: P, c: P, d: P) => o(a, b, c) * o(a, b, d) < 0 && o(c, d, a) * o(c, d, b) < 0;
+    const lines = ids.map((id) => ({ id, pts: poly(id) }));
+    const hits: string[] = [];
+    for (let i = 0; i < lines.length; i++) for (let j = i + 1; j < lines.length; j++) {
+      const [A, B] = [lines[i].pts, lines[j].pts];
+      let hit = false;
+      for (let a = 1; a < A.length && !hit; a++) for (let b = 1; b < B.length && !hit; b++) hit = cross(A[a - 1], A[a], B[b - 1], B[b]);
+      if (hit) hits.push(lines[i].id + ' x ' + lines[j].id);
+    }
+    return { sampled: lines.map((l) => l.id + ':' + l.pts.length), hits };
+  }, ids);
+}
+
+/**
+ * Asserts that the wires on one side of a card sit at 1/(n+1) … n/(n+1) along it, in the given order, and that no two wires cross.
+ * Returns the ports so a journey can note them.
+ */
+export async function expectEvenPorts(page: Page, nodeId: string, side: Side, order: string[], where: string) {
+  const ports = await sidePorts(page, nodeId, side);
+  const box = (await page.locator('.react-flow__node[data-id="' + nodeId + '"]').boundingBox())!;
+  const length = side === 'left' || side === 'right' ? box.height : box.width;
+  expect(ports.map((p) => p.id), where + ': the wires meet ' + nodeId + "'s " + side + ' side in this order').toEqual(order);
+  ports.forEach((p, i) => {
+    const want = (i + 1) / (order.length + 1);
+    expect(Math.abs(p.f - want) * length, where + ': ' + p.id + ' meets the side at ' + (i + 1) + '/' + (order.length + 1) + ' (got ' + p.f.toFixed(3) + ')').toBeLessThanOrEqual(1.5);
+  });
+  const x = await crossings(page, (await neonEdges(page)).map((e) => e.id));
+  expect(x.hits, where + ': no two wires cross').toEqual([]);
+  return ports;
+}
+
+/**
+ * A card's four ports as a finger meets them: whether a clipping box around the port cuts it off, whether the whole drawn dot
+ * (its centre and four points near its rim) is the port under the finger and inside the screen, and how far the port's touch area
+ * reaches across and along, in screen px.
+ */
+export async function portTouch(page: Page, nodeId: string) {
+  return page.locator('.react-flow__node[data-id="' + nodeId + '"] .react-flow__handle').evaluateAll((hs) => hs.map((h) => {
+    const r = h.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const on = (x: number, y: number) => document.elementFromPoint(x, y)?.closest('.react-flow__handle') === h;
+    const reach = (dx: number, dy: number) => { let d = 0; while (d < 200 && on(cx + dx * (d + 0.25), cy + dy * (d + 0.25))) d += 0.25; return d; };
+    let clippedBy: string | null = null;
+    for (let a = h.parentElement; a && !clippedBy; a = a.parentElement) {
+      const s = getComputedStyle(a);
+      const clips = s.overflowX !== 'visible' || s.overflowY !== 'visible' || s.clipPath !== 'none';
+      const b = a.getBoundingClientRect();
+      if (clips && (r.left < b.left - 0.5 || r.top < b.top - 0.5 || r.right > b.right + 0.5 || r.bottom > b.bottom + 0.5)) clippedBy = a.className || a.tagName;
+      if (a.classList.contains('react-flow__node')) break;
+    }
+    const k = r.width * 0.35;
+    const dot = [[0, 0], [-k, 0], [k, 0], [0, -k], [0, k]].every(([dx, dy]) => on(cx + dx, cy + dy));
+    const inView = r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight;
+    return { side: h.getAttribute('data-handlepos'), opacity: getComputedStyle(h).opacity, size: r.width, clippedBy, dot, inView, w: reach(-1, 0) + reach(1, 0), h: reach(0, -1) + reach(0, 1) };
+  }));
+}
