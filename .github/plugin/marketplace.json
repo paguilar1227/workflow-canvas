@@ -1,0 +1,18 @@
+{
+  "name": "workflow-canvas",
+  "owner": {
+    "name": "Pablo Aguilar"
+  },
+  "metadata": {
+    "description": "Workflow Canvas plugin for GitHub Copilot CLI",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "workflow-canvas",
+      "description": "Infinite, editable canvas for plans, architectures, workflows, codebase maps and mind maps, shared live between you and your coding agent: 36 MCP tools (including describe_logic for reading a flow back), plus a skill that knows when to use it and starts the canvas if it is not running.",
+      "version": "0.1.0",
+      "source": "./plugins/workflow-canvas"
+    }
+  ]
+}

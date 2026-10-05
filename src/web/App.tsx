@@ -30,11 +30,11 @@ function useTheme() {
 
 /**
  * Drawer ("compact") layout whenever the docked columns and the toolbar cannot sit side by side: outline 268px +
- * inspector 292px + toolbar (measured 543px with a mouse, 469px with touch sizing) + 8px margins. Also any touch
+ * inspector 292px + toolbar (measured 622px with a mouse, 502px with touch sizing) + 8px margins. Also any touch
  * screen shorter than a tablet (landscape phones are at most ~430px tall; the smallest iPad is 744px).
  * Touch sizing follows the pointer type, not the width.
  */
-const COMPACT_QUERY = '(max-width: 1045px), (pointer: fine) and (max-width: 1119px), (pointer: coarse) and (max-height: 600px)';
+const COMPACT_QUERY = '(max-width: 1077px), (pointer: fine) and (max-width: 1197px), (pointer: coarse) and (max-height: 600px)';
 const COARSE_QUERY = '(pointer: coarse)';
 
 function useDeviceClass() {

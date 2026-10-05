@@ -1,10 +1,10 @@
 import { useEffect, useState, type KeyboardEvent } from 'react';
 import { AlignLeft, AlignCenterHorizontal, AlignRight, AlignStartVertical, AlignCenterVertical, AlignEndVertical, Columns3, Rows3, Frame, Link as LinkIcon, Trash2, Copy, ArrowLeftRight } from 'lucide-react';
 import { useApp, set } from '../store';
-import { Picker, priorityOptions, shapeOptions, statusOptions } from './Picker';
+import { Picker, priorityOptions, roleOptions, shapeOptions, statusOptions } from './Picker';
 import * as actions from '../actions';
 import { ColumnHeader } from './Chrome';
-import { COLOR_NAMES, NODE_SHAPES, NODE_STATUSES, EDGE_ROUTINGS, EDGE_STYLES, ARROW_MODES, type CanvasNode, type CanvasEdge, type ColorName } from '../../shared/types';
+import { COLOR_NAMES, NODE_ROLES, NODE_SHAPES, NODE_STATUSES, EDGE_ROUTINGS, EDGE_STYLES, ARROW_MODES, type CanvasNode, type CanvasEdge, type ColorName } from '../../shared/types';
 
 function Text({ label, value, onCommit, multiline, mono, testId, placeholder, noEmoji }: { label: string; value?: string; onCommit: (v: string) => void; multiline?: boolean; mono?: boolean; testId?: string; placeholder?: string; noEmoji?: boolean }) {
   const [v, setV] = useState(value ?? '');
@@ -60,7 +60,10 @@ function NodeInspector({ n }: { n: CanvasNode }) {
       <Colors value={n.color} onPick={(c) => actions.setColor(c)} />
       {n.kind === 'topic' ? (
         <>
-          <div className="field"><label>Shape</label><Picker id="insp-shape" label="Shape" grid value={n.shape ?? 'card'} options={shapeOptions(NODE_SHAPES)} onPick={(s) => actions.setShape(s)} testId="shape-picker" /></div>
+          <div className="field-row">
+            <div className="field"><label>Logic role</label><Picker id="insp-role" label="Logic role" grid value={n.role ?? 'none'} options={roleOptions(NODE_ROLES, 'Step')} onPick={(r) => actions.setRole(r)} testId="role-picker" /></div>
+            <div className="field"><label>Shape</label><Picker id="insp-shape" label="Shape" grid value={n.shape ?? 'card'} options={shapeOptions(NODE_SHAPES)} onPick={(s) => actions.setShape(s)} testId="shape-picker" /></div>
+          </div>
           <div className="field-row">
             <div className="field"><label>Status</label><Picker id="insp-status" label="Status" value={n.status ?? 'none'} options={statusOptions(NODE_STATUSES)} onPick={(s) => actions.setStatus(s)} testId="status-picker" /></div>
             <div className="field"><label>Priority</label><Picker id="insp-priority" label="Priority" value={n.priority ?? 0} options={priorityOptions(PRIORITIES)} onPick={(p) => up({ priority: p })} testId="priority-picker" /></div>

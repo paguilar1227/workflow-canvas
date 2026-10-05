@@ -1,4 +1,5 @@
 import type { CanvasDocument, CanvasEdge, CanvasNode, DocSettings, NodeKind, NodeShape, Side, TreeLayout } from './types';
+import { ROLE_INFO, isRole } from './logic';
 import { childrenMap, descendants, hiddenIds, isAncestor, nodeMap, rootOf } from './graph';
 import { defaultSize, bounds, center, containsPoint } from './sizes';
 import { alignNodes, distributeNodes, fitFrame, layoutGraph, layoutGrid, layoutLanes, layoutTree, type Align, type GraphDirection, type Pos } from './layout';
@@ -80,17 +81,18 @@ export function normalizeCommand(doc: CanvasDocument, input: CommandInput, opts:
         const parent = parentId ? working.nodes.find((n) => n.id === parentId) : undefined;
         if (parentId && !parent) throw new CommandError('Parent "' + parentId + '" not found');
         const isRoot = kind === 'topic' && !parentId;
-        const shape: NodeShape | undefined = kind === 'topic' ? ((raw.shape as NodeShape) ?? (parent ? 'rounded' : 'card')) : undefined;
+        const roleInfo = kind === 'topic' && isRole(raw.role) ? ROLE_INFO[raw.role] : undefined;
+        const shape: NodeShape | undefined = kind === 'topic' ? ((raw.shape as NodeShape) ?? roleInfo?.shape ?? (parent ? 'rounded' : 'card')) : undefined;
         const size = defaultSize(kind, shape, false);
         const node: CanvasNode = {
-          id, kind, title: raw.title ?? (kind === 'frame' ? 'Frame' : kind === 'sticky' ? '' : 'Topic'),
+          id, kind, title: raw.title ?? (kind === 'frame' ? 'Frame' : kind === 'sticky' ? '' : roleInfo?.title ?? 'Topic'),
           x: 0, y: 0,
           width: raw.width ?? (parent && shape === 'rounded' ? 200 : size.width),
           height: raw.height ?? (parent && shape === 'rounded' ? 48 : size.height),
           order: ++order,
         };
         if (shape) node.shape = shape;
-        for (const k of ['subtitle', 'notes', 'badge', 'icon', 'color', 'collapsed', 'tags', 'link', 'status', 'priority', 'locked'] as const) {
+        for (const k of ['subtitle', 'notes', 'badge', 'icon', 'role', 'color', 'collapsed', 'tags', 'link', 'status', 'priority', 'locked'] as const) {
           if (raw[k] !== undefined && raw[k] !== null && raw[k] !== '') (node as unknown as Record<string, unknown>)[k] = raw[k];
         }
         if (parentId) node.parentId = parentId;
@@ -298,7 +300,7 @@ function clearSpaceAround(doc: CanvasDocument, rootId: string): CanvasDocument {
   return applyPositions(doc, moves);
 }
 
-const NODE_PATCH_KEYS = ['kind', 'title', 'subtitle', 'notes', 'badge', 'icon', 'shape', 'color', 'x', 'y', 'width', 'height', 'parentId', 'frameId', 'collapsed', 'tags', 'link', 'status', 'priority', 'locked', 'points'] as const;
+const NODE_PATCH_KEYS = ['kind', 'title', 'subtitle', 'notes', 'badge', 'icon', 'shape', 'role', 'color', 'x', 'y', 'width', 'height', 'parentId', 'frameId', 'collapsed', 'tags', 'link', 'status', 'priority', 'locked', 'points'] as const;
 const EDGE_PATCH_KEYS = ['source', 'target', 'label', 'style', 'arrow', 'routing', 'color', 'animated', 'sourceSide', 'targetSide'] as const;
 
 function mergeDefined<T extends object>(base: T, patch: Record<string, unknown>, keys: readonly string[]): T {
@@ -331,6 +333,7 @@ export function applyCommand(doc: CanvasDocument, cmd: Command): CanvasDocument 
           const u = byId.get(n.id);
           if (!u) return n;
           const patch: Record<string, unknown> = { ...u };
+          if (isRole(u.role) && u.shape === undefined && n.kind === 'topic') patch.shape = ROLE_INFO[u.role].shape;
           if (u.parentId !== undefined && u.parentId !== null && (u.parentId === n.id || !doc.nodes.some((p) => p.id === u.parentId) || isAncestor(doc, n.id, u.parentId))) delete patch.parentId;
           const m = mergeDefined(n, patch, NODE_PATCH_KEYS);
           if (m !== n && (m.parentId !== n.parentId || m.collapsed !== n.collapsed || m.width !== n.width || m.height !== n.height)) touched.push(n.id, ...(n.parentId ? [n.parentId] : []));

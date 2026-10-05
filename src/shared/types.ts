@@ -1,5 +1,7 @@
 export type NodeKind = 'topic' | 'frame' | 'sticky' | 'text' | 'drawing';
-export type NodeShape = 'card' | 'rounded' | 'pill' | 'rectangle' | 'diamond' | 'circle' | 'hexagon' | 'cylinder';
+export type NodeShape = 'card' | 'rounded' | 'pill' | 'rectangle' | 'diamond' | 'circle' | 'hexagon' | 'cylinder' | 'parallelogram';
+/** What a topic means in a flow, so people and AI can read the diagram's logic. A topic without a role is a plain step. */
+export type NodeRole = 'start' | 'end' | 'decision' | 'parallel' | 'wait' | 'data' | 'store' | 'subprocess' | 'external';
 export type ColorName = 'default' | 'blue' | 'green' | 'amber' | 'red' | 'purple' | 'pink' | 'teal' | 'gray';
 export type Side = 'top' | 'right' | 'bottom' | 'left';
 export type NodeStatus = 'none' | 'todo' | 'doing' | 'done' | 'blocked';
@@ -9,7 +11,8 @@ export type ArrowMode = 'end' | 'start' | 'both' | 'none';
 export type TreeLayout = 'mindmap' | 'right' | 'left' | 'down';
 
 export const NODE_KINDS: NodeKind[] = ['topic', 'frame', 'sticky', 'text', 'drawing'];
-export const NODE_SHAPES: NodeShape[] = ['card', 'rounded', 'pill', 'rectangle', 'diamond', 'circle', 'hexagon', 'cylinder'];
+export const NODE_SHAPES: NodeShape[] = ['card', 'rounded', 'pill', 'rectangle', 'diamond', 'circle', 'hexagon', 'cylinder', 'parallelogram'];
+export const NODE_ROLES: NodeRole[] = ['start', 'end', 'decision', 'parallel', 'wait', 'data', 'store', 'subprocess', 'external'];
 export const COLOR_NAMES: ColorName[] = ['default', 'blue', 'green', 'amber', 'red', 'purple', 'pink', 'teal', 'gray'];
 export const SIDES: Side[] = ['top', 'right', 'bottom', 'left'];
 export const NODE_STATUSES: NodeStatus[] = ['none', 'todo', 'doing', 'done', 'blocked'];
@@ -27,6 +30,7 @@ export interface CanvasNode {
   badge?: string;
   icon?: string;
   shape?: NodeShape;
+  role?: NodeRole;
   color?: ColorName;
   x: number;
   y: number;

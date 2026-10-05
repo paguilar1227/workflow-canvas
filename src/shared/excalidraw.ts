@@ -3,6 +3,7 @@
  * .excalidraw scene format: { type: 'excalidraw', version: 2, elements, appState, files }.
  */
 import type { CanvasDocument, CanvasEdge, CanvasNode, ColorName, DocSettings } from './types';
+import { isRole } from './logic';
 import { applyCommand, normalizeCommand, type EdgeInput, type NodeInput } from './commands';
 import { childrenMap } from './graph';
 
@@ -76,7 +77,7 @@ export function exportExcalidraw(doc: CanvasDocument): Record<string, unknown> {
     const el = base(n.id, type, n.x, n.y, n.width, n.height, {
       frameId, roundness: rounded, strokeColor: STROKE[c],
       backgroundColor: n.kind === 'sticky' ? (c === 'default' ? STICKY_FILL : FILL[c]) : FILL[c], fillStyle: n.kind === 'sticky' ? 'solid' : 'hachure',
-      link: n.link ?? null, locked: !!n.locked, customData: { workflowCanvas: { kind: n.kind, shape: n.shape, color: n.color ?? 'default', subtitle: n.subtitle, badge: n.badge, icon: n.icon, notes: n.notes, tags: n.tags, status: n.status, priority: n.priority, parentId: n.parentId, node: nodeRecord(n) } },
+      link: n.link ?? null, locked: !!n.locked, customData: { workflowCanvas: { kind: n.kind, shape: n.shape, role: n.role, color: n.color ?? 'default', subtitle: n.subtitle, badge: n.badge, icon: n.icon, notes: n.notes, tags: n.tags, status: n.status, priority: n.priority, parentId: n.parentId, node: nodeRecord(n) } },
     });
     els.push(el); nodeEl.set(n.id, el);
     const text = label(n);
@@ -177,7 +178,8 @@ export function importExcalidraw(content: string | Record<string, unknown>, pref
       if (chosen) n.color = chosen;
       if (frameId) n.frameId = frameId;
       if (typeof e.link === 'string' && e.link) n.link = e.link;
-      for (const k of ['badge', 'icon', 'notes', 'tags', 'status', 'priority'] as const) if (meta[k] !== undefined && meta[k] !== null) (n as Record<string, unknown>)[k] = meta[k];
+      for (const k of ['badge', 'icon', 'role', 'notes', 'tags', 'status', 'priority'] as const) if (meta[k] !== undefined && meta[k] !== null) (n as Record<string, unknown>)[k] = meta[k];
+      if (n.role !== undefined && !isRole(n.role)) delete n.role;
       if (meta.icon && n.title?.startsWith(meta.icon + ' ')) n.title = n.title.slice(meta.icon.length + 1);
       if (meta.parentId && byId.has(meta.parentId)) n.parentId = id(meta.parentId);
       out.nodes.push(n); nodeIds.add(e.id); continue;
@@ -246,6 +248,7 @@ export function documentFromExcalidraw(content: string | Record<string, unknown>
     const rec = meta(e).node;
     if (!rec) continue;
     const n = { ...rec, x: Number(e.x), y: Number(e.y), width: Number(e.width), height: Number(e.height) } as CanvasNode;
+    if (n.role !== undefined && !isRole(n.role)) delete n.role;
     if (n.kind === 'drawing') n.points = ((e.points as [number, number][] | undefined) ?? []).map(([px, py]) => [px, py] as [number, number]);
     if (n.kind === 'frame' && typeof e.name === 'string') n.title = e.name;
     if (n.kind === 'text' && typeof e.text === 'string') n.title = e.text;

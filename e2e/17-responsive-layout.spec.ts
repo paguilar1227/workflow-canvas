@@ -4,8 +4,10 @@ import { Phone } from './support/phone';
 
 /**
  * Sizes that sit on either side of the drawer ("compact") threshold (App.tsx COMPACT_QUERY): docked outline 268 +
- * inspector 292 + toolbar (543 mouse / 469 touch) + margins do not fit below 1046px (1120px with a mouse), so those
- * windows use drawers; touch tablets wide enough keep the docked columns. Ported from work/fixcheck/layout-sweep.mjs.
+ * inspector 292 + toolbar (622 mouse / 502 touch, with the Logic button) + 16px margins do not fit below 1078px (1198px
+ * with a mouse), so those windows use drawers; touch tablets wide enough keep the docked columns. 1077/1078 (touch) and
+ * 1197/1198 (mouse) sit on the edges; 1120 and 1180 are mouse windows whose toolbar overlapped the docked columns (bug L3).
+ * Ported from work/fixcheck/layout-sweep.mjs.
  */
 const { defaultBrowserType: _webkit, ...iPad } = devices['iPad Pro 11'];
 type Size = { name: string; width: number; height: number; touch: boolean; compact: boolean; shot?: string };
@@ -13,11 +15,13 @@ const touchSizes: Size[] = [
   { name: 'iPad Pro 11 portrait', width: 834, height: 1194, touch: true, compact: true, shot: 'ipad-pro-11-portrait' },
   { name: 'iPad Pro 12.9 portrait', width: 1024, height: 1366, touch: true, compact: true, shot: 'ipad-pro-12-9-portrait' },
   { name: 'iPad 7 landscape', width: 1080, height: 810, touch: true, compact: false, shot: 'ipad-7-landscape' },
+  { name: 'touch window 1077', width: 1077, height: 810, touch: true, compact: true },
+  { name: 'touch window 1078', width: 1078, height: 810, touch: true, compact: false },
   { name: 'iPad Air landscape', width: 1180, height: 820, touch: true, compact: false },
   { name: 'iPad Pro 11 landscape', width: 1194, height: 834, touch: true, compact: false },
   { name: 'iPad Pro 12.9 landscape', width: 1366, height: 1024, touch: true, compact: false },
 ];
-const mouseSizes: Size[] = [821, 960, 1100, 1119, 1120, 1280, 1440].map((width) => ({ name: 'mouse window ' + width, width, height: 800, touch: false, compact: width <= 1119 }));
+const mouseSizes: Size[] = [821, 960, 1100, 1120, 1180, 1197, 1198, 1280, 1440].map((width) => ({ name: 'mouse window ' + width, width, height: 800, touch: false, compact: width <= 1197 }));
 
 /** Boxes of the floating chrome and docked columns, plus overflow, read from the live page. */
 const measure = (page: Page) => page.evaluate(() => {
@@ -44,7 +48,7 @@ const measure = (page: Page) => page.evaluate(() => {
 });
 
 test('keep the layout tidy on tablets and narrow desktop windows', async ({ page, app, ev, browser, request }, info) => {
-  ev.proves('With a topic selected, every tablet and narrow-window size gets the right layout: iPad portraits (834, 1024) and mouse windows up to 1119px use drawers; iPad landscapes (1080–1366) and mouse windows from 1120px keep the docked outline and inspector. At every size the page and the top bar do not overflow sideways, the toolbar sits inside the canvas, and the toolbar, zoom bar, minimap, selection bar and docked columns never overlap; on touch sizes every chrome control is at least 44×44. Screenshots show the iPad Pro portraits and the iPad 7 landscape; the video shows the mouse window being resized.');
+  ev.proves('With a topic selected, every tablet and narrow-window size gets the right layout: iPad portraits (834, 1024), touch windows up to 1077px and mouse windows up to 1197px (including 1120 and 1180, where the toolbar with the Logic button used to overlap the docked columns, bug L3) use drawers; touch windows from 1078px, iPad landscapes (1080–1366) and mouse windows from 1198px keep the docked outline and inspector. At every size the page and the top bar do not overflow sideways, the toolbar sits inside the canvas, and the toolbar, zoom bar, minimap, selection bar and docked columns never overlap; on touch sizes every chrome control is at least 44×44. Screenshots show the iPad Pro portraits and the iPad 7 landscape; the video shows the mouse window being resized.');
   const docId = await app.newDoc('Responsive layout');
   await app.tool('add_nodes', { documentId: docId, nodes: [
     { id: 'rl-research', title: 'Research', x: 0, y: 0 },
@@ -98,4 +102,3 @@ test('keep the layout tidy on tablets and narrow desktop windows', async ({ page
     });
   }
 });
-

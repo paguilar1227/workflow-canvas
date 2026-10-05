@@ -7,7 +7,8 @@ import { set } from '../store';
 import { RoughShape, seedOf, strokePath, useSketch } from './sketch';
 import { InlineMarkdown, Markdown, toggleTask } from '../markdown';
 import { emojiUiOwns } from '../panels/EmojiAssist';
-import { STATUS_GLYPH } from '../panels/Picker';
+import { RoleIcon, STATUS_GLYPH } from '../panels/Picker';
+import { ROLE_INFO, isRole } from '../../shared/logic';
 import { NeonBurst } from './neon';
 
 export interface NodeData extends Record<string, unknown> {
@@ -72,9 +73,11 @@ function toggle(n: CanvasNode) {
 
 function Markers({ n }: { n: CanvasNode }) {
   const status = n.status && n.status !== 'none' ? n.status : null;
-  if (!status && !n.priority) return null;
+  const role = n.kind === 'topic' && isRole(n.role) ? n.role : null;
+  if (!status && !n.priority && !role) return null;
   return (
     <div className="wfc-markers">
+      {role ? <span className={'wfc-marker role role-' + role} title={ROLE_INFO[role].label + ': ' + ROLE_INFO[role].meaning} data-testid="role-marker" data-role={role}><RoleIcon role={role} size={11} /></span> : null}
       {n.priority ? <span className="wfc-marker prio" title={'Priority ' + n.priority}>{n.priority}</span> : null}
       {status ? <span className={'wfc-marker st-' + status} title={status}>{STATUS_GLYPH[status]}</span> : null}
     </div>
@@ -96,6 +99,7 @@ function ShapeSvg({ shape }: { shape: string }) {
   if (shape === 'diamond') el = <polygon className="fill" points="50,1 99,50 50,99 1,50" />;
   else if (shape === 'circle') el = <ellipse className="fill" cx="50" cy="50" rx="49" ry="49" />;
   else if (shape === 'hexagon') el = <polygon className="fill" points="14,1 86,1 99,50 86,99 14,99 1,50" />;
+  else if (shape === 'parallelogram') el = <polygon className="fill" points="7,1 107,1 93,99 -7,99" />;
   else el = (
     <g>
       <path className="fill" d="M1,14 A49,13 0 0,1 99,14 L99,86 A49,13 0 0,1 1,86 Z" />
@@ -105,7 +109,7 @@ function ShapeSvg({ shape }: { shape: string }) {
   return <svg className="wfc-shape-svg" viewBox="0 0 100 100" preserveAspectRatio="none">{el}</svg>;
 }
 
-const SVG_SHAPES = new Set(['diamond', 'circle', 'hexagon', 'cylinder']);
+const SVG_SHAPES = new Set(['diamond', 'circle', 'hexagon', 'cylinder', 'parallelogram']);
 
 export const TopicNode = memo(function TopicNode({ data, selected, width, height }: NodeProps) {
   const d = data as NodeData;
@@ -113,7 +117,7 @@ export const TopicNode = memo(function TopicNode({ data, selected, width, height
   const shape = n.shape ?? 'card';
   const sketch = useSketch();
   const svg = SVG_SHAPES.has(shape) && !sketch;
-  const cls = ['wfc-node', 'shape-' + shape, n.color && n.color !== 'default' ? 'has-color' : '', d.isRoot ? 'is-root' : '', svg ? 'svg-shape' : '',
+  const cls = ['wfc-node', 'shape-' + shape, isRole(n.role) ? 'role-' + n.role : '', n.color && n.color !== 'default' ? 'has-color' : '', d.isRoot ? 'is-root' : '', svg ? 'svg-shape' : '',
     d.match === 'match' ? 'is-match' : '', d.match === 'current' ? 'is-current-match' : '', d.dropTarget ? 'drop-target' : '', d.flashing ? 'flash' : '', sketch ? 'sketch' : ''].filter(Boolean).join(' ');
   return (
     <>

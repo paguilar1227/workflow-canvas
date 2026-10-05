@@ -21,15 +21,35 @@ There is no login, so by default the app only listens on this machine (`127.0.0.
 | --- | --- |
 | Canvas | Infinite pan/zoom (scroll, ⌘+scroll / pinch, Space+drag, hand tool), fit view, minimap, dot/line/cross grid, snap to grid |
 | Mind maps (XMind-style) | Tab = child, Enter = sibling, F2 edit, `/` collapse/expand with counts, arrow-key navigation, drag a topic onto another to re-parent, auto-arranged branches, layouts: balanced mind map, logic chart →/←, org chart ↓ |
-| Diagrams | Cards (icon + title + monospace subtitle + badge, like the pr-lens reference), rounded/pill/rectangle/diamond/circle/hexagon/cylinder shapes, stickies, free text, frames/swimlanes (members move with the frame), connectors via handle drag (drop anywhere on the target), labels, arrows, solid/dashed/dotted, smooth/bezier/straight/step routing, animated flow |
-| Excalidraw-inspired | Freehand pen (P), hand-drawn "Excalidraw Sketch" themes in light and dark (rough.js), R/D/O shape shortcuts, zen mode (Alt+Z), view-only mode (Alt+R), copy PNG to clipboard, `.excalidraw` import/export |
+| Diagrams | Cards (icon + title + monospace subtitle + badge, like the pr-lens reference), rounded/pill/rectangle/diamond/circle/hexagon/cylinder/parallelogram shapes, logic roles (below), stickies, free text, frames/swimlanes (members move with the frame), connectors via handle drag (drop anywhere on the target), labels, arrows, solid/dashed/dotted, smooth/bezier/straight/step routing, animated flow |
+| Excalidraw-inspired | Freehand pen (P), hand-drawn "Excalidraw Sketch" themes in light and dark (rough.js), R/D/O shortcuts (rectangle, decision, ellipse), zen mode (Alt+Z), view-only mode (Alt+R), copy PNG to clipboard, `.excalidraw` import/export |
 | Editing | Inspector for every property (title, subtitle, badge, emoji icon, color, shape, status, priority, tags, link, notes, size, lock; shape, status and priority are compact pickers that open as bottom sheets on phones), multi-select align/distribute/frame/connect, copy/cut/paste/duplicate, context menus, undo/redo (shared with AI) |
 | Layout | Graph (dagre) LR/TB with frames as clusters, swimlanes, grid, tree layouts |
 | Documents | Multiple canvases from templates (blank, mind map, architecture lanes, workflow), rename, duplicate, delete, outline panel, search (⌘F). Drag the bar between Documents and Outline (or focus it and use the arrow keys) to resize the list; double-click or Enter resets it, and the size is remembered on each device |
-| Import / export | Import Mermaid flowcharts (subgraphs → frames), Markdown outlines (→ mind map), Excalidraw scenes, JSON. Export PNG, SVG, Markdown, Mermaid, Excalidraw, JSON |
+| Import / export | Import Mermaid flowcharts (subgraphs → frames), Markdown outlines (→ mind map), Excalidraw scenes, JSON. Export PNG, SVG, Markdown, the logic description, Mermaid, Excalidraw, JSON |
 | Collaboration | Every open tab and every AI client sees changes live; AI edits show an activity feed and highlight the touched nodes |
 
 Press **?** in the app for the full shortcut list.
+
+## Logic: diagrams people and AI can both read
+
+A topic can carry a **logic role** so the diagram says what it means, not just how it looks. Pick one from **Logic** in the toolbar (a bottom sheet on phones) or the Inspector's **Logic role** picker; **D** adds a decision.
+
+| Role | Meaning | Default look |
+| --- | --- | --- |
+| Start | Entry point or trigger | pill |
+| End | Outcome where the flow stops | pill, heavy outline |
+| Decision | Yes/no or multi-way choice | diamond; new connectors from it are labelled Yes, then No |
+| Parallel | Split into paths that run at once, or join them | hexagon |
+| Wait | Timer, event or message | circle |
+| Data | Input or output (form, message, file, report) | parallelogram |
+| Data store | Database the flow reads or writes | cylinder |
+| Subprocess | Flow detailed elsewhere (link its document) | rounded, double outline |
+| External | Person, team or outside system | rectangle, dashed outline |
+
+A topic with no role is an ordinary step. Frames act as lanes (who owns a step), stickies connected to a step are notes on it, and loose stickies are open notes.
+
+**File → Logic description** and the AI tool `describe_logic` turn the canvas into the same written flow: numbered steps from each start, every decision's conditions and where they lead, loops, merges, parallel splits and joins, lanes, data stores read and written, external actors, notes, and an **Issues** list of gaps (unlabelled branches, dead ends, steps no start reaches, loops with no exit, a missing start). That is what an agent reads before implementing a design or drafting requirements from it.
 
 ## Markdown and emoji
 
@@ -85,6 +105,10 @@ Fonts are bundled open-source substitutes (Inter, Manrope, Space Grotesk, Fraunc
 
 The server exposes the same command model the UI uses, so AI and human actions are interchangeable, live and undoable.
 
+- **Plugin (Codex and GitHub Copilot CLI, recommended):** `plugins/workflow-canvas` bundles the MCP server and the `workflow-canvas` skill. Its server launcher starts Docker Desktop and the canvas container when they are not running (`skills/workflow-canvas/scripts/ensure-canvas.sh`), then bridges stdio to the tool API, so the tools are there even if the canvas was down.
+  - Codex: `codex plugin marketplace add paguilar1227/workflow-canvas` (or a local checkout path), then `codex plugin add workflow-canvas@workflow-canvas`, and restart Codex.
+  - Copilot CLI: `copilot plugin marketplace add paguilar1227/workflow-canvas` (or a local checkout path), then `copilot plugin install workflow-canvas@workflow-canvas`.
+  - Settings: `WFC_URL` (default `http://localhost:8790`), `WFC_CONTAINER` (default `workflow-canvas`), `WFC_REPO` (a checkout to `docker compose up` when no container exists yet).
 - **MCP (streamable HTTP):** `http://localhost:8790/mcp`
   - Codex: `codex mcp add workflow-canvas --url http://localhost:8790/mcp`
   - Claude Code: `claude mcp add --transport http workflow-canvas http://localhost:8790/mcp`
@@ -92,9 +116,9 @@ The server exposes the same command model the UI uses, so AI and human actions a
 - **Plain HTTP:** `GET /api/tools` (JSON Schemas), `POST /api/tools/<name>` with JSON arguments. `GET /api/documents/<id>?format=markdown|mermaid`.
 - **Script client:** `node scripts/mcp-call.mjs list` / `node scripts/mcp-call.mjs call <tool> '<json>' [--save shot.png]`
 
-### 35 tools
+### 36 tools
 
-`get_canvas_state`, `list_documents`, `get_document`, `find_nodes`, `create_document`, `open_document`, `update_document`, `duplicate_document`, `delete_document`, `add_nodes`, `update_nodes`, `delete_nodes`, `move_nodes`, `duplicate_nodes`, `reparent_node`, `set_collapsed`, `add_edges`, `update_edges`, `delete_edges`, `create_diagram`, `auto_layout`, `align_nodes`, `distribute_nodes`, `fit_frame_to_contents`, `import_content`, `export_document`, `capture_screenshot`, `undo`, `redo`, `select`, `control_view`, `list_themes`, `set_theme`, `set_ui`, `save_to_file`.
+`get_canvas_state`, `list_documents`, `get_document`, `describe_logic`, `find_nodes`, `create_document`, `open_document`, `update_document`, `duplicate_document`, `delete_document`, `add_nodes`, `update_nodes`, `delete_nodes`, `move_nodes`, `duplicate_nodes`, `reparent_node`, `set_collapsed`, `add_edges`, `update_edges`, `delete_edges`, `create_diagram`, `auto_layout`, `align_nodes`, `distribute_nodes`, `fit_frame_to_contents`, `import_content`, `export_document`, `capture_screenshot`, `undo`, `redo`, `select`, `control_view`, `list_themes`, `set_theme`, `set_ui`, `save_to_file`.
 
 ### UI ↔ AI parity
 
@@ -118,6 +142,8 @@ The server exposes the same command model the UI uses, so AI and human actions a
 | Theme picker | `list_themes`, `set_theme` |
 | Save / autosave to a .excalidraw file | `save_to_file` with `path` (a file or the session's artifacts folder; autosaves from then on) |
 | Panels, minimap, snap, background, search, pen/hand/select tool, zen, view-only, start inline editing | `set_ui` |
+| Logic menu, Logic role picker, decision Yes/No labels | `add_nodes` / `update_nodes` (`role`), `add_edges` (`label`) |
+| File → Logic description | `describe_logic` (or `export_document` format `logic`) |
 | Look at the canvas | `capture_screenshot`, `get_document`, `find_nodes` |
 
 Bulk drawing for AI: `create_diagram` adds nodes + edges and arranges them in one undoable step.

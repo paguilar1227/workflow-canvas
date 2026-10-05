@@ -10,7 +10,9 @@
     "start": "node dist/server/index.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:e2e": "playwright test",
-    "test:ai": "node scripts/ai-tests/run.mjs"
+    "test:ai": "node scripts/ai-tests/run.mjs",
+    "test:logic": "tsx scripts/logic-tests/describe-logic.test.mts",
+    "test:plugin": "bash scripts/plugin-tests/ensure-canvas.test.sh"
   },
   "engines": {
     "node": ">=22"

@@ -13,6 +13,7 @@ import { genId, type OpEvent, type Store } from './store';
 import type { Hub } from './hub';
 import type { FileSaver } from './files';
 import { isAncestor } from '../shared/graph';
+import { describeLogic } from '../shared/logic';
 
 export interface ToolContext { origin: string }
 export interface ToolOutput { json?: unknown; text?: string; image?: { data: string; mimeType: string } }
@@ -37,6 +38,7 @@ export const SERVER_INSTRUCTIONS = [
   'Read state with get_document (format summary), get_canvas_state, find_nodes. Verify visually with capture_screenshot (needs a browser tab open).',
   'View & UI: control_view (fit/focus/zoom), select, set_theme / list_themes (includes hand-drawn Excalidraw-style themes in light and dark), set_ui (panels, minimap, snap, search, zen/view mode, pen mode, inline edit), open_document. undo/redo are shared with the human.',
   'Text: sticky and text nodes render GitHub-flavoured Markdown (task lists toggle with a click); topic/frame titles and connector labels render inline Markdown. :shortcodes: (GitHub names, e.g. :rocket: :white_check_mark:) are converted to emoji in every text field, for people and AI alike.',
+  'Logic: give topics a role (start, end, decision, parallel, wait, data, store, subprocess, external; none = an ordinary step) and label every connector leaving a decision with its condition (Yes/No or the case). describe_logic reads the diagram back as a numbered flow (branches with conditions, loops, merges, parallel paths, lanes as owners, data stores, external actors, attached notes) and lists gaps such as unlabelled branches or dead ends. Call it before you implement, review or write requirements from a diagram, and after you build one to check it says what you meant.',
   'Interop: import_content/export_document support Mermaid, Markdown outlines and Excalidraw (.excalidraw) scenes.',
   'Files: save_to_file with a path (a .excalidraw file or a folder such as your session artifacts folder) saves the document there and keeps it autosaved after every change; without a path it saves to the file already attached (by you or by the person pressing Save). If the server cannot reach the path (for example a hosted preview), it returns the file contents for you to write.',
 ].join('\n');
@@ -45,6 +47,7 @@ function summarizeDoc(doc: CanvasDocument, canUndo: boolean, canRedo: boolean): 
   const lines: string[] = [];
   const fmt = (n: CanvasNode) => {
     const bits = ['[' + n.id + '] ' + n.kind + (n.shape ? '/' + n.shape : '') + ' "' + n.title + '"'];
+    if (n.role) bits.push('role=' + n.role);
     if (n.subtitle) bits.push('sub="' + n.subtitle + '"');
     if (n.badge) bits.push('badge="' + n.badge + '"');
     if (n.icon) bits.push('icon=' + n.icon);
@@ -135,6 +138,16 @@ export function createTools(store: Store, hub: Hub, files: FileSaver): ToolDef[]
       },
     },
     {
+      name: 'describe_logic', title: 'Describe the logic',
+      description: "Read a canvas as a flow you can implement or turn into requirements: numbered steps following the arrows from each start, decisions with each condition and where it leads, loops, merges, parallel splits/joins, lanes (frames) as owners, data stores read/written, external actors, notes, and an Issues list of gaps (unlabelled decision branches, dead ends, unreachable steps, loops with no exit, missing start). Roles come from each topic's role (diamond/cylinder/parallelogram shapes count as decision/store/data when no role is set). format 'markdown' (default) or 'json'.",
+      input: { documentId: docIdArg, format: z.enum(['markdown', 'json']).optional() }, annotations: { readOnlyHint: true },
+      run: async (a) => {
+        const id = resolveDoc(a.documentId);
+        const res = describeLogic(store.get(id)!);
+        return a.format === 'json' ? { json: res.report } : { text: res.markdown };
+      },
+    },
+    {
       name: 'find_nodes', title: 'Find nodes',
       description: 'Case-insensitive search across titles, subtitles, notes, badges and tags. Set highlight=true to also highlight matches in the UI search bar.',
       input: { documentId: docIdArg, query: z.string().min(1), highlight: z.boolean().optional() }, annotations: { readOnlyHint: true },
@@ -178,7 +191,11 @@ export function createTools(store: Store, hub: Hub, files: FileSaver): ToolDef[]
         const server = files.fileFor(id) ? await files.save(id) : null;
         // Several tabs can show the document; only the one with the file attached can save it, so prefer its answer.
         const ui = (await hub.view('save_file', {}, id, (r) => r.ok === true)) as Record<string, unknown>;
-        if (server?.ok || ui?.ok === true) return { json: { ok: true, documentId: id, ...(server?.ok ? { file: server.file, autosave: true } : {}), ui } };
+        if (server?.ok || ui?.ok === true) {
+          const person = ui?.ok === true && typeof ui.file === 'string' ? ui.file : undefined;
+          if (!person) return { json: { ok: true, documentId: id, file: server!.file, autosave: true, ui } };
+          return { json: { ok: true, documentId: id, file: person, savedTo: 'the file the person picked with Save (report this one to them)', ...(server?.ok ? { alsoSaved: server.file, autosave: true } : {}), ui } };
+        }
         if (server) return handBack('Writing ' + server.file + ' failed: ' + server.error, { ui });
         // The person's browser has a file attached but could not write it (for example autosave is paused): report that, not "no file".
         if (ui?.file) return { json: { ok: false, documentId: id, reason: String(ui.reason ?? 'The browser could not save ' + ui.file + '.'), ui } };
@@ -236,7 +253,7 @@ export function createTools(store: Store, hub: Hub, files: FileSaver): ToolDef[]
     },
     {
       name: 'update_nodes', title: 'Update nodes',
-      description: 'Edit any node fields (title, subtitle, notes, badge, icon, shape, color, size, position, parentId, frameId, tags, link, status, priority, collapsed, locked). Send "" or null to clear a field.',
+      description: 'Edit any node fields (title, subtitle, notes, badge, icon, shape, role, color, size, position, parentId, frameId, tags, link, status, priority, collapsed, locked). Send "" or null to clear a field.',
       input: { documentId: docIdArg, updates: z.array(nodePatchSchema).min(1) },
       run: async (a, ctx) => {
         const id = resolveDoc(a.documentId);
@@ -310,7 +327,7 @@ export function createTools(store: Store, hub: Hub, files: FileSaver): ToolDef[]
     },
     {
       name: 'create_diagram', title: 'Create a whole diagram',
-      description: "Atomically add many nodes + edges and arrange them (one undo step). Reference node ids you choose in edges, parentId and frameId. layout: 'auto' (default: lanes if frames, tree if only hierarchy, else graph LR), 'graph', 'tree', 'lanes', 'grid' or 'none'. clear=true replaces the current content.",
+      description: "Atomically add many nodes + edges and arrange them (one undo step). Reference node ids you choose in edges, parentId and frameId. layout: 'auto' (default: lanes if frames, tree if only hierarchy, else graph LR), 'graph', 'tree', 'lanes', 'grid' or 'none'. clear=true replaces the current content. For flows, set each topic's role (start, decision, end, …) and label the connectors leaving a decision with their conditions, then check the result with describe_logic.",
       input: {
         documentId: docIdArg,
         nodes: z.array(nodeInputSchema).min(1),
@@ -382,12 +399,13 @@ export function createTools(store: Store, hub: Hub, files: FileSaver): ToolDef[]
     },
     {
       name: 'export_document', title: 'Export',
-      description: "Export as 'markdown' outline, 'mermaid' flowchart, 'excalidraw' scene JSON (open it at excalidraw.com or any Excalidraw editor), 'json', or render 'png' / 'svg' through the connected browser UI.",
-      input: { documentId: docIdArg, format: z.enum(['markdown', 'mermaid', 'excalidraw', 'json', 'png', 'svg']) }, annotations: { readOnlyHint: true },
+      description: "Export as 'markdown' outline, 'logic' (the describe_logic reading as Markdown), 'mermaid' flowchart, 'excalidraw' scene JSON (open it at excalidraw.com or any Excalidraw editor), 'json', or render 'png' / 'svg' through the connected browser UI.",
+      input: { documentId: docIdArg, format: z.enum(['markdown', 'logic', 'mermaid', 'excalidraw', 'json', 'png', 'svg']) }, annotations: { readOnlyHint: true },
       run: async (a) => {
         const id = resolveDoc(a.documentId);
         const doc = store.get(id)!;
         if (a.format === 'markdown') return { text: exportMarkdown(doc) };
+        if (a.format === 'logic') return { text: describeLogic(doc).markdown };
         if (a.format === 'mermaid') return { text: exportMermaid(doc) };
         if (a.format === 'json') return { text: JSON.stringify(doc, null, 1) };
         if (a.format === 'excalidraw') return { text: JSON.stringify(exportExcalidraw(doc), null, 1) };

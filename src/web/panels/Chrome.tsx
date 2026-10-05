@@ -1,20 +1,23 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { MousePointer2, Hand, Square, Frame, StickyNote, Type, Spline, Minus, Plus, Maximize, ChevronUp, ChevronDown, X, Bot, PenLine, Eye, Minimize2, BoxSelect, Maximize2, Pencil, CornerDownRight, ListPlus, SlidersHorizontal, MoreHorizontal, Trash2, Tag } from 'lucide-react';
+import { Workflow, MousePointer2, Hand, Square, Frame, StickyNote, Type, Spline, Minus, Plus, Maximize, ChevronUp, ChevronDown, X, Bot, PenLine, Eye, Minimize2, BoxSelect, Maximize2, Pencil, CornerDownRight, ListPlus, SlidersHorizontal, MoreHorizontal, Trash2, Tag } from 'lucide-react';
 import { useStore } from '@xyflow/react';
 import { useApp, set, get } from '../store';
 import * as actions from '../actions';
 import { updateSession } from '../sync';
-import { COLOR_NAMES } from '../../shared/types';
+import { COLOR_NAMES, NODE_ROLES, type NodeRole } from '../../shared/types';
+import { ROLE_INFO } from '../../shared/logic';
+import { Picker, roleOptions } from './Picker';
 
 export function Toolbar() {
   const mode = useApp((s) => s.session.mode);
   const selCount = useApp((s) => s.selection.nodes.length);
   const placing = useApp((s) => s.placing?.kind);
+  const placingRole = useApp((s) => s.placing?.extra?.role);
   const coarse = useApp((s) => s.coarse);
   const areaSelect = useApp((s) => s.areaSelect);
   return (
     <div className="toolbar" role="toolbar" aria-label="Canvas tools" data-testid="toolbar">
-      <button className={'btn icon' + (mode === 'select' && !areaSelect ? ' active' : '')} title="Select (V)" aria-label="Select tool" onClick={() => actions.setMode('select')}><MousePointer2 size={16} /></button>
+      {coarse && mode !== 'pan' ? null : <button className={'btn icon' + (mode === 'select' && !areaSelect ? ' active' : '')} title="Select (V)" aria-label="Select tool" onClick={() => actions.setMode('select')}><MousePointer2 size={16} /></button>}
       {coarse ? (
         <button className={'btn icon' + (areaSelect ? ' active' : '')} title="Select an area (one finger otherwise pans)" aria-label="Area select tool" aria-pressed={areaSelect} data-testid="tool-area" onClick={actions.toggleAreaSelect}><BoxSelect size={16} /></button>
       ) : (
@@ -22,10 +25,12 @@ export function Toolbar() {
       )}
       <button className={'btn icon' + (mode === 'draw' ? ' active' : '')} title="Pen — freehand draw (P)" aria-label="Pen tool" data-testid="tool-pen" onClick={() => actions.setMode(mode === 'draw' ? 'select' : 'draw')}><PenLine size={16} /></button>
       <div className="sep" style={{ alignSelf: 'center' }} />
-      <button className={'btn' + (placing === 'topic' ? ' active' : '')} title="Add topic (N) — click the canvas to place it, or it appears next to the selection" data-testid="add-topic" onClick={() => actions.insert('topic')}><Square size={15} />Topic</button>
+      <button className={'btn' + (placing === 'topic' && !placingRole ? ' active' : '')} title="Add topic (N) — click the canvas to place it, or it appears next to the selection" data-testid="add-topic" onClick={() => actions.insert('topic')}><Square size={15} />Topic</button>
       <button className={'btn' + (placing === 'frame' ? ' active' : '')} title="Add frame / lane (F) — wraps the selection, or click the canvas to place one" data-testid="add-frame" onClick={() => actions.insert('frame')}><Frame size={15} />Frame</button>
       <button className={'btn' + (placing === 'sticky' ? ' active' : '')} title="Add sticky note (S) — click the canvas to place it" data-testid="add-sticky" onClick={() => actions.insert('sticky')}><StickyNote size={15} />Sticky</button>
       <button className={'btn' + (placing === 'text' ? ' active' : '')} title="Add text (T) — click the canvas to place it" data-testid="add-text" onClick={() => actions.insert('text')}><Type size={15} />Text</button>
+      <Picker id="logic-menu" label="Add a logic node (start, decision, end…)" grid options={roleOptions(NODE_ROLES)} onPick={(r) => actions.insertRole(r as NodeRole)} testId="add-logic"
+        buttonClass={'btn' + (placingRole ? ' active' : '')} trigger={<><Workflow size={15} />Logic</>} />
       {coarse ? null : <div className="sep" style={{ alignSelf: 'center' }} />}
       {coarse ? null : <button className="btn" title="Connect selected nodes (C)" data-testid="connect" disabled={selCount < 2} onClick={actions.connectSelected}><Spline size={15} />Connect</button>}
     </div>
@@ -33,13 +38,17 @@ export function Toolbar() {
 }
 
 const PLACE_LABEL: Record<string, string> = { topic: 'topic', frame: 'frame', sticky: 'sticky note', text: 'text' };
+const placeLabel = (p: { kind: string; extra?: { role?: NodeRole } }) => {
+  const noun = p.extra?.role ? ROLE_INFO[p.extra.role].noun : PLACE_LABEL[p.kind] ?? p.kind;
+  return (/^[aeiou]/i.test(noun) ? 'an ' : 'a ') + noun;
+};
 
 export function ModePill() {
   const s = useApp((st) => st.session);
   const placing = useApp((st) => st.placing);
   const touch = useApp((st) => st.compact || st.coarse);
   const area = useApp((st) => st.areaSelect);
-  if (placing && !s.viewMode) return <div className="mode-pill" data-testid="place-pill"><MousePointer2 size={14} /><span className="pill-text">{touch ? 'Tap to place a ' + (PLACE_LABEL[placing.kind] ?? placing.kind) : <>Click the canvas to place a {PLACE_LABEL[placing.kind] ?? placing.kind} · Enter = centre</>}</span><button className="btn outline" onClick={actions.cancelPlacing}>{touch ? 'Cancel' : 'Cancel (Esc)'}</button></div>;
+  if (placing && !s.viewMode) return <div className="mode-pill" data-testid="place-pill"><MousePointer2 size={14} /><span className="pill-text">{touch ? 'Tap to place ' + placeLabel(placing) : <>Click the canvas to place {placeLabel(placing)} · Enter = centre</>}</span><button className="btn outline" onClick={actions.cancelPlacing}>{touch ? 'Cancel' : 'Cancel (Esc)'}</button></div>;
   if (area && !s.viewMode) return <div className="mode-pill" data-testid="area-pill"><BoxSelect size={14} /><span className="pill-text">Drag across nodes to select them</span><button className="btn outline" onClick={actions.toggleAreaSelect}>Cancel</button></div>;
   if (s.viewMode) return <div className="mode-pill" data-testid="view-pill"><Eye size={14} /><span className="pill-text">View mode — read-only</span><button className="btn outline" onClick={actions.toggleViewMode} data-testid="exit-view">{touch ? 'Edit' : 'Edit (Alt+R)'}</button></div>;
   if (s.zenMode) return <div className="mode-pill" data-testid="zen-pill"><Minimize2 size={14} /><span className="pill-text">Zen mode</span><button className="btn outline" onClick={actions.toggleZen} data-testid="exit-zen">{touch ? 'Exit' : 'Exit (Alt+Z)'}</button></div>;
@@ -201,7 +210,7 @@ export function HelpModal() {
     ['Copy / cut / paste', '⌘C / ⌘X / ⌘V'], ['Duplicate', '⌘D'], ['Select all', '⌘A'], ['Frame (group) selection', '⌘G'],
     ['Connect selected in order', 'C'], ['New topic / sticky / text / frame (click to place; beside the selection if any)', 'N / S / T / F'], ['Place at view centre / cancel placing', 'Enter / Esc'], ['Select / hand tool', 'V / H'], ['Pan', 'Scroll, Space + drag, middle-drag'],
     ['Zoom', '⌘ + scroll, pinch, ⌘+ / ⌘-'], ['Fit to screen / selection', '⇧1 / ⇧2'], ['Search', '⌘F'], ['This help', '?'],
-    ['Rectangle / diamond / ellipse', 'R / D / O'], ['Pen (freehand)', 'P, Esc to finish'], ['Zen mode', 'Alt+Z'], ['View (read-only) mode', 'Alt+R'],
+    ['Rectangle / decision / ellipse', 'R / D / O'], ['Pen (freehand)', 'P, Esc to finish'], ['Zen mode', 'Alt+Z'], ['View (read-only) mode', 'Alt+R'],
   ];
   return (
     <div className="modal-backdrop" onClick={() => set({ helpOpen: false })}>

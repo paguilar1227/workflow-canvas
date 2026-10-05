@@ -9,11 +9,11 @@ export { expect };
 
 export interface WNode {
   id: string; kind: string; title: string; x: number; y: number; width: number; height: number;
-  subtitle?: string; notes?: string; badge?: string; icon?: string; shape?: string; color?: string | null;
+  subtitle?: string; notes?: string; badge?: string; icon?: string; shape?: string; role?: string | null; color?: string | null;
   parentId?: string | null; frameId?: string | null; collapsed?: boolean; tags?: string[]; link?: string;
   status?: string | null; priority?: number; points?: [number, number][];
 }
-export interface WEdge { id: string; source: string; target: string; label?: string; style: string; arrow: string; routing: string; animated?: boolean; color?: string | null }
+export interface WEdge { id: string; source: string; target: string; sourceSide?: string | null; targetSide?: string | null; label?: string; style: string; arrow: string; routing: string; animated?: boolean; color?: string | null }
 export interface WDoc { id: string; title: string; nodes: WNode[]; edges: WEdge[]; settings: { autoArrange: boolean; treeLayout: string } }
 export interface WState {
   doc: WDoc | null; docId: string | null; connected: boolean; pending: number;

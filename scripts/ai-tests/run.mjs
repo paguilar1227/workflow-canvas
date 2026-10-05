@@ -11,7 +11,7 @@
 // batch's checks would see); its watcher tab and video start only when it starts.
 //
 //   node scripts/ai-tests/run.mjs [--base http://localhost:8790] [--out <dir>] [--only A,C] [--timeout-min 25] [--headed]
-//                                 [--container wfc-ai-test] [--expect-tools 35]
+//                                 [--container wfc-ai-test] [--expect-tools 36]
 //                                 [--fallback-base http://127.0.0.1:8799] [--fallback-container wfc-ai-test-nomount]
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -33,8 +33,8 @@ const SETTLE_MS = 400; // the web client animates view changes for 350 ms (src/w
 const REASONING = 'medium';
 const MCP_NAME = 'workflow_canvas';
 const BASELINE_THEME = 'neon-flow';
-const REQUIRED_AI_TOOLS = ['add_nodes', 'update_nodes', 'create_diagram', 'save_to_file'];
-const EXPECTED_TOOL_COUNT = Number(args['expect-tools'] ?? 35);
+const REQUIRED_AI_TOOLS = ['add_nodes', 'update_nodes', 'create_diagram', 'save_to_file', 'describe_logic'];
+const EXPECTED_TOOL_COUNT = Number(args['expect-tools'] ?? 36);
 const CONTAINER = args.container ? String(args.container) : null;
 // A second server with no shared folder (like a hosted preview), for scenarios that need one.
 const FALLBACK_BASE = args['fallback-base'] ? String(args['fallback-base']).replace(/\/$/, '') : null;
@@ -471,12 +471,14 @@ async function runScenario(sc, { t0, readOnly, serverTools }) {
   await sc.shots;
   await sleep(SETTLE_MS);
   if (sc.collect) {
-    try { Object.assign(sc.data, await sc.collect({ ...person, log: (line) => log('HARNESS: ' + line), calls: sc.calls })); } catch (e) { log('! harness collection failed: ' + e.message); sc.data.collectError = String(e.stack ?? e); }
+    try { Object.assign(sc.data, await sc.collect({ ...person, log: (line) => log('HARNESS: ' + line), calls: sc.calls, finalMessages: sc.finalMessages })); } catch (e) { log('! harness collection failed: ' + e.message); sc.data.collectError = String(e.stack ?? e); }
   }
   // Files the server wrote for the AI outside this scenario's evidence folder (save_to_file with a path the AI chose) are moved into
   // <evidence>/ai-saved-elsewhere/ so test runs leave nothing behind in the shared folder. Only files created during this scenario are moved.
   sc.data.relocated = [];
-  const savedFiles = [...new Set(sc.calls.filter((c) => c.tool === 'save_to_file' && c.ok && c.resultJson?.ok === true && typeof c.resultJson?.file === 'string').map((c) => path.resolve(c.resultJson.file)))];
+  // When the person's browser saved too, the reply's file is their picked file name and the server's own copy is alsoSaved.
+  const savedFiles = [...new Set(sc.calls.filter((c) => c.tool === 'save_to_file' && c.ok && c.resultJson?.ok === true)
+    .flatMap((c) => [c.resultJson.file, c.resultJson.alsoSaved]).filter((f) => typeof f === 'string' && path.isAbsolute(f)).map((f) => path.resolve(f)))];
   for (const f of savedFiles.filter((x) => !x.startsWith(sc.dir + path.sep))) {
     const st = fs.existsSync(f) ? fs.statSync(f) : null;
     if (!st || st.birthtimeMs < started.getTime()) { sc.data.relocated.push({ from: f, moved: false, why: st ? 'existed before the scenario started' : 'missing' }); log('HARNESS: left ' + f + ' in place (' + (st ? 'existed before the scenario started' : 'missing') + ')'); continue; }

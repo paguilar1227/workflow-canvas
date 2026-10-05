@@ -1,4 +1,4 @@
-import { memo, type CSSProperties } from 'react';
+import { memo, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath, getStraightPath, Position, useInternalNode, ViewportPortal, type EdgeProps } from '@xyflow/react';
 import type { CanvasEdge, Side } from '../../shared/types';
 import { COLOR_NAMES } from '../../shared/types';
@@ -30,6 +30,22 @@ function anchor(r: Rect, side: Side) {
 
 function shift(p: { x: number; y: number }, side: Side, offset: number) {
   return side === 'left' || side === 'right' ? { x: p.x, y: p.y + offset } : { x: p.x + offset, y: p.y };
+}
+
+/**
+ * Where to put a bezier connector's label: the point nearest the middle of the curve whose label box (half-size
+ * \`half\`) stays clear of both end nodes, so a wire curving into a node's port never hides its label under the node.
+ */
+export function clearLabelPoint(path: string, rects: Rect[], half: { w: number; h: number }, middle: { x: number; y: number }) {
+  const n = path.match(/-?\d*\.?\d+(?:e-?\d+)?/g)?.map(Number);
+  if (!n || n.length !== 8) return middle;
+  const at = (t: number) => {
+    const u = 1 - t, a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t;
+    return { x: a * n[0] + b * n[2] + c * n[4] + d * n[6], y: a * n[1] + b * n[3] + c * n[5] + d * n[7] };
+  };
+  const clear = (p: { x: number; y: number }) => rects.every((r) => p.x + half.w <= r.x || p.x - half.w >= r.x + r.w || p.y + half.h <= r.y || p.y - half.h >= r.y + r.h);
+  for (let i = 0; i <= 50; i++) for (const t of i ? [0.5 - i / 100, 0.5 + i / 100] : [0.5]) { const p = at(t); if (clear(p)) return p; }
+  return middle;
 }
 
 /** A point a fraction of the way along one side of a node (0.5 is the side's middle). */
@@ -93,6 +109,12 @@ export const SmartEdge = memo(function SmartEdge({ id, source, target, data, sel
   const sketch = useSketch();
   const neon = useNeon();
   const born = useApp((st) => !!st.newEdges[id]);
+  const labelRef = useRef<HTMLDivElement>(null);
+  const [labelHalf, setLabelHalf] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = labelRef.current;
+    if (el && (el.offsetWidth / 2 !== labelHalf.w || el.offsetHeight / 2 !== labelHalf.h)) setLabelHalf({ w: el.offsetWidth / 2, h: el.offsetHeight / 2 });
+  });
   if (!s || !t) return null;
   const [as, at] = autoSides(s, t);
   const ss = (e.sourceSide as Side) || as;
@@ -101,9 +123,10 @@ export const SmartEdge = memo(function SmartEdge({ id, source, target, data, sel
   const b = neon && slot ? alongSide(t, ts, slot.t) : shift(anchor(t, ts), ts, offset);
   const params = { sourceX: a.x, sourceY: a.y, sourcePosition: POS[ss], targetX: b.x, targetY: b.y, targetPosition: POS[ts] };
   const routing = neon && e.routing === 'smooth' ? 'bezier' : e.routing;
-  const [path, lx, ly] = routing === 'bezier' ? getBezierPath(params)
+  const [path, mx, my] = routing === 'bezier' ? getBezierPath(params)
     : routing === 'straight' ? getStraightPath(params)
     : getSmoothStepPath({ ...params, borderRadius: routing === 'step' ? 0 : 10, offset: 18 });
+  const { x: lx, y: ly } = routing === 'bezier' && (e.label || editing) ? clearLabelPoint(path, [s, t], labelHalf, { x: mx, y: my }) : { x: mx, y: my };
   const cls = ['wfc-edge-path', selected ? 'selected' : '', e.animated ? 'animated' : e.style !== 'solid' ? e.style : '', sketch ? 'sk-base' : '', neon ? 'neon' : '', neon && born ? 'born' : ''].join(' ');
   const colorName = neon && wire ? wire : e.color;
   const color = colorName && colorName !== 'default' ? 'var(--c-' + colorName + ')' : undefined;
@@ -133,6 +156,7 @@ export const SmartEdge = memo(function SmartEdge({ id, source, target, data, sel
       {e.label || editing ? (
         <EdgeLabelRenderer>
           <div
+            ref={labelRef}
             className={'wfc-edge-label nodrag nopan' + (selected ? ' selected' : '')}
             style={{ left: lx, top: ly }}
             data-testid={'edge-label-' + id}

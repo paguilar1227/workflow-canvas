@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "workflow-canvas": {
+      "type": "local",
+      "command": "bash",
+      "args": [
+        "${PLUGIN_ROOT}/skills/workflow-canvas/scripts/canvas-mcp.sh"
+      ],
+      "tools": [
+        "*"
+      ]
+    }
+  }
+}

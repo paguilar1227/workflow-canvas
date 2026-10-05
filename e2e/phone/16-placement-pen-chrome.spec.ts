@@ -157,8 +157,11 @@ test('place elements where I click, draw precisely, and keep the chrome tidy', a
     const last = toolbar.locator('button').last();
     const lb = await app.box(last);
     expect(lb.x + lb.width <= at320.vw && lb.x >= 0, 'the last tool is reachable on screen').toBe(true);
+    await expect(last, 'the last tool is Logic').toHaveAttribute('data-testid', 'add-logic');
     await phone.tap(last);
-    await expect(pill, 'the last tool (Text) arms placement').toContainText('Tap to place');
+    await expect(page.getByTestId('add-logic-options'), 'tapping Logic opens its sheet').toBeVisible();
+    await phone.tap(page.getByTestId('role-start'));
+    await expect(pill, 'picking Start from the last tool arms placement').toContainText('Tap to place');
     await phone.ergonomics('320px phone');
     await ev.snap('toolbar-scrolled-at-320');
     await phone.tap(pill.getByRole('button', { name: 'Cancel' }));

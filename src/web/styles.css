@@ -246,6 +246,22 @@ input, textarea, select { font: inherit; color: var(--text); }
 .wfc-marker.st-doing { color: var(--c-amber); border-color: color-mix(in srgb, var(--c-amber) 50%, var(--panel-border)); }
 .wfc-marker.st-blocked { color: var(--c-red); border-color: color-mix(in srgb, var(--c-red) 50%, var(--panel-border)); }
 .wfc-marker.st-todo { color: var(--text-2); }
+.wfc-node.shape-diamond:is(.svg-shape, .sketch) > .wfc-markers { left: 25%; top: 25%; transform: translate(-50%, -50%); }
+.wfc-node.shape-circle:is(.svg-shape, .sketch) > .wfc-markers { left: 14.6%; top: 14.6%; transform: translate(-50%, -50%); }
+.wfc-marker.role { padding: 0; width: 18px; color: var(--rc, var(--text-2)); border-color: color-mix(in srgb, var(--rc, var(--text-3)) 55%, var(--panel-border)); }
+.wfc-marker.role-start { --rc: var(--c-green); }
+.wfc-marker.role-end { --rc: var(--c-red); }
+.wfc-marker.role-decision { --rc: var(--c-amber); }
+.wfc-marker.role-parallel { --rc: var(--c-purple); }
+.wfc-marker.role-wait { --rc: var(--c-teal); }
+.wfc-marker.role-data, .wfc-marker.role-store { --rc: var(--c-blue); }
+.wfc-marker.role-subprocess { --rc: var(--c-pink); }
+.wfc-marker.role-external { --rc: var(--c-gray); }
+.wfc-node.role-end:not(.svg-shape) { border-width: 3px; }
+.wfc-node.role-end .wfc-shape-svg .fill { stroke-width: 3; }
+.wfc-node.role-external:not(.svg-shape) { border-style: dashed; }
+.wfc-node.role-external .wfc-shape-svg .fill { stroke-dasharray: 6 4; }
+.wfc-node.role-subprocess:not(.svg-shape)::before { content: ''; position: absolute; inset: 4px; border: 1px solid var(--node-border); border-radius: inherit; pointer-events: none; }
 .wfc-indicators { position: absolute !important; bottom: 4px; right: 8px; display: flex; gap: 4px; color: var(--text-3); }
 .wfc-indicators a { color: var(--text-3); display: inline-flex; }
 .wfc-indicators a:hover { color: var(--selection); }

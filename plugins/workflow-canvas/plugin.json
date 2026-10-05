@@ -1,0 +1,21 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "workflow-canvas",
+  "version": "0.1.0",
+  "description": "Infinite, editable canvas for plans, architectures, workflows, codebase maps and mind maps, shared live between you and your coding agent: 36 MCP tools (including describe_logic for reading a flow back), plus a skill that knows when to use it and starts the canvas if it is not running.",
+  "author": {
+    "name": "Pablo Aguilar",
+    "url": "https://github.com/paguilar1227"
+  },
+  "homepage": "https://github.com/paguilar1227/workflow-canvas",
+  "repository": "https://github.com/paguilar1227/workflow-canvas",
+  "keywords": [
+    "canvas",
+    "diagram",
+    "mind-map",
+    "workflow",
+    "architecture",
+    "mcp",
+    "excalidraw"
+  ]
+}

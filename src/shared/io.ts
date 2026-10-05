@@ -47,7 +47,7 @@ export function exportMarkdown(doc: CanvasDocument): string {
 
 const SHAPE_TO_MERMAID: Record<string, [string, string]> = {
   card: ['["', '"]'], rounded: ['("', '")'], rectangle: ['["', '"]'], pill: ['(["', '"])'], diamond: ['{"', '"}'],
-  circle: ['(("', '"))'], hexagon: ['{{"', '"}}'], cylinder: ['[("', '")]'],
+  circle: ['(("', '"))'], hexagon: ['{{"', '"}}'], cylinder: ['[("', '")]'], parallelogram: ['[/"', '"/]'],
 };
 
 export function exportMermaid(doc: CanvasDocument, direction = 'LR'): string {
@@ -105,7 +105,7 @@ export interface MermaidImport { direction: 'LR' | 'TB' | 'RL' | 'BT'; nodes: No
 
 const OPENERS: [string, string, NodeShape][] = [
   ['(((', ')))', 'circle'], ['((', '))', 'circle'], ['([', '])', 'pill'], ['[(', ')]', 'cylinder'], ['[[', ']]', 'rectangle'],
-  ['{{', '}}', 'hexagon'], ['[/', '/]', 'rectangle'], ['[\\', '\\]', 'rectangle'], ['[', ']', 'rectangle'], ['(', ')', 'rounded'], ['{', '}', 'diamond'], ['>', ']', 'rectangle'],
+  ['{{', '}}', 'hexagon'], ['[/', '/]', 'parallelogram'], ['[\\', '\\]', 'parallelogram'], ['[', ']', 'rectangle'], ['(', ')', 'rounded'], ['{', '}', 'diamond'], ['>', ']', 'rectangle'],
 ];
 
 export function importMermaid(text: string, idPrefix: string): MermaidImport {

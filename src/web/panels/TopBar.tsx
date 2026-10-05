@@ -191,6 +191,7 @@ function FileItems() {
       <MenuItem testId="export-png" onClick={() => actions.exportAs('png')}>PNG image</MenuItem>
       <MenuItem testId="export-svg" onClick={() => actions.exportAs('svg')}>SVG image</MenuItem>
       <MenuItem testId="export-markdown" onClick={() => actions.exportAs('markdown')}>Markdown outline</MenuItem>
+      <MenuItem testId="export-logic" onClick={() => actions.exportAs('logic')}>Logic description (.md)</MenuItem>
       <MenuItem testId="export-mermaid" onClick={() => actions.exportAs('mermaid')}>Mermaid flowchart</MenuItem>
       <MenuItem testId="export-excalidraw" onClick={() => actions.exportAs('excalidraw')}>Excalidraw (.excalidraw)</MenuItem>
       <MenuItem testId="export-json" onClick={() => actions.exportAs('json')}>JSON</MenuItem>

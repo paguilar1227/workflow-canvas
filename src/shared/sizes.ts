@@ -10,6 +10,7 @@ export function defaultSize(kind: NodeKind, shape: NodeShape | undefined, isRoot
     case 'circle': return { width: 128, height: 128 };
     case 'hexagon': return { width: 200, height: 88 };
     case 'cylinder': return { width: 180, height: 104 };
+    case 'parallelogram': return { width: 200, height: 72 };
     case 'pill': return isRoot ? { width: 260, height: 72 } : { width: 200, height: 52 };
     case 'rounded':
     case 'rectangle': return { width: 220, height: 64 };

@@ -105,12 +105,14 @@ const tabFileState = (tab) => tab.evaluate(() => {
 });
 const plainTabsOk = (tabs, docId) => Array.isArray(tabs) && tabs.length === F_EXTRA_TABS && tabs.every((t) => t.doc === docId && t.file === 'none' && t.name === null);
 
-/** Page init script: back the browser's save dialog with a real file in the origin-private file system (OPFS). */
+/** Page init script: back the browser's save dialog with a real file in the origin-private file system (OPFS). The person types
+ *  their own name in the dialog (not the suggested document title), so the file they picked can be told apart from a server copy,
+ *  which the server names after the title. */
 function opfsSavePicker() {
   window.__wfcPicked = [];
-  window.showSaveFilePicker = async (opts = {}) => {
+  window.showSaveFilePicker = async () => {
     const root = await navigator.storage.getDirectory();
-    const handle = await root.getFileHandle(opts.suggestedName || 'canvas.excalidraw', { create: true });
+    const handle = await root.getFileHandle('my-release-checklist.excalidraw', { create: true });
     window.__wfcPicked.push(handle.name);
     return handle;
   };
@@ -487,6 +489,224 @@ export function judgeBursts(doc, log, calls) {
 }
 
 
+// ---------- J and K: topic roles and describe_logic ----------
+const { describeLogic } = await tsImport('../../src/shared/logic.ts', import.meta.url);
+const J = { start: 'Refund requested', ask: 'Ask for the receipt', declined: 'Refund declined', paid: 'Refund paid', review: 'Review the request', receipt: 'Receipt attached?',
+  days: 'Within 30 days?', amount: 'Check the amount', manager: 'Manager approval', pay: 'Pay the refund', db: 'Orders database', psp: 'Payment provider' };
+const J_LANES = ['Customer', 'Support', 'Finance'];
+const J_LANE = { [J.start]: 'Customer', [J.ask]: 'Customer', [J.declined]: 'Customer', [J.paid]: 'Customer', [J.review]: 'Support', [J.receipt]: 'Support', [J.days]: 'Support',
+  [J.amount]: 'Finance', [J.manager]: 'Finance', [J.pay]: 'Finance' };
+const J_ROLE = { [J.start]: 'start', [J.declined]: 'end', [J.paid]: 'end', [J.receipt]: 'decision', [J.days]: 'decision', [J.db]: 'store', [J.psp]: 'external' };
+// Control flow [from, to, label]: a RegExp the label must match, null = the deliberately unlabelled branch (labelled "No" in turn 2), absent = any.
+const J_FLOW = [[J.start, J.review], [J.review, J.receipt], [J.receipt, J.days, /^yes$/i], [J.receipt, J.ask, /^no$/i], [J.ask, J.review], [J.days, J.amount, /^yes$/i], [J.days, J.declined, null],
+  [J.amount, J.pay, /^up to \$?500$/i], [J.amount, J.manager, /^over \$?500$/i], [J.manager, J.pay], [J.pay, J.paid]];
+const J_DATA = [[J.db, J.review], [J.pay, J.db], [J.pay, J.psp]];
+const J_MAIN = [J.start, J.review, J.receipt, J.days, J.amount, J.pay, J.paid];
+const J_FLOW_TITLES = Object.values(J).filter((t) => J_LANE[t]);
+const jId = (d, title) => hNode(d, title)?.id ?? null;
+const jWantRole = (t, phase) => (phase === 2 && t === J.amount ? 'decision' : J_ROLE[t] ?? null);
+const jWantLabel = (lab, phase) => (lab === null && phase === 2 ? /^no$/i : lab);
+const jLabelOk = (want, label) => (want === undefined ? true : want === null ? !String(label ?? '').trim() : want.test(String(label ?? '').trim()));
+const jIssueLines = (md) => (String(md ?? '').split('\n## Issues\n')[1] ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
+/** The diagram against the person's description: every box once with its role and lane, every connector once in the right direction. */
+export function jBuilt(d, phase) {
+  const frames = (d?.nodes ?? []).filter((n) => n.kind === 'frame');
+  const boxes = Object.values(J).map((t) => {
+    const all = (d?.nodes ?? []).filter((n) => n.kind === 'topic' && hNorm(n.title) === hNorm(t));
+    const n = all[0], lane = frames.find((f) => f.id === n?.frameId)?.title ?? null;
+    return { title: t, count: all.length, role: n?.role ?? null, wantRole: jWantRole(t, phase), shape: n?.shape ?? null, lane, wantLane: J_LANE[t] ?? null,
+      ok: all.length === 1 && (n.role ?? null) === jWantRole(t, phase) && (!J_LANE[t] || hNorm(lane) === hNorm(J_LANE[t])) };
+  });
+  const edge = ([a, b, lab]) => {
+    const es = (d?.edges ?? []).filter((e) => e.source === jId(d, a) && e.target === jId(d, b));
+    return { from: a, to: b, count: es.length, id: es[0]?.id ?? null, label: es[0]?.label ?? null, ok: es.length === 1 && jLabelOk(jWantLabel(lab, phase), es[0].label) };
+  };
+  const links = [...J_FLOW, ...J_DATA].map(edge);
+  const extra = (d?.nodes ?? []).filter((n) => n.kind === 'topic' && !Object.values(J).some((t) => hNorm(t) === hNorm(n.title))).map((n) => n.title);
+  const lanes = J_LANES.map((l) => frames.filter((f) => hNorm(f.title) === hNorm(l)).length);
+  return { ok: boxes.every((b) => b.ok) && links.every((l) => l.ok) && lanes.every((n) => n === 1), lanes: Object.fromEntries(J_LANES.map((l, i) => [l, lanes[i]])), wrongBoxes: boxes.filter((b) => !b.ok), wrongLinks: links.filter((l) => !l.ok),
+    extraTopics: extra, totals: { topics: (d?.nodes ?? []).filter((n) => n.kind === 'topic').length, edges: d?.edges?.length ?? 0 } };
+}
+/** describe_logic (json report + markdown) against what the described flow means. */
+export function jLogic(d, r, md, phase) {
+  md = String(md ?? '');
+  const id = (t) => jId(d, t), T = (t) => titleOf(d, id(t)) ?? t;
+  const step = (t) => r?.steps?.find((s) => s.id === id(t)) ?? null;
+  const no = (t) => step(t)?.step ?? null;
+  const steps = r?.steps ?? [];
+  const roles = J_FLOW_TITLES.map((t) => ({ title: t, role: step(t)?.role ?? null, want: jWantRole(t, phase) ?? 'step' })).filter((x) => x.role !== x.want);
+  const order = { firstStep: steps[0] ? steps[0].title + ' (' + steps[0].role + ')' : null, entries: (r?.entries ?? []).map((e) => titleOf(d, e)), mainPath: J_MAIN.map((t) => t + ' = step ' + no(t)), numbered: steps.length, expected: J_FLOW_TITLES.length, wrongRoles: roles };
+  order.ok = steps[0]?.id === id(J.start) && steps[0]?.role === 'start' && (r?.entries ?? []).length === 1 && r.entries[0] === id(J.start)
+    && J_MAIN.every((t, i) => no(t) !== null && (i === 0 || no(t) > no(J_MAIN[i - 1]))) && J_FLOW_TITLES.every((t) => no(t) !== null) && steps.length === J_FLOW_TITLES.length && roles.length === 0;
+  const branches = J_FLOW.map(([a, b, lab]) => {
+    const l = step(a)?.next?.find((x) => x.to === id(b));
+    return { from: a, to: b, label: l?.label ?? null, ok: !!l && jLabelOk(jWantLabel(lab, phase), l.label) };
+  });
+  const extraNext = steps.flatMap((s) => s.next.filter((l) => !J_FLOW.some(([a, b]) => s.id === id(a) && l.to === id(b))).map((l) => titleOf(d, l.from) + ' -> ' + titleOf(d, l.to)));
+  const decisionMd = phase === 2 ? ['**' + T(J.amount) + '** · decision'] : [];
+  const flow = { ok: branches.every((x) => x.ok) && extraNext.length === 0 && decisionMd.every((s) => md.includes(s)), wrong: branches.filter((x) => !x.ok), extraNext, decisionMd, labels: branches.map((x) => x.from + ' -> ' + x.to + ': ' + (x.label ?? '(none)')) };
+  const loopMd = 'loops back to step ' + no(J.review) + ' (**' + T(J.review) + '**)';
+  const loops = (r?.loops ?? []).map((x) => ({ from: titleOf(d, x.from), to: titleOf(d, x.to), exits: x.exits }));
+  const loop = { ok: loops.length === 1 && r.loops[0].from === id(J.ask) && r.loops[0].to === id(J.review) && r.loops[0].exits === true && md.includes(loopMd), loops, markdown: loopMd, inMarkdown: md.includes(loopMd) };
+  const frames = (d?.nodes ?? []).filter((n) => n.kind === 'frame');
+  const laneMd = J_LANES.map((l) => '- **' + (frames.find((f) => hNorm(f.title) === hNorm(l))?.title ?? l) + '**: steps ' + J_FLOW_TITLES.filter((t) => J_LANE[t] === l).map(no).sort((a, b) => a - b).join(', '));
+  const wrongLane = J_FLOW_TITLES.filter((t) => hNorm(step(t)?.lane) !== hNorm(J_LANE[t])).map((t) => ({ title: t, lane: step(t)?.lane ?? null, want: J_LANE[t] }));
+  const lanes = { ok: wrongLane.length === 0 && laneMd.every((s) => md.includes(s)), wrongLane, markdown: laneMd, inMarkdown: laneMd.map((s) => md.includes(s)) };
+  const access = (r?.dataAccess ?? []).map((x) => titleOf(d, x.nodeId) + ' ' + x.access + ' ' + titleOf(d, x.storeId)).sort();
+  const talks = (r?.interactions ?? []).map((x) => titleOf(d, x.nodeId) + ' ' + x.direction + ' ' + titleOf(d, x.externalId)).sort();
+  const wantAccess = [T(J.pay) + ' writes ' + T(J.db), T(J.review) + ' reads ' + T(J.db)].sort(), wantTalks = [T(J.pay) + ' sends to ' + T(J.psp)];
+  const dataMd = ['step ' + no(J.review) + ' (**' + T(J.review) + '**) reads it', 'step ' + no(J.pay) + ' (**' + T(J.pay) + '**) writes it', 'step ' + no(J.pay) + ' (**' + T(J.pay) + '**) sends to it'];
+  const data = { ok: JSON.stringify(access) === JSON.stringify(wantAccess) && JSON.stringify(talks) === JSON.stringify(wantTalks) && dataMd.every((s) => md.includes(s)), access, interactions: talks, markdown: dataMd, inMarkdown: dataMd.map((s) => md.includes(s)) };
+  const planted = (d?.edges ?? []).find((e) => e.source === id(J.days) && e.target === id(J.declined))?.id ?? null;
+  const lines = jIssueLines(md), list = r?.issues ?? [];
+  const issues = { json: list, markdown: lines, planted };
+  issues.ok = phase === 1
+    ? list.length === 1 && !!planted && list[0].edgeId === planted && list[0].nodeId === id(J.days) && /no condition label/.test(list[0].message) && lines.length === 1 && lines[0] === '- ' + list[0].message
+    : list.length === 0 && lines.length === 1 && lines[0] === '- None found.';
+  return { order, flow, loop, lanes, data, issues };
+}
+/** What the harness reads back at a point between turns: the server document, describe_logic in both formats and export_document 'logic'. */
+export async function jSnapshot(p, tag) {
+  const doc = await p.http('/api/documents/' + encodeURIComponent(p.docId));
+  const md = (await p.tool('describe_logic', { documentId: p.docId })).text ?? '';
+  const json = (await p.tool('describe_logic', { documentId: p.docId, format: 'json' })).json ?? null;
+  const exported = (await p.tool('export_document', { documentId: p.docId, format: 'logic' })).text ?? '';
+  fs.writeFileSync(path.join(p.dir, 'logic-' + tag + '.md'), md);
+  fs.writeFileSync(path.join(p.dir, 'logic-' + tag + '.json'), JSON.stringify(json, null, 1));
+  p.log('describe_logic ' + tag + ': ' + (md.match(/\*\*Summary:\*\*[^\n]*/)?.[0] ?? '(no summary)') + ' · export_document logic ' + (exported === md ? 'equals' : 'DIFFERS from') + ' it');
+  return { doc, md, json, exportSame: exported === md, ...(exported === md ? {} : { exported }) };
+}
+/** Server behaviour of roles on a scratch document: a role without a shape picks the role's shape, an explicit shape wins. */
+export async function jRoleShapes(p) {
+  const s = (await p.tool('create_document', { title: 'AI test J · role/shape probe', open: false })).json.documentId;
+  await p.tool('add_nodes', { documentId: s, nodes: [{ id: 'plain', title: 'Plain step' }, { id: 'plain-2', title: 'Plain step 2' }, { id: 'data', title: 'Form', role: 'data' }, { id: 'store', title: 'DB', role: 'store' }, { id: 'given', title: 'Shape given', role: 'decision', shape: 'hexagon' }] });
+  const created = (await p.http('/api/documents/' + s)).nodes.map((n) => ({ id: n.id, role: n.role ?? null, shape: n.shape ?? null }));
+  await p.tool('update_nodes', { documentId: s, updates: [{ id: 'plain', role: 'decision' }, { id: 'plain-2', role: 'decision', shape: 'circle' }] });
+  const updated = (await p.http('/api/documents/' + s)).nodes.map((n) => ({ id: n.id, role: n.role ?? null, shape: n.shape ?? null }));
+  await p.tool('delete_document', { documentId: s });
+  const at = (l, id) => l.find((n) => n.id === id) ?? {};
+  const ok = at(created, 'plain').shape === 'card' && at(created, 'data').shape === 'parallelogram' && at(created, 'store').shape === 'cylinder' && at(created, 'given').shape === 'hexagon'
+    && at(updated, 'plain').role === 'decision' && at(updated, 'plain').shape === 'diamond' && at(updated, 'plain-2').shape === 'circle';
+  return { ok, created, updated };
+}
+
+// K: a "human-built" design made through the same tool commands the UI's actions use (REST, origin user): no description, no notes.
+const K_LANES = { hm: 'Hiring manager', it: 'IT service desk', proc: 'Procurement' };
+export async function kBuild(tool, docId) {
+  const W = 1900;
+  await tool('add_nodes', { documentId: docId, nodes: [
+    { id: 'k-lane-hm', kind: 'frame', title: K_LANES.hm, x: 0, y: 0, width: W, height: 200 },
+    { id: 'k-lane-it', kind: 'frame', title: K_LANES.it, x: 0, y: 240, width: W, height: 200 },
+    { id: 'k-lane-proc', kind: 'frame', title: K_LANES.proc, x: 0, y: 480, width: W, height: 300 },
+  ] });
+  await tool('add_nodes', { documentId: docId, nodes: [
+    { id: 'k-start', title: 'Offer accepted', role: 'start', frameId: 'k-lane-hm', x: 40, y: 70 },
+    { id: 'k-request', title: 'Request a laptop', frameId: 'k-lane-hm', x: 260, y: 60 },
+    { id: 'k-check', title: 'Check stock', frameId: 'k-lane-it', x: 260, y: 300 },
+    { id: 'k-instock', title: 'In stock?', shape: 'diamond', frameId: 'k-lane-it', x: 560, y: 290 },
+    { id: 'k-cost', title: 'Cost over $2,000?', role: 'decision', frameId: 'k-lane-proc', x: 560, y: 530 },
+    { id: 'k-approve', title: 'Finance director approval', frameId: 'k-lane-proc', x: 820, y: 520 },
+    { id: 'k-order', title: 'Order from vendor', frameId: 'k-lane-proc', x: 1080, y: 530 },
+    { id: 'k-delivered', title: 'Delivered within 10 days?', role: 'decision', frameId: 'k-lane-proc', x: 1340, y: 520 },
+    { id: 'k-chase', title: 'Chase the vendor', frameId: 'k-lane-proc', x: 1340, y: 680 },
+    { id: 'k-image', title: 'Image the laptop', frameId: 'k-lane-it', x: 1600, y: 300 },
+    { id: 'k-end', title: 'Laptop ready on day one', role: 'end', frameId: 'k-lane-hm', x: 1600, y: 70 },
+    { id: 'k-inventory', title: 'Asset inventory', role: 'store', x: 260, y: 840 },
+    { id: 'k-portal', title: 'Vendor ordering portal', role: 'external', x: 1080, y: 840 },
+    { id: 'k-question', kind: 'sticky', title: 'Open question: what happens if the finance director rejects the purchase?', frameId: 'k-lane-proc', x: 820, y: 640 },
+  ] });
+  const e = (source, target, label) => ({ source, target, ...(label ? { label } : {}) });
+  await tool('add_edges', { documentId: docId, edges: [
+    e('k-start', 'k-request'), e('k-request', 'k-check'), e('k-check', 'k-instock'),
+    e('k-instock', 'k-image', 'Yes'), e('k-instock', 'k-cost', 'No'),
+    e('k-cost', 'k-approve', 'Over $2,000'), e('k-cost', 'k-order', '$2,000 or less'),
+    e('k-approve', 'k-order', 'Approved'),
+    e('k-order', 'k-delivered'), e('k-delivered', 'k-image', 'Yes'), e('k-delivered', 'k-chase', 'No'), e('k-chase', 'k-delivered'),
+    e('k-image', 'k-end'),
+    e('k-inventory', 'k-check'), e('k-image', 'k-inventory'),
+    e('k-order', 'k-portal', 'Purchase order'),
+  ] });
+}
+const K_SECTIONS = { actors: /actor|stakeholder|participant|\broles?\b/i, trigger: /trigger/i, 'main flow': /main flow|happy path|primary flow|main process|process flow|core flow|\bflow\b/i,
+  'branches/business rules': /branch|business rule|\brules?\b/i, data: /\bdata\b/i, 'external integrations': /external|integration/i, 'open questions': /open question|\bquestions\b/i };
+const K_HEADING = /^\s*(#{1,6}\s+\S.*|(\d+[.)]\s*)?\*\*[^*]+\*\*.*|(\d+[.)]\s*)?__[^_]+__.*)$/;
+const K_ROW = /^\|(?!\s*:?-{2,})\s*([^|]+?)\s*\|/;
+const K_COST = /\$?\s?2,000|\$?\s?2000|\$2k\b|\b2k\b/i;
+const K_DAYS = /\b(10|ten)[ -]?(business |working |calendar )?days?\b/i;
+const K_CHASE = /chase|follow[ -]?(s )?up|escalat|remind|nudge/i;
+// Each item must be backed by BRD lines (a table row, bullet or paragraph line). A rule is [name, ...regexes that must all match one line]; 'all' = each regex matches some line.
+const K_ITEMS = [
+  { key: 'actors', name: 'the three lane owners are named', all: [/hiring manager/i, /IT service desk|service desk|\bIT desk\b/i, /procurement/i] },
+  { key: 'trigger', name: 'trigger: the offer is accepted', rules: [['offer accepted', /\boffer\b/i, /accept/i]] },
+  { key: 'decision-stock', name: 'decision "In stock?" with both conditions', rules: [
+    ['in stock -> image the laptop', /\bin[ -]stock\b|\bavailable\b/i, /imag|set ?up|provision|prepar|configur/i],
+    ['not in stock -> procurement path', /(\bnot|\bno|n['’]t|out of)\s+(currently\s+)?(in[ -])?stock|out[ -]of[ -]stock|unavailable|not available|in stock\?.*\bno\b|\b(no|not|none|nothing)\b[^.;,\n]{0,30}\bin[ -]stock\b|n['’]t\b[^.;,\n]{0,30}\bin[ -]stock\b/i, /order|vendor|procure|purchas|\bbuy|cost|2,?000|2k/i]] },
+  { key: 'decision-cost', name: 'decision "Cost over $2,000?" with both conditions', rules: [
+    ['over $2,000 -> finance director approval', K_COST, /over|above|more than|exceed|greater|>|higher/i, /financ|director|approv/i],
+    ['$2,000 or less -> order directly', K_COST, /or less|or under|\bunder\b|below|at most|up to|less than|≤|<=|not over|n['’]t exceed|not exceed|at or under|otherwise|else|\?\W*no\b/i]] },
+  { key: 'decision-delivery', name: 'decision "Delivered within 10 days?" with both conditions', rules: [
+    ['delivered in 10 days -> image the laptop', K_DAYS, /deliver|arriv|receiv/i, /imag|set ?up|provision|prepar|service desk|\bIT\b|proceed|continue|ready/i],
+    ['not delivered -> chase the vendor', K_CHASE, /vendor|supplier/i, /deliver|arriv|receiv|late|delay|overdue|\b(10|ten)\b/i, /\bnot\b|n['’]t\b|late|delay|overdue|miss|\bno\b|exceed|beyond|after/i]] },
+  { key: 'loop', name: 'the loop: chase the vendor, then check delivery again', rules: [['chase and re-check', K_CHASE, /until|again|repeat|loop|re-?check|re-?evaluat|re-?assess|back to|return|cycle|each time|keep|recurs/i]] },
+  { key: 'store', name: 'data store "Asset inventory" is named', rules: [['Asset inventory', /asset inventory/i]] },
+  { key: 'external', name: 'external system "Vendor ordering portal" is named', rules: [['Vendor ordering portal', /vendor (ordering )?portal/i]] },
+  { key: 'open-question', name: 'the open-question sticky: what if the finance director rejects the purchase', rules: [['finance director rejects', /financ|director/i, /reject|declin|\bden(y|ies|ied|ial)\b|refus|not approv|turn(s|ed)? down|withh/i]] },
+];
+/** Grade a BRD (Markdown) against the K design: every item must be backed by at least one line of the BRD; matching lines are kept as evidence. */
+export function gradeBrd(md) {
+  const lines = String(md ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
+  const plain = lines.map((l) => l.replace(/[*_\x60]/g, ''));
+  const hits = (res) => plain.filter((l) => res.every((re) => re.test(l)));
+  const headings = lines.filter((l) => K_HEADING.test(l)).map((l) => l.replace(/[*_#\x60]/g, '').trim());
+  const rowLabels = lines.map((l) => l.match(K_ROW)?.[1]).filter(Boolean).map((l) => l.replace(/[*_#\x60]/g, '').trim());
+  const sections = Object.fromEntries(Object.entries(K_SECTIONS).map(([k, re]) => [k, [...headings, ...rowLabels].find((h) => re.test(h)) ?? null]));
+  const items = [{ key: 'sections', name: 'has the requested sections (actors, trigger, main flow, branches/business rules, data, external integrations, open questions)', pass: Object.values(sections).every(Boolean), evidence: sections }];
+  for (const it of K_ITEMS) {
+    if (it.all) { const ev = it.all.map((re) => [String(re), plain.find((l) => re.test(l)) ?? null]); items.push({ key: it.key, name: it.name, pass: ev.every(([, l]) => l), evidence: Object.fromEntries(ev) }); continue; }
+    const ev = it.rules.map(([name, ...res]) => [name, hits(res).slice(0, 3)]);
+    items.push({ key: it.key, name: it.name, pass: ev.every(([, h]) => h.length > 0), evidence: Object.fromEntries(ev) });
+  }
+  const words = String(md ?? '').split(/\s+/).filter(Boolean).length;
+  const store = plain.filter((l) => /asset inventory/i.test(l));
+  return { pass: items.every((x) => x.pass), words, items, headings, rowLabels,
+    storeDetail: { read: store.some((l) => /read|check|look ?up|quer|consult|verif/i.test(l)), written: store.some((l) => /writ|updat|record|assign|decrement|reserv|mark|log|register/i.test(l)) } };
+}
+
+/** The design's logic in comparable form: every node (id, kind, title, role, shape, lane) and connector (ends, label). */
+const kDesign = (d) => ({ nodes: (d?.nodes ?? []).map((n) => [n.id, n.kind, n.title, n.role ?? '', n.shape ?? '', n.frameId ?? ''].join('|')).sort(), edges: (d?.edges ?? []).map((e) => [e.source, e.target, e.label ?? ''].join('|')).sort() });
+export const J_NO_PROBLEMS = /\b(no|0|zero)\b[^.\n]{0,30}\b(problems?|issues?|gaps?)\b|\bnone found\b|\b(problems?|issues?)\b[^.\n]{0,20}\bnone\b|\bnothing\b[^.\n]{0,20}\b(left|missing|outstanding|remain\w*|flagged)\b|(isn|aren)['’]t any\b[^.\n]{0,30}\b(problems?|issues?)\b/i;
+export const J_TOLD_UNLABELLED = (m) => /label/i.test(m) && /refund declined|30 days|declin/i.test(m);
+/** Reopen the saved .excalidraw two ways: the shared parser the app's Open uses (read with the shared describeLogic), and the server import into a scratch document. */
+export async function jReopen(p, file, snap) {
+  const r = hRead(file);
+  const topics = (nodes) => (nodes ?? []).filter((n) => n.kind === 'topic');
+  const body = (m) => String(m ?? '').split('\n').slice(1).join('\n');
+  const want = Object.fromEntries(topics(snap?.doc?.nodes).map((n) => [n.id, n.role ?? null]));
+  const app = { parsed: !!r.doc, parseError: r.parseError ?? null, ok: false };
+  if (r.doc && snap?.doc) {
+    const got = Object.fromEntries(topics(r.doc.nodes).map((n) => [n.id, n.role ?? null]));
+    app.rolesDiffer = Object.keys({ ...want, ...got }).filter((id) => want[id] !== got[id]).map((id) => ({ id, title: titleOf(snap.doc, id) ?? null, server: want[id] ?? null, file: got[id] ?? null }));
+    const md = describeLogic({ ...snap.doc, title: r.doc.title ?? snap.doc.title, description: r.doc.description, nodes: r.doc.nodes, edges: r.doc.edges }).markdown;
+    fs.writeFileSync(path.join(p.dir, 'reopened.app.logic.md'), md);
+    app.readingSame = md === snap.md;
+    app.ok = app.rolesDiffer.length === 0 && app.readingSame;
+  }
+  const server = { ok: false };
+  const scratch = (await p.tool('create_document', { title: 'AI test J · reopened file', open: false })).json.documentId;
+  try {
+    await p.tool('import_content', { documentId: scratch, format: 'excalidraw', content: r.text, mode: 'replace' });
+    const d = await p.http('/api/documents/' + encodeURIComponent(scratch));
+    const md = (await p.tool('describe_logic', { documentId: scratch })).text ?? '';
+    fs.writeFileSync(path.join(p.dir, 'reopened.server.logic.md'), md);
+    const a = Object.fromEntries(topics(snap?.doc?.nodes).map((n) => [n.title, n.role ?? null])), b = Object.fromEntries(topics(d.nodes).map((n) => [n.title, n.role ?? null]));
+    server.rolesDiffer = Object.keys({ ...a, ...b }).filter((k) => a[k] !== b[k]).map((k) => ({ title: k, server: a[k] ?? null, reopened: b[k] ?? null }));
+    server.readingSame = body(md) === body(snap?.md);
+    server.ok = server.rolesDiffer.length === 0 && server.readingSame;
+  } catch (e) { server.error = String(e.message ?? e); }
+  await p.tool('delete_document', { documentId: scratch }).catch(() => {});
+  return { app, server };
+}
+
 export const SCENARIOS = [
   {
     id: 'A',
@@ -841,6 +1061,12 @@ export const SCENARIOS = [
       const bad = (race?.results ?? []).map((r, i) => ({ i, r })).filter(({ r }) => r?.ok !== true || r?.ui?.file !== data.picked);
       check('save race: every edit-then-immediate save_to_file returned ok:true and the file has the last edit', !!race && race.results.length === race.edits && bad.length === 0 && race.file === data.picked && race.fileStartNotes === race.lastEdit,
         { edits: race?.edits, ok: race ? race.results.length - bad.length : 0, failures: bad.slice(0, 5), lastEdit: race?.lastEdit, fileStartNotes: race?.fileStartNotes, parseError: race?.parseError, extraTabsDuringRace: data.extraTabsAfterRace ?? null });
+      const replies = [...saves2.map((x) => ({ from: 'AI turn 2', r: x.resultJson })), ...(race?.results ?? []).map((r) => ({ from: 'race', r }))];
+      const offModel = replies.filter(({ r }) => r?.ok !== true || r?.file !== data.picked || typeof r?.savedTo !== 'string');
+      check("save_to_file replies lead with the person's picked file: file = the picked file and savedTo set, for every AI turn-2 save and every race save",
+        !!data.picked && saves2.length > 0 && !!race && race.results.length === race.edits && offModel.length === 0,
+        { picked: data.picked ?? null, replies: replies.length, offModel: offModel.slice(0, 5).map(({ from, r }) => ({ from, ok: r?.ok, file: r?.file, savedTo: r?.savedTo, alsoSaved: r?.alsoSaved, uiFile: r?.ui?.file })),
+          alsoSaved: [...new Set(replies.map(({ r }) => r?.alsoSaved).filter(Boolean))] });
     },
   },
   {
@@ -1186,6 +1412,145 @@ export const SCENARIOS = [
           judged: shot?.file ?? null, wireColours: used, wirePixels: s && Object.fromEntries(NEON.wires.map((u) => [u, { predominant: s.predominant['--c-' + u] ?? 0, blended: s.blend['--c-' + u] ?? 0 }])), absent });
       const r = data.restored;
       check('harness restored the baseline theme at the end (session and live UI)', !!r && r.session === r.baseline && r.ui === r.baseline && r.neon === r.baselineIsNeon, r ?? data.cleanupError ?? null);
+    },
+  },
+  {
+    id: 'J',
+    slug: 'J-logic-roles-describe-logic',
+    title: 'AI draws a refund flow with roles and lanes, checks it with describe_logic, fixes the planted gap and saves it',
+    model: 'gpt-6-sol',
+    environmentNote: "Turn 1: the person describes a refund process in plain words (three lanes, a start, two end points, two decisions, a database, a payment provider, a loop back for a missing receipt), asks to leave one decision branch unlabelled for now and to keep \"Check the amount\" an ordinary step, then asks the AI to check the logic. After each turn and at the end the harness reads describe_logic itself (markdown and json) and export_document format 'logic', saved as logic-after-turn-1, logic-after-turn-2 and logic-final (.md/.json). Turn 2: the person asks to label that branch \"No\", to make \"Check the amount\" a decision and to check again. Turn 3: the AI saves the diagram as an .excalidraw file into the scenario's artifacts/ folder (shared with the server as in H). The harness reopens that file two ways: the shared parser the app's Open uses (documentFromExcalidraw, src/web/files.ts) read with the shared describeLogic (reopened.app.logic.md), and the server import (import_content mode replace into a scratch document, then describe_logic; reopened.server.logic.md; the scratch document is deleted). It also probes the role-to-shape defaults on a scratch document through REST.",
+    async setup(h) {
+      const artifactsDir = path.join(h.dir, 'artifacts');
+      fs.rmSync(artifactsDir, { recursive: true, force: true });
+      fs.mkdirSync(artifactsDir, { recursive: true });
+      for (const f of fs.existsSync(h.dir) ? fs.readdirSync(h.dir) : []) if (/^(logic-.*\.(md|json)|reopened\..*)$/.test(f)) fs.rmSync(path.join(h.dir, f));
+      const r = await h.tool('create_document', { title: 'AI test J · Refund process', open: false });
+      return { docId: r.json.documentId, artifactsDir };
+    },
+    turns: [
+      {
+        prompt: (c) => 'In my Workflow Canvas document ' + c.docId + ' (it is empty), draw our refund process as a flow chart in one go, with three lanes: "Customer", "Support" and "Finance". ' +
+          'It starts when the customer submits "Refund requested". Support does "Review the request", which reads the order from the "Orders database", and then decides "Receipt attached?". ' +
+          'If "No", the customer gets "Ask for the receipt" and the request goes back to "Review the request". If "Yes", Support decides "Within 30 days?". ' +
+          'If "Yes", Finance does "Check the amount": "Up to $500" goes straight to "Pay the refund", "Over $500" goes to "Manager approval" first and then to "Pay the refund". ' +
+          '"Pay the refund" writes the payment into the "Orders database" and sends the money to the "Payment provider", an outside system; then the process ends with "Refund paid" in the customer lane. ' +
+          'If it is not within 30 days, the process ends with "Refund declined" in the customer lane; leave that connector without a label for now, we have not agreed the wording. ' +
+          'Draw the database connectors in the direction the data moves: from the database into "Review the request", and from "Pay the refund" into the database. Put the database and the payment provider outside the lanes. ' +
+          'Mark the start, the end points, the decisions, the database and the payment provider as what they are; everything else, including "Check the amount", is an ordinary step for now. Label the other decision branches exactly as I wrote them. ' +
+          'When it is drawn, check the logic of the diagram and tell me if anything is missing or unclear.',
+      },
+      {
+        async before(p) { return { logic1: await jSnapshot(p, 'after-turn-1') }; },
+        prompt: (c) => 'In my Workflow Canvas document ' + c.docId + ': we agreed the wording, so label the connector from "Within 30 days?" to "Refund declined" "No". ' +
+          'Also, "Check the amount" really is a decision, so make it one. Then check the logic again and tell me whether any problems are left.',
+      },
+      {
+        async before(p) { return { logic2: await jSnapshot(p, 'after-turn-2') }; },
+        prompt: (c) => 'Save the refund flow in my Workflow Canvas document ' + c.docId + " as an .excalidraw file into this session's artifacts folder, " + c.artifactsDir + ', and tell me the full path of the file.',
+      },
+    ],
+    async collect(p) {
+      const logic3 = await jSnapshot(p, 'final');
+      const roleShapes = await jRoleShapes(p);
+      p.log('role/shape probe on a scratch document: ' + JSON.stringify(roleShapes));
+      const files = hFiles(path.join(p.dir, 'artifacts')).map((f) => path.join(p.dir, 'artifacts', f));
+      const target = files.length === 1 ? files[0] : null;
+      const w = target ? await hWaitSynced(p, target) : null;
+      const reopen = target ? await jReopen(p, target, logic3) : null;
+      p.log('artifacts folder holds ' + JSON.stringify(files.map((f) => path.basename(f))) + '; file ' + JSON.stringify(hBrief(w)) + '; reopened ' + JSON.stringify(reopen && { app: reopen.app.ok, server: reopen.server.ok }));
+      return { logic3, roleShapes, artifactsFiles: files, file: target, saved: hBrief(w), savedDoc: w?.f.doc ?? null, reopen, evidenceFiles: ['logic-after-turn-1.md', 'logic-after-turn-2.md', 'logic-final.md', 'artifacts/' + (target ? path.basename(target) : '(missing)'), 'reopened.app.logic.md', 'reopened.server.logic.md'] };
+    },
+    verify(c, check) {
+      const { data } = c;
+      const t = (n) => c.calls.filter((x) => x.turn === n);
+      const empty = { nodes: [], edges: [] };
+      const s1 = data.logic1, s2 = data.logic2, s3 = data.logic3;
+      const d1 = s1?.doc ?? empty, d2 = s2?.doc ?? empty;
+      const cd = t(1).filter((x) => x.tool === 'create_diagram' && x.ok);
+      const cdNodes = cd.flatMap((x) => x.args?.nodes ?? []);
+      check('turn 1: AI built the flow with create_diagram, giving topics roles and using frames as lanes',
+        cd.length > 0 && cdNodes.some((n) => n.role) && cdNodes.some((n) => n.kind === 'frame') && cdNodes.some((n) => n.frameId),
+        { createDiagramCalls: cd.length, rolesInArgs: cdNodes.filter((n) => n.role).map((n) => n.title + ': ' + n.role), framesInArgs: cdNodes.filter((n) => n.kind === 'frame').map((n) => n.title), nodesInALane: cdNodes.filter((n) => n.frameId).length, sequence: t(1).map((x) => x.tool + (x.ok ? '' : ' ✗')) });
+      const b1 = jBuilt(d1, 1);
+      check('turn 1: the diagram is the described flow (every box once with its role and lane, every connector once in the right direction, the "Within 30 days?" to "Refund declined" branch unlabelled)', b1.ok, b1);
+      const L1 = jLogic(d1, s1?.json, s1?.md, 1);
+      check('describe_logic after turn 1: numbered steps start at "Refund requested" and follow the main path in order, with the right roles', L1.order.ok, L1.order);
+      check('describe_logic after turn 1: every branch leads to the right step with its condition label (Yes/No, Up to $500/Over $500)', L1.flow.ok, L1.flow);
+      check('describe_logic after turn 1: one loop, "Ask for the receipt" loops back to "Review the request" (json and markdown)', L1.loop.ok, L1.loop);
+      check('describe_logic after turn 1: lanes Customer, Support and Finance own the right steps (json and markdown)', L1.lanes.ok, L1.lanes);
+      check('describe_logic after turn 1: data and external system ("Review the request" reads "Orders database"; "Pay the refund" writes it and sends to "Payment provider")', L1.data.ok, L1.data);
+      check('describe_logic after turn 1: Issues lists exactly the planted gap (the unlabelled branch from "Within 30 days?"), in json and markdown', L1.issues.ok, L1.issues);
+      const used = [1, 2].map((n) => t(n).filter((x) => x.tool === 'describe_logic' && x.ok).map((x) => x.args?.format ?? 'markdown'));
+      check('AI used describe_logic when asked to check the logic (turn 1 and turn 2)', used.every((u) => u.length > 0), { turn1: used[0], turn2: used[1] });
+      const m1 = c.finalMessages[0] ?? '';
+      check('turn 1: AI told the person about the unlabelled branch', J_TOLD_UNLABELLED(m1), { finalMessage: m1 }, { info: true });
+      const planted = L1.issues.planted;
+      const ue = t(2).filter((x) => x.tool === 'update_edges' && x.ok && !!planted && JSON.stringify(x.args ?? {}).includes(planted));
+      const e2 = d2.edges.find((e) => e.id === planted);
+      check('turn 2: AI labelled the planted connector "No" with update_edges (the same connector, not re-drawn)', !!planted && ue.length > 0 && /^no$/i.test(String(e2?.label ?? '').trim()),
+        { planted, labelAfterTurn2: e2?.label ?? null, updateEdges: ue.map((x) => x.args), sequence: t(2).map((x) => x.tool + (x.ok ? '' : ' ✗')) });
+      const amount = jId(d1, J.amount);
+      const un = t(2).filter((x) => x.tool === 'update_nodes' && x.ok && (x.args?.updates ?? []).some((u) => u.id === amount && u.role === 'decision'));
+      const n1 = d1.nodes.find((n) => n.id === amount), n2 = d2.nodes.find((n) => n.id === amount);
+      check('turn 2: AI made "Check the amount" a decision with update_nodes role "decision" and its shape became a diamond', un.length > 0 && n2?.role === 'decision' && n2?.shape === 'diamond',
+        { before: n1 ? { role: n1.role ?? null, shape: n1.shape ?? null } : null, after: n2 ? { role: n2.role ?? null, shape: n2.shape ?? null } : null, updateNodes: un.map((x) => x.args),
+          shapeAlsoGivenByAi: un.some((x) => x.args.updates.some((u) => u.id === amount && u.shape !== undefined)) });
+      const b2 = jBuilt(d2, 2), L2 = jLogic(d2, s2?.json, s2?.md, 2);
+      check('describe_logic after turn 2: Issues says "None found." (json list empty)', L2.issues.ok, L2.issues);
+      check('describe_logic after turn 2: the rest of the reading is right ("Check the amount" a decision with its two conditions, the branch labelled No, loop, lanes, data)',
+        b2.ok && L2.order.ok && L2.flow.ok && L2.loop.ok && L2.lanes.ok && L2.data.ok, { built: b2, order: L2.order, flow: L2.flow, loop: L2.loop, lanes: L2.lanes, data: L2.data });
+      const m2 = c.finalMessages[1] ?? '';
+      check('turn 2: AI told the person no problems are left', J_NO_PROBLEMS.test(m2), { finalMessage: m2 }, { info: true });
+      check('export_document format logic equals the describe_logic markdown (after turn 1, after turn 2, at the end)', [s1, s2, s3].every((s) => s?.exportSame === true),
+        { afterTurn1: s1?.exportSame ?? null, afterTurn2: s2?.exportSame ?? null, final: s3?.exportSame ?? null, ...([s1, s2, s3].some((s) => s && !s.exportSame) ? { exported: [s1, s2, s3].map((s) => s?.exported ?? null) } : {}) });
+      check('server: a role without a shape sets the default shape (decision to diamond also on update_nodes, data to parallelogram, store to cylinder); an explicit shape wins', !!data.roleShapes?.ok, data.roleShapes ?? null);
+      const saves = t(3).filter((x) => x.tool === 'save_to_file');
+      const pathSaves = saves.filter((x) => x.ok && x.resultJson?.ok === true && inDir(x.resultJson?.file, c.sc.artifactsDir) && /\.excalidraw$/.test(x.resultJson.file));
+      const inFile = data.savedDoc ? jBuilt(data.savedDoc, 2) : null;
+      check('turn 3: AI saved it with save_to_file into the artifacts folder; the file is a valid Excalidraw scene equal to the server copy, roles and lanes included',
+        pathSaves.length > 0 && pathSaves.at(-1).resultJson.file === data.file && !!data.saved?.synced && data.saved.type === 'excalidraw' && !data.saved.parseError && !!inFile?.ok,
+        { saves: saves.map((x) => ({ args: x.args, result: x.resultJson ?? x.error })), artifactsFiles: data.artifactsFiles, file: data.saved ?? null, fileHoldsTheFlow: inFile && { ok: inFile.ok, wrongBoxes: inFile.wrongBoxes, wrongLinks: inFile.wrongLinks, lanes: inFile.lanes } });
+      const ro = data.reopen;
+      check('reopening the saved file keeps every role and gives the same describe_logic reading (the app file parser and the server import)', !!ro?.app?.ok && !!ro?.server?.ok, ro ?? null);
+    },
+  },
+  {
+    id: 'K',
+    slug: 'K-brd-from-person-built-diagram',
+    title: 'A fresh AI agent reads a person-built diagram (no description) and drafts a one-page BRD from it',
+    model: 'gpt-6-sol',
+    environmentNote: "Setup builds the design as the person, through the server's REST tool endpoint with origin user: three lane frames (Hiring manager, IT service desk, Procurement), 11 steps (start and end by role, \"In stock?\" a decision only by its diamond shape, two decisions by role), a loop (chase the vendor, then check delivery again), the \"Asset inventory\" store (read by \"Check stock\", written by \"Image the laptop\"), the \"Vendor ordering portal\" external system and one open-question sticky. Nothing explains the design: no document description and no notes. The agent gets only the document id and the request, in codex's read-only sandbox, so the BRD is its reply; the harness saves it as brd.md and grades it line by line against the design (grading.json: every item must be backed by a BRD line; the matching lines are kept). logic-reference.md is the describe_logic reading the harness took right after building the design.",
+    async setup(h) {
+      for (const f of ['brd.md', 'grading.json', 'logic-reference.md']) fs.rmSync(path.join(h.dir, f), { force: true });
+      const r = await h.tool('create_document', { title: 'AI test K · New-hire laptop request', open: false });
+      const docId = r.json.documentId;
+      await kBuild(h.tool, docId);
+      const reading = (await h.tool('describe_logic', { documentId: docId })).text ?? '';
+      fs.writeFileSync(path.join(h.dir, 'logic-reference.md'), reading);
+      return { docId, kReading: reading, kDesign: kDesign(await h.http('/api/documents/' + encodeURIComponent(docId))) };
+    },
+    prompt: (c) => 'Read the design in my Workflow Canvas document ' + c.docId + ' and draft a one-page BRD from it (actors, trigger, main flow, branches/business rules, data, external integrations, open questions). Reply with the BRD in Markdown.',
+    async collect(p) {
+      const brd = p.finalMessages?.at(-1) ?? '';
+      fs.writeFileSync(path.join(p.dir, 'brd.md'), brd);
+      const grading = gradeBrd(brd);
+      fs.writeFileSync(path.join(p.dir, 'grading.json'), JSON.stringify(grading, null, 1));
+      const readingAfter = (await p.tool('describe_logic', { documentId: p.docId })).text ?? '';
+      const designAfter = kDesign(await p.http('/api/documents/' + encodeURIComponent(p.docId)));
+      p.log('BRD (' + grading.words + ' words) saved as brd.md; graded ' + grading.items.filter((x) => x.pass).length + '/' + grading.items.length + ' items (grading.json)');
+      return { grading, readingAfter, designAfter, evidenceFiles: ['brd.md', 'grading.json', 'logic-reference.md'] };
+    },
+    verify(c, check) {
+      const { data } = c;
+      const reads = okCalls(c, 'describe_logic');
+      check('the agent called describe_logic to read the design', reads.length > 0, { describeLogicCalls: reads.map((x) => x.args), sequence: c.calls.map((x) => x.tool + (x.ok ? '' : ' ✗')) });
+      const edits = c.calls.filter((x) => DOC_EDIT_TOOLS.includes(x.tool));
+      const readingSame = data.readingAfter === c.sc.kReading, designSame = JSON.stringify(data.designAfter) === JSON.stringify(c.sc.kDesign);
+      check('the agent only read the design (no edit calls; every node, connector and the describe_logic reading are as the person left them)', edits.length === 0 && readingSame && designSame,
+        { edits: edits.map((x) => x.tool + (x.ok ? '' : ' ✗')), readingSame, designSame });
+      const g = data.grading ?? gradeBrd(c.finalMessages.at(-1) ?? '');
+      for (const it of g.items) check('BRD: ' + it.name, it.pass, it.evidence);
     },
   },
 ];

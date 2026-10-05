@@ -79,7 +79,7 @@ export function useKeyboard() {
       switch (letter) {
         case 'n': actions.insert('topic'); break;
         case 'r': actions.insert('topic', { shape: 'rectangle' }); break;
-        case 'd': actions.insert('topic', { shape: 'diamond' }); break;
+        case 'd': actions.insertRole('decision'); break;
         case 'o': actions.insert('topic', { shape: 'circle' }); break;
         case 'p': actions.setMode('draw'); break;
         case 's': actions.insert('sticky'); break;

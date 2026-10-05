@@ -2,7 +2,8 @@ import { nanoid } from 'nanoid';
 import { get, set, toast } from './store';
 import { dispatch, callTool, undo as wsUndo, redo as wsRedo, updateSession, renderCanvasImage, openDocument } from './sync';
 import { flow, viewportCenter } from './flowApi';
-import type { CanvasNode, ColorName, NodeKind, NodeShape, NodeStatus, Side } from '../shared/types';
+import type { CanvasNode, ColorName, NodeKind, NodeRole, NodeShape, NodeStatus, Side } from '../shared/types';
+import { ROLE_INFO, describeLogic, roleOf } from '../shared/logic';
 import type { CommandInput, EdgePatch, LayoutDirection, LayoutMode, NodePatch } from '../shared/commands';
 import { childrenMap, descendants } from '../shared/graph';
 import { cloneNodes } from '../shared/clipboard';
@@ -122,6 +123,16 @@ export function setColor(color: ColorName | null) {
   if (s.edges.length) dispatch({ type: 'update_edges', updates: s.edges.map((id) => ({ id, color: (color ?? null) as unknown as ColorName })) });
 }
 export function setShape(shape: NodeShape) { updateSelected({ shape }); }
+/** A role also switches the topic to that role's shape; 'none' keeps the shape and makes it an ordinary step. */
+export function setRole(role: NodeRole | 'none') {
+  const topics = sel().nodes.filter((id) => nodeById(id)?.kind === 'topic');
+  updateNodes(topics.map((id) => ({ id, role: role === 'none' ? (null as unknown as NodeRole) : role })));
+}
+/** Toolbar Logic menu and the D shortcut: insert a topic that carries a logic role. */
+export function insertRole(role: NodeRole) {
+  const info = ROLE_INFO[role];
+  insert('topic', { role, shape: info.shape, title: info.title });
+}
 export function setStatus(status: NodeStatus) { updateSelected({ status: status === 'none' ? (null as unknown as NodeStatus) : status }); }
 
 export function deleteSelection() {
@@ -184,7 +195,16 @@ export function connectSelected() {
 }
 export function connect(source: string, target: string, sourceSide?: Side, targetSide?: Side) {
   if (source === target) return;
-  dispatch({ type: 'add_edges', edges: [{ source, target, sourceSide, targetSide }] });
+  dispatch({ type: 'add_edges', edges: [{ source, target, sourceSide, targetSide, ...branchLabel(source) }] });
+}
+
+/** A new connector out of a decision starts labelled Yes, then No, so every branch states its condition. */
+function branchLabel(source: string): { label?: string } {
+  const n = nodeById(source);
+  if (!n || roleOf(n).role !== 'decision') return {};
+  const used = new Set((doc()?.edges ?? []).filter((e) => e.source === source && e.label).map((e) => e.label!.trim().toLowerCase()));
+  const label = ['Yes', 'No'].find((l) => !used.has(l.toLowerCase()));
+  return label ? { label } : {};
 }
 export function reverseEdge(id: string) {
   const e = doc()?.edges.find((x) => x.id === id); if (!e) return;
@@ -303,11 +323,12 @@ function download(name: string, content: string | Blob, type = 'text/plain') {
 }
 const fileBase = () => (doc()?.title ?? 'canvas').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-').toLowerCase() || 'canvas';
 
-export async function exportAs(format: 'png' | 'svg' | 'json' | 'markdown' | 'mermaid' | 'excalidraw') {
+export async function exportAs(format: 'png' | 'svg' | 'json' | 'markdown' | 'logic' | 'mermaid' | 'excalidraw') {
   const d = doc(); if (!d) return;
   if (format === 'excalidraw') return download(fileBase() + '.excalidraw', JSON.stringify(exportExcalidraw(d), null, 2), 'application/json');
   if (format === 'json') return download(fileBase() + '.json', JSON.stringify(d, null, 2), 'application/json');
   if (format === 'markdown') return download(fileBase() + '.md', exportMarkdown(d), 'text/markdown');
+  if (format === 'logic') return download(fileBase() + '-logic.md', describeLogic(d).markdown, 'text/markdown');
   if (format === 'mermaid') return download(fileBase() + '.mmd', exportMermaid(d));
   const f = flow(); if (!f) return;
   const vp = f.getViewport();

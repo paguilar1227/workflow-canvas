@@ -1,17 +1,20 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, CircleHelp, Database, FileText, Flag, Globe, Hourglass, Layers, Play, Split, type LucideIcon } from 'lucide-react';
 import { useApp, set } from '../store';
-import type { NodeShape, NodeStatus } from '../../shared/types';
+import type { NodeRole, NodeShape, NodeStatus } from '../../shared/types';
+import { ROLE_INFO } from '../../shared/logic';
 
-export interface PickerOption<T extends string | number> { value: T; label: string; icon?: ReactNode; testId?: string }
+export interface PickerOption<T extends string | number> { value: T; label: string; icon?: ReactNode; testId?: string; hint?: string }
 
 /**
  * A compact property control: one button shows the current value and opens the choices in a popover
  * (a bottom sheet on phones). Arrow keys move between choices, Enter picks, Escape closes.
  */
-export function Picker<T extends string | number>({ id, label, value, options, onPick, testId, grid, placeholder = 'Choose…' }: {
+export function Picker<T extends string | number>({ id, label, value, options, onPick, testId, grid, placeholder = 'Choose…', trigger, buttonClass }: {
   id: string; label: string; value?: T; options: PickerOption<T>[]; onPick: (v: T) => void; testId?: string; grid?: boolean; placeholder?: string;
+  /** Custom button content (e.g. a toolbar menu); the picker then acts as a menu of actions. */
+  trigger?: ReactNode; buttonClass?: string;
 }) {
   const open = useApp((s) => s.openMenu === id);
   const sheet = useApp((s) => s.compact);
@@ -71,15 +74,19 @@ export function Picker<T extends string | number>({ id, label, value, options, o
 
   return (
     <>
-      <button ref={btn} className={'picker-btn' + (open ? ' open' : '')} data-testid={testId} aria-haspopup="listbox" aria-expanded={open} aria-label={label + ': ' + (current?.label ?? placeholder)}
+      <button ref={btn} className={(buttonClass ?? 'picker-btn') + (open ? ' open' : '')} data-testid={testId} aria-haspopup="listbox" aria-expanded={open} aria-label={trigger ? label : label + ': ' + (current?.label ?? placeholder)} title={trigger ? label : undefined}
         onClick={(e) => { e.stopPropagation(); set({ openMenu: open ? null : id }); }}
         onKeyDown={(e) => {
           // Like a native select; also keeps canvas shortcuts (Enter adds a sibling topic) from firing.
           if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(e.key)) { e.preventDefault(); e.stopPropagation(); set({ openMenu: id }); }
         }}>
-        {current?.icon ? <span className="picker-icon">{current.icon}</span> : null}
-        <span className={'picker-value' + (current ? '' : ' placeholder')}>{current?.label ?? placeholder}</span>
-        <ChevronDown size={14} className="picker-chevron" />
+        {trigger ?? (
+          <>
+            {current?.icon ? <span className="picker-icon">{current.icon}</span> : null}
+            <span className={'picker-value' + (current ? '' : ' placeholder')}>{current?.label ?? placeholder}</span>
+            <ChevronDown size={14} className="picker-chevron" />
+          </>
+        )}
       </button>
       {shown ? createPortal(
         <>
@@ -88,7 +95,7 @@ export function Picker<T extends string | number>({ id, label, value, options, o
             {sheet ? <div className="picker-title">{label}</div> : null}
             <div className="picker-options" role="listbox" aria-label={label}>
               {options.map((o) => (
-                <button key={String(o.value)} role="option" aria-selected={o.value === value} className={'picker-option' + (o.value === value ? ' on' : '')} data-testid={o.testId} onClick={() => pick(o.value)}>
+                <button key={String(o.value)} role="option" aria-selected={o.value === value} className={'picker-option' + (o.value === value ? ' on' : '')} data-testid={o.testId} title={o.hint} onClick={() => pick(o.value)}>
                   {o.icon ? <span className="picker-icon">{o.icon}</span> : null}
                   <span className="picker-label">{o.label}</span>
                   {!grid && o.value === value ? <Check size={14} className="picker-check" /> : null}
@@ -112,6 +119,7 @@ const SHAPE_PATHS: Record<NodeShape, ReactNode> = {
   circle: <circle cx="12" cy="12" r="9.5" />,
   hexagon: <polygon points="6.5,3 17.5,3 22.5,12 17.5,21 6.5,21 1.5,12" />,
   cylinder: <><path d="M3,6 C3,3 21,3 21,6 L21,18 C21,21 3,21 3,18 Z" /><path d="M3,6 C3,9 21,9 21,6" /></>,
+  parallelogram: <polygon points="6,5 23,5 18,19 1,19" />,
 };
 
 export function ShapeIcon({ shape, size = 18 }: { shape: NodeShape; size?: number }) {
@@ -129,6 +137,19 @@ const STATUS_LABEL: Record<NodeStatus, string> = { none: 'None', todo: 'To do', 
 
 export const statusOptions = (statuses: readonly NodeStatus[]): PickerOption<NodeStatus>[] =>
   statuses.map((s) => ({ value: s, label: STATUS_LABEL[s], icon: s === 'none' ? <span className="wfc-marker none">–</span> : <span className={'wfc-marker st-' + s}>{STATUS_GLYPH[s]}</span>, testId: 'status-' + s }));
+
+const ROLE_ICONS: Record<NodeRole, LucideIcon> = { start: Play, end: Flag, decision: CircleHelp, parallel: Split, wait: Hourglass, data: FileText, store: Database, subprocess: Layers, external: Globe };
+
+export function RoleIcon({ role, size = 12 }: { role: NodeRole; size?: number }) {
+  const Icon = ROLE_ICONS[role];
+  return <Icon size={size} strokeWidth={2.2} aria-hidden="true" />;
+}
+
+/** Logic roles with their icon; 'none' leaves an ordinary step. */
+export const roleOptions = (roles: readonly NodeRole[], none?: string): PickerOption<NodeRole | 'none'>[] => [
+  ...(none ? [{ value: 'none' as const, label: none, icon: <span className="wfc-marker none">–</span>, testId: 'role-none', hint: 'An ordinary action, or a plain topic with no special logic.' }] : []),
+  ...roles.map((r) => ({ value: r, label: ROLE_INFO[r].label, icon: <span className={'wfc-marker role role-' + r}><RoleIcon role={r} /></span>, testId: 'role-' + r, hint: ROLE_INFO[r].meaning })),
+];
 
 export const priorityOptions = (levels: readonly number[]): PickerOption<number>[] =>
   levels.map((p) => ({ value: p, label: p === 0 ? 'None' : 'P' + p, icon: p === 0 ? <span className="wfc-marker none">–</span> : <span className="wfc-marker prio">{p}</span>, testId: 'priority-' + p }));

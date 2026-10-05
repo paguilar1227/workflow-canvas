@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ARROW_MODES, COLOR_NAMES, EDGE_ROUTINGS, EDGE_STYLES, NODE_KINDS, NODE_SHAPES, NODE_STATUSES, SIDES, TREE_LAYOUTS } from './types';
+import { ARROW_MODES, COLOR_NAMES, EDGE_ROUTINGS, EDGE_STYLES, NODE_KINDS, NODE_ROLES, NODE_SHAPES, NODE_STATUSES, SIDES, TREE_LAYOUTS } from './types';
 
 export const colorSchema = z.enum(COLOR_NAMES as [string, ...string[]]);
 export const sideSchema = z.enum(SIDES as [string, ...string[]]);
@@ -11,7 +11,8 @@ export const nodeFieldShape = {
   notes: z.string().nullable().optional().describe('Long-form notes shown in the inspector (markdown-ish plain text).'),
   badge: z.string().nullable().optional().describe('Small pill label on the top-right edge (e.g. "Proposed", "v2", "Owner: API").'),
   icon: z.string().nullable().optional().describe('Emoji or short glyph shown in the icon square (e.g. "🗄️", "⚙️", "λ").'),
-  shape: z.enum(NODE_SHAPES as [string, ...string[]]).nullable().optional().describe('Topic shape: card (icon+title+subtitle), rounded, pill, rectangle, diamond (decision), circle, hexagon, cylinder (database).'),
+  shape: z.enum(NODE_SHAPES as [string, ...string[]]).nullable().optional().describe('Topic shape: card (icon+title+subtitle), rounded, pill, rectangle, diamond (decision), circle, hexagon, cylinder (database), parallelogram (data in/out). Setting a role picks the matching shape unless you also give one.'),
+  role: z.enum(NODE_ROLES as [string, ...string[]]).nullable().optional().describe("What the topic means in the flow, so the logic can be read back with describe_logic: 'start' (entry/trigger), 'end' (outcome), 'decision' (yes/no or multi-way choice; label every outgoing connector with its condition, e.g. Yes/No), 'parallel' (split into paths that run at once, or join them), 'wait' (timer/event), 'data' (input/output such as a form or file), 'store' (database the flow reads/writes), 'subprocess' (flow detailed elsewhere), 'external' (person/team/outside system). Omit (or null) for an ordinary step."),
   color: colorSchema.nullable().optional().describe('Accent colour name from the active theme palette.'),
   x: z.number().optional().describe('Canvas x (top-left). Omit to auto-place.'),
   y: z.number().optional().describe('Canvas y (top-left). Omit to auto-place.'),

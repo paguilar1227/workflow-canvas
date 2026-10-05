@@ -1,4 +1,5 @@
 import { test, expect } from './support/journey';
+import { NODE_SHAPES } from '../src/shared/types';
 
 test('style a topic in the inspector', async ({ page, app, ev }) => {
   ev.proves('A user selects a topic and, from the inspector, gives it a subtitle, badge, emoji icon, colour, diamond and cylinder shapes, a status, a priority, tags, notes and a link; shape, status and priority are compact pickers that open their choices, close on a pick (or on a click outside, changing nothing) and show the same icon as the canvas marker. Each change is rendered on the canvas node (text, markers, tag chips, indicators, shape outline) and saved to the document.');
@@ -54,11 +55,12 @@ test('style a topic in the inspector', async ({ page, app, ev }) => {
     await expect(page.getByTestId('shape-picker')).toContainText('Card');
     await page.getByTestId('shape-picker').click();
     const tiles = page.getByTestId('shape-picker-options').getByRole('option');
-    await expect(tiles, 'the shape picker is a grid of 8 shape tiles').toHaveCount(8);
+    await expect(tiles, 'the shape picker is a grid of ' + NODE_SHAPES.length + ' shape tiles').toHaveCount(NODE_SHAPES.length);
+    expect(await tiles.evaluateAll((els) => els.map((e) => e.getAttribute('data-testid'))), 'one tile per shape, in order (Data\'s parallelogram last)').toEqual(NODE_SHAPES.map((s) => 'shape-' + s));
     await expect(page.getByTestId('shape-card'), 'the current shape is marked').toHaveAttribute('aria-selected', 'true');
     const cols = await tiles.evaluateAll((els) => new Set(els.map((e) => Math.round(e.getBoundingClientRect().x))).size);
     const rows = await tiles.evaluateAll((els) => new Set(els.map((e) => Math.round(e.getBoundingClientRect().y))).size);
-    expect({ cols, rows }, 'shape tiles are laid out 4 x 2').toEqual({ cols: 4, rows: 2 });
+    expect({ cols, rows }, 'shape tiles are laid out four to a row').toEqual({ cols: 4, rows: Math.ceil(NODE_SHAPES.length / 4) });
     await ev.snap('shape-picker-open');
     await page.getByTestId('shape-diamond').click();
     await expect(page.getByTestId('shape-picker-options'), 'picking a shape closes the picker').toHaveCount(0);

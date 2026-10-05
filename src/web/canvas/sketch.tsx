@@ -29,6 +29,7 @@ export const RoughShape = memo(function RoughShape({ shape, w, h, seed, filled, 
     switch (shape) {
       case 'circle': d = gen.ellipse(w / 2, h / 2, w - 3, h - 3, o); break;
       case 'diamond': d = gen.polygon([[w / 2, 1], [w - 1, h / 2], [w / 2, h - 1], [1, h / 2]], o); break;
+      case 'parallelogram': d = gen.polygon([[w * 0.07, 1], [w * 1.07, 1], [w * 0.93, h - 1], [-w * 0.07, h - 1]], o); break;
       case 'hexagon': d = gen.polygon([[w * 0.14, 1], [w * 0.86, 1], [w - 1, h / 2], [w * 0.86, h - 1], [w * 0.14, h - 1], [1, h / 2]], o); break;
       case 'cylinder': {
         const ry = Math.min(14, h / 6);
