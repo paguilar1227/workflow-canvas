@@ -21,7 +21,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 server.setRequestHandler(CallToolRequestSchema, async (req) => {
   const clientName = server.getClientVersion()?.name ?? 'stdio';
   const res = await fetch(base + '/api/tools/' + encodeURIComponent(req.params.name), {
-    method: 'POST', headers: { 'content-type': 'application/json', 'x-client-name': clientName }, body: JSON.stringify(req.params.arguments ?? {}),
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-client-name': clientName, ...(process.env.WFC_PUBLIC_URL ? { 'x-canvas-url': process.env.WFC_PUBLIC_URL } : {}) }, body: JSON.stringify(req.params.arguments ?? {}),
   });
   const body = (await res.json()) as { ok: boolean; result?: Parameters<typeof toMcpContent>[0]; error?: string };
   if (!body.ok || !body.result) return { isError: true, content: [{ type: 'text', text: 'Error: ' + (body.error ?? 'request failed') }] };

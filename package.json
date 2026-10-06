@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "description": "Infinite canvas for plans, architecture, and codebases with a full AI toolset (MCP).",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/paguilar1227/workflow-canvas.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/server/index.ts",
@@ -11,7 +16,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:e2e": "playwright test",
     "test:ai": "node scripts/ai-tests/run.mjs",
-    "test:logic": "tsx scripts/logic-tests/describe-logic.test.mts",
+    "test:unit": "tsx scripts/unit-tests/describe-logic.test.mts && tsx scripts/unit-tests/lanes-order.test.mts",
     "test:plugin": "bash scripts/plugin-tests/ensure-canvas.test.sh"
   },
   "engines": {

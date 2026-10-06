@@ -140,7 +140,7 @@ export function normalizeCommand(doc: CanvasDocument, input: CommandInput, opts:
       if (loose.length) {
         const existing = bounds(doc.nodes);
         const anchor = opts.anchor ?? (existing ? { x: existing.x + existing.width + 120, y: existing.y } : { x: 0, y: 0 });
-        const cols = Math.ceil(Math.sqrt(loose.length));
+        const cols = loose.every((n) => n.kind === 'frame') ? loose.length : Math.ceil(Math.sqrt(loose.length));
         const cw = Math.max(...loose.map((n) => n.width)) + SIDE_GAP;
         const ch = Math.max(...loose.map((n) => n.height)) + SIDE_GAP;
         const totalW = Math.min(cols, loose.length) * cw - SIDE_GAP;

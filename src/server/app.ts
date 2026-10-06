@@ -22,6 +22,7 @@ export async function createApp(opts: AppOptions) {
   await files.init();
   const tools = createTools(store, hub, files);
   const app = express();
+  if (process.env.DEMO_DEPLOYMENT_ID) app.set('trust proxy', true);
   app.use((req, res, next) => { if (isTrustedRequest(req)) next(); else res.status(403).json({ ok: false, error: UNTRUSTED_MESSAGE }); });
   app.use(express.json({ limit: '25mb' }));
 
@@ -30,7 +31,8 @@ export async function createApp(opts: AppOptions) {
   app.post('/api/tools/:name', async (req, res) => {
     try {
       const origin = req.header('x-origin') === 'user' ? 'user' : 'ai:' + (req.header('x-client-name') ?? 'rest');
-      res.json({ ok: true, result: await invokeTool(tools, req.params.name, req.body, { origin }) });
+      const canvasUrl = (req.header('x-canvas-url') ?? req.protocol + '://' + req.host).replace(/\/$/, '');
+      res.json({ ok: true, result: await invokeTool(tools, req.params.name, req.body, { origin, canvasUrl }) });
     } catch (err) {
       res.status(400).json({ ok: false, error: (err as Error).message });
     }

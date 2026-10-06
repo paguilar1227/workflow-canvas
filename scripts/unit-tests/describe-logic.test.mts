@@ -1,4 +1,4 @@
-// Regression tests for describeLogic and role import: npm run test:logic
+// Regression tests for describeLogic and role import: npm run test:unit
 import { describeLogic } from '../../src/shared/logic';
 import { documentFromExcalidraw, exportExcalidraw, importExcalidraw } from '../../src/shared/excalidraw';
 import type { CanvasDocument, CanvasEdge, CanvasNode } from '../../src/shared/types';

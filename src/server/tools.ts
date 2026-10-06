@@ -15,7 +15,7 @@ import type { FileSaver } from './files';
 import { isAncestor } from '../shared/graph';
 import { describeLogic } from '../shared/logic';
 
-export interface ToolContext { origin: string }
+export interface ToolContext { origin: string; /** Address of the canvas as the caller reaches it, for links such as <canvasUrl>/?doc=<id>. */ canvasUrl?: string }
 export interface ToolOutput { json?: unknown; text?: string; image?: { data: string; mimeType: string } }
 export interface ToolDef {
   name: string;
@@ -30,12 +30,13 @@ const docIdArg = z.string().min(1).optional().describe('Target document id. Defa
 
 export const SERVER_INSTRUCTIONS = [
   'Workflow Canvas is an infinite canvas (mind maps, architecture diagrams, workflows, codebase maps) shared live between a human UI and you.',
+  'If a skill named workflow-canvas is available to you, load it before your first change: it has the workflow and recipes for architecture maps, codebase maps, decision flows, mind maps and plans.',
   'Everything a person can do in the UI is available as a tool; changes you make appear instantly in their browser and are undoable.',
   'Model: a document has nodes and edges. Node kinds: topic (cards/shapes), frame (swimlane/boundary drawn behind nodes; members move with it), sticky, text, drawing (freehand pen stroke from points).',
   'Hierarchy: set parentId to build XMind-style mind-map branches (auto-arranged when document setting autoArrange=true). Use edges for any other relationship (labels, arrows, dashed, animated).',
   'Coordinates are canvas pixels (x right, y down, top-left of node). Omit x/y to auto-place, then call auto_layout (graph | tree | lanes | grid).',
   'Fast path for a whole diagram: create_diagram with nodes (give each a short id) + edges referencing those ids + layout. Frames: create frame nodes and set frameId on members, then layout lanes.',
-  'Read state with get_document (format summary), get_canvas_state, find_nodes. Verify visually with capture_screenshot (needs a browser tab open).',
+  'Read state with get_document (format summary), get_canvas_state (its canvasUrl is the address to give people: <canvasUrl>/?doc=<id>), find_nodes. Verify visually with capture_screenshot (needs a browser tab open).',
   'View & UI: control_view (fit/focus/zoom), select, set_theme / list_themes (includes hand-drawn Excalidraw-style themes in light and dark), set_ui (panels, minimap, snap, search, zen/view mode, pen mode, inline edit), open_document. undo/redo are shared with the human.',
   'Text: sticky and text nodes render GitHub-flavoured Markdown (task lists toggle with a click); topic/frame titles and connector labels render inline Markdown. :shortcodes: (GitHub names, e.g. :rocket: :white_check_mark:) are converted to emoji in every text field, for people and AI alike.',
   'Logic: give topics a role (start, end, decision, parallel, wait, data, store, subprocess, external; none = an ordinary step) and label every connector leaving a decision with its condition (Yes/No or the case). describe_logic reads the diagram back as a numbered flow (branches with conditions, loops, merges, parallel paths, lanes as owners, data stores, external actors, attached notes) and lists gaps such as unlabelled branches or dead ends. Call it before you implement, review or write requirements from a diagram, and after you build one to check it says what you meant.',
@@ -118,9 +119,9 @@ export function createTools(store: Store, hub: Hub, files: FileSaver): ToolDef[]
   const tools: ToolDef[] = [
     {
       name: 'get_canvas_state', title: 'Get canvas state',
-      description: 'Overview of the app: documents, the document open in the UI, theme, connected browser UIs, the human\'s current selection (session.selection is for the active document; session.selections maps every document id to its current selection) and viewport. Call this first.',
+      description: 'Overview of the app: canvasUrl (link documents as <canvasUrl>/?doc=<id>), documents, the document open in the UI, theme, connected browser UIs, the human\'s current selection (session.selection is for the active document; session.selections maps every document id to its current selection) and viewport. Call this first, and load the workflow-canvas skill before building if you have it.',
       input: {}, annotations: { readOnlyHint: true },
-      run: async () => ({ json: { connectedUIs: hub.uiCount, session: sessionView(store.session), documents: store.list(), themes: THEMES.map((t) => t.id) } }),
+      run: async (_a, ctx) => ({ json: { ...(ctx.canvasUrl ? { canvasUrl: ctx.canvasUrl } : {}), connectedUIs: hub.uiCount, session: sessionView(store.session), documents: store.list(), themes: THEMES.map((t) => t.id) } }),
     },
     {
       name: 'list_documents', title: 'List documents', description: 'List all canvases (id, title, counts, last update).',

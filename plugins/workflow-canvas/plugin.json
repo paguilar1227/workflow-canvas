@@ -9,6 +9,7 @@
   },
   "homepage": "https://github.com/paguilar1227/workflow-canvas",
   "repository": "https://github.com/paguilar1227/workflow-canvas",
+  "license": "MIT",
   "keywords": [
     "canvas",
     "diagram",

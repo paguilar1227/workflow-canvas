@@ -49,8 +49,8 @@ export const THEMES: ThemeDef[] = [
     id: 'lens-dark',
     name: 'Lens Dark',
     mode: 'dark',
-    description: 'Matches the pr-lens mapping-web reference: GitHub-dark canvas, dotted grid, swimlane frames, badge-tagged cards.',
-    source: { label: 'pr-lens mapping-web-dark.svg (your reference)' },
+    description: 'GitHub-dark canvas, dotted grid, swimlane frames and badge-tagged cards, in the style of code-mapping diagrams.',
+    source: { label: 'Dark code-mapping diagram style' },
     background: 'dots', gap: 18,
     tokens: {
       '--font-ui': INTER, '--font-display': INTER, '--font-mono': JBMONO,

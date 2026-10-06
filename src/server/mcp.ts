@@ -15,14 +15,14 @@ export function toMcpContent(out: ToolOutput) {
   return content;
 }
 
-function buildServer(tools: ToolDef[]) {
+function buildServer(tools: ToolDef[], canvasUrl: string) {
   const server = new McpServer(SERVER_INFO, { instructions: SERVER_INSTRUCTIONS, capabilities: { tools: {} } });
   for (const t of tools) {
     server.registerTool(t.name, { title: t.title, description: t.description, inputSchema: t.input, annotations: t.annotations }, async (args: unknown) => {
       const client = server.server.getClientVersion();
       const origin = 'ai:' + (client?.name ?? 'mcp');
       try {
-        return { content: toMcpContent(await t.run(args, { origin })) };
+        return { content: toMcpContent(await t.run(args, { origin, canvasUrl })) };
       } catch (err) {
         return { isError: true, content: [{ type: 'text' as const, text: 'Error: ' + (err as Error).message }] };
       }
@@ -47,7 +47,7 @@ export function mountMcp(app: Express, tools: ToolDef[]) {
         onsessioninitialized: (id) => { transports.set(id, t); },
       });
       t.onclose = () => { if (t.sessionId) transports.delete(t.sessionId); };
-      await buildServer(tools).connect(t);
+      await buildServer(tools, req.protocol + '://' + req.host).connect(t);
       transport = t;
     }
     await transport.handleRequest(req, res, req.body);
