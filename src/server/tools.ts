@@ -37,7 +37,7 @@ export const SERVER_INSTRUCTIONS = [
   'Coordinates are canvas pixels (x right, y down, top-left of node). Omit x/y to auto-place, then call auto_layout (graph | tree | lanes | grid).',
   'Fast path for a whole diagram: create_diagram with nodes (give each a short id) + edges referencing those ids + layout. Frames: create frame nodes and set frameId on members, then layout lanes.',
   'Read state with get_document (format summary), get_canvas_state (its canvasUrl is the address to give people: <canvasUrl>/?doc=<id>), find_nodes. Verify visually with capture_screenshot (needs a browser tab open).',
-  'View & UI: control_view (fit/focus/zoom), select, set_theme / list_themes (includes hand-drawn Excalidraw-style themes in light and dark), set_ui (panels, minimap, snap, search, zen/view mode, pen mode, inline edit), open_document. undo/redo are shared with the human.',
+  'View & UI: control_view (fit/focus/zoom), select, set_theme / list_themes (includes hand-drawn Excalidraw-style themes in light and dark), set_ui (panels, minimap, snap, search, zen/view mode, pen mode, inline edit, quick-edit popover), open_document. undo/redo are shared with the human.',
   'Text: sticky and text nodes render GitHub-flavoured Markdown (task lists toggle with a click); topic/frame titles and connector labels render inline Markdown. :shortcodes: (GitHub names, e.g. :rocket: :white_check_mark:) are converted to emoji in every text field, for people and AI alike.',
   'Logic: give topics a role (start, end, decision, parallel, wait, data, store, subprocess, external; none = an ordinary step) and label every connector leaving a decision with its condition (Yes/No or the case). describe_logic reads the diagram back as a numbered flow (branches with conditions, loops, merges, parallel paths, lanes as owners, data stores, external actors, attached notes) and lists gaps such as unlabelled branches or dead ends. Call it before you implement, review or write requirements from a diagram, and after you build one to check it says what you meant.',
   'Interop: import_content/export_document support Mermaid, Markdown outlines and Excalidraw (.excalidraw) scenes.',
@@ -480,11 +480,12 @@ export function createTools(store: Store, hub: Hub, files: FileSaver): ToolDef[]
     },
     {
       name: 'set_ui', title: 'Set UI options',
-      description: "Toggle panels and canvas options: inspector, outline, minimap, snapToGrid, mode ('select' | 'pan' | 'draw' freehand pen), zenMode (hide chrome), viewMode (read-only for the human), background ('theme' | 'dots' | 'lines' | 'cross' | 'none'), search (highlights matches; '' clears), editNodeId (open inline title editing for the human).",
-      input: { documentId: docIdArg, inspector: z.boolean().optional(), outline: z.boolean().optional(), minimap: z.boolean().optional(), snapToGrid: z.boolean().optional(), mode: z.enum(['select', 'pan', 'draw']).optional(), zenMode: z.boolean().optional(), viewMode: z.boolean().optional(), background: z.enum(['theme', 'dots', 'lines', 'cross', 'none']).optional(), search: z.string().optional(), editNodeId: z.string().optional() },
+      description: "Toggle panels and canvas options: inspector, outline, minimap, snapToGrid, mode ('select' | 'pan' | 'draw' freehand pen), zenMode (hide chrome), viewMode (read-only for the human), background ('theme' | 'dots' | 'lines' | 'cross' | 'none'), search (highlights matches; '' clears), editNodeId (open inline title editing for the human), quickEditNodeId (open that node's quick-edit popover, its inspector beside it, in mouse-driven UIs; touch UIs just select it; '' closes it).",
+      input: { documentId: docIdArg, inspector: z.boolean().optional(), outline: z.boolean().optional(), minimap: z.boolean().optional(), snapToGrid: z.boolean().optional(), mode: z.enum(['select', 'pan', 'draw']).optional(), zenMode: z.boolean().optional(), viewMode: z.boolean().optional(), background: z.enum(['theme', 'dots', 'lines', 'cross', 'none']).optional(), search: z.string().optional(), editNodeId: z.string().optional(), quickEditNodeId: z.string().optional() },
       run: async (a) => {
         const id = resolveDoc(a.documentId);
         if (a.editNodeId) requireIds(id, [a.editNodeId], 'node');
+        if (a.quickEditNodeId) requireIds(id, [a.quickEditNodeId], 'node');
         const s = store.session;
         const patch: Partial<SessionState> = {};
         if (a.inspector !== undefined || a.outline !== undefined || a.minimap !== undefined) patch.panels = { inspector: a.inspector ?? s.panels.inspector, outline: a.outline ?? s.panels.outline, minimap: a.minimap ?? s.panels.minimap };

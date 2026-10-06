@@ -208,6 +208,12 @@ async function handleView(msg: { action: string; args: any; docId?: string }): P
       const n = get().doc?.nodes.find((x) => x.id === a.editNodeId);
       if (n && f) f.setCenter(n.x + n.width / 2, n.y + n.height / 2, { zoom: Math.max(f.getZoom(), 1), duration: DURATION });
     }
+    if (a.quickEditNodeId === '') set({ nodeMenu: null });
+    if (a.quickEditNodeId) {
+      set({ selection: { nodes: [a.quickEditNodeId], edges: [] }, editingId: null, nodeMenu: get().coarse ? null : a.quickEditNodeId });
+      const n = get().doc?.nodes.find((x) => x.id === a.quickEditNodeId);
+      if (n && f) f.setCenter(n.x + n.width / 2, n.y + n.height / 2, { zoom: Math.max(f.getZoom(), 1), duration: DURATION });
+    }
     return { ok: true };
   }
   if (msg.action === 'viewport' && f) {
@@ -275,11 +281,15 @@ async function capture(msg: { docId: string; format: 'png' | 'svg'; fit: boolean
   const f = flow();
   if (!f) return { error: 'canvas not ready' };
   const prevSel = get().selection;
-  set({ selection: { nodes: [], edges: [] } });
-  if (msg.fit) { await f.fitView({ padding: 0.08, duration: 0, maxZoom: 1.5 }); }
-  await nextFrame(); await sleep(120);
-  const dataUrl = await renderCanvasImage(msg.format);
-  set({ selection: prevSel });
+  set({ capturing: true, selection: { nodes: [], edges: [] } });
+  let dataUrl: string;
+  try {
+    if (msg.fit) { await f.fitView({ padding: 0.08, duration: 0, maxZoom: 1.5 }); }
+    await nextFrame(); await sleep(120);
+    dataUrl = await renderCanvasImage(msg.format);
+  } finally {
+    set({ selection: prevSel, capturing: false });
+  }
   if (switching && prevDoc) openDocument(prevDoc);
   else await f.setViewport(prevViewport, { duration: 0 });
   return { dataUrl };

@@ -8,6 +8,7 @@ import { Inspector } from './panels/Inspector';
 import { Toolbar, ZoomBar, SearchBar, ActivityFeed, Toast, ContextMenu, HelpModal, AiModal, ImportModal, ModePill, SelectionBar } from './panels/Chrome';
 import { useKeyboard } from './keyboard';
 import { EmojiAssist } from './panels/EmojiAssist';
+import { NodePopover } from './panels/NodePopover';
 import { getTheme, THEMES } from '../shared/themes';
 
 const ALL_TOKEN_KEYS = [...new Set(THEMES.flatMap((t) => Object.keys(t.tokens)))];
@@ -144,6 +145,7 @@ export function App() {
           {compact ? <div className={'drawer-backdrop' + (drawer ? ' shown' : '')} data-testid="drawer-backdrop" aria-hidden={!drawer} onClick={() => set({ drawer: null, drawerFull: false })} /> : null}
         </div>
         <ContextMenu />
+        <NodePopover />
         <HelpModal />
         <AiModal />
         <ImportModal />

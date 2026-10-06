@@ -16,6 +16,7 @@ test('an AI client works over the API safely and predictably', async ({ page, ap
       ['delete_nodes', { documentId: docId, ids: ['nope'] }, /Unknown node ids/],
       ['delete_edges', { documentId: docId, ids: ['nope'] }, /Unknown edge ids/],
       ['set_ui', { documentId: docId, editNodeId: 'nope' }, /Unknown node ids/],
+      ['set_ui', { documentId: docId, quickEditNodeId: 'nope' }, /Unknown node ids/],
     ];
     for (const [name, args, message] of cases) {
       const body = await (await page.request.post('/api/tools/' + name, { data: args })).json();

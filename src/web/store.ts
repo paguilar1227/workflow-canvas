@@ -21,6 +21,10 @@ export interface AppState {
   selection: { nodes: string[]; edges: string[] };
   editingId: string | null;
   editingEdgeId: string | null;
+  /** Node whose quick-edit popover (its inspector beside it, opened by a mouse double-click) is open, per tab. */
+  nodeMenu: string | null;
+  /** An AI screenshot is being taken: the selection is hidden for the picture, so a quick-edit popover stays open. */
+  capturing: boolean;
   /** Toolbar/shortcut element waiting for a click on the canvas (per tab, not shared). */
   placing: { kind: NodeKind; extra: Partial<CanvasNode> } | null;
   /** The .excalidraw file this tab autosaves the open document to. */
@@ -66,6 +70,8 @@ export const useApp = create<AppState>(() => ({
   selection: { nodes: [], edges: [] },
   editingId: null,
   editingEdgeId: null,
+  nodeMenu: null,
+  capturing: false,
   placing: null,
   file: { docId: null, name: null, state: 'none' },
   compact: false,

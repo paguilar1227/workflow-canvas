@@ -292,7 +292,13 @@ export function Canvas() {
       onNodeDragStart={onNodeDragStart}
       onNodeDrag={onNodeDrag}
       onNodeDragStop={onNodeDragStop}
-      onNodeDoubleClick={(_e, n) => { if (viewMode || n.type === 'drawing') return; set({ selection: { nodes: [n.id], edges: [] }, editingId: n.id }); }}
+      onNodeDoubleClick={(e, n) => {
+        if (viewMode || n.type === 'drawing') return;
+        const s = get();
+        if (s.editingId === n.id || (e.target as HTMLElement).closest('input, textarea, button, [contenteditable="true"]')) return;
+        if (s.coarse) { set({ selection: { nodes: [n.id], edges: [] }, editingId: n.id }); return; }
+        set({ selection: { nodes: [n.id], edges: [] }, nodeMenu: n.id, editingId: null, menu: null, openMenu: null });
+      }}
       onEdgeDoubleClick={(_e, edge) => { if (!viewMode && edge.type === 'smart') set({ selection: { nodes: [], edges: [edge.id] }, editingEdgeId: edge.id }); }}
       onPaneClick={() => { set({ selection: { nodes: [], edges: [] }, menu: null, openMenu: null, editingId: null }); }}
       onPaneContextMenu={(e) => { e.preventDefault(); openCtx(e as unknown as MouseEvent); }}

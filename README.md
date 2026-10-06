@@ -85,7 +85,7 @@ To use the skill without the plugin, copy that folder into your agent's skills d
 | Zoom, pan, fit, focus | `control_view` |
 | Theme picker | `list_themes`, `set_theme` |
 | Save / autosave to a .excalidraw file | `save_to_file` with `path` (a file or a folder; autosaves from then on) |
-| Panels, minimap, snap, background, search, pen/hand/select tool, zen, view-only, start inline editing | `set_ui` |
+| Panels, minimap, snap, background, search, pen/hand/select tool, zen, view-only, start inline editing, open a node's quick-edit popover | `set_ui` |
 | Logic menu, Logic role picker, decision Yes/No labels | `add_nodes` / `update_nodes` (`role`), `add_edges` (`label`) |
 | File → Logic description | `describe_logic` (or `export_document` format `logic`) |
 | Look at the canvas | `capture_screenshot`, `get_document`, `find_nodes` |
@@ -142,7 +142,7 @@ It lists numbered steps from each start, every decision's conditions and where t
 | Mind maps (XMind-style) | Tab = child, Enter = sibling, F2 edit, `/` collapse/expand with counts, arrow-key navigation, drag a topic onto another to re-parent, auto-arranged branches, layouts: balanced mind map, logic chart →/←, org chart ↓ |
 | Diagrams | Cards (icon + title + monospace subtitle + badge), rounded/pill/rectangle/diamond/circle/hexagon/cylinder/parallelogram shapes, logic roles (below), stickies, free text, frames/swimlanes (members move with the frame), connectors via handle drag (drop anywhere on the target), labels, arrows, solid/dashed/dotted, smooth/bezier/straight/step routing, animated flow |
 | Excalidraw-inspired | Freehand pen (P), hand-drawn "Excalidraw Sketch" themes in light and dark (rough.js), R/D/O shortcuts (rectangle, decision, ellipse), zen mode (Alt+Z), view-only mode (Alt+R), copy PNG to clipboard, `.excalidraw` import/export |
-| Editing | Inspector for every property (title, subtitle, badge, emoji icon, color, shape, status, priority, tags, link, notes, size, lock; shape, status and priority are compact pickers that open as bottom sheets on phones), multi-select align/distribute/frame/connect, copy/cut/paste/duplicate, context menus, undo/redo (shared with AI) |
+| Editing | Double-click a node (with a mouse) to edit it in a popover right beside it, the same fields as the inspector, which follows the node as you pan, zoom or drag; F2 or **Edit text** in the right-click menu edits the text on the canvas. Inspector for every property (title, subtitle, badge, emoji icon, color, shape, status, priority, tags, link, notes, size, lock; shape, status and priority are compact pickers that open as bottom sheets on phones), multi-select align/distribute/frame/connect, copy/cut/paste/duplicate, context menus, undo/redo (shared with AI) |
 | Layout | Graph (dagre) LR/TB with frames as clusters, swimlanes, grid, tree layouts |
 | Documents | Multiple canvases from templates (blank, mind map, architecture lanes, workflow), rename, duplicate, delete, outline panel, search (⌘F). Drag the bar between Documents and Outline (or focus it and use the arrow keys) to resize the list; double-click or Enter resets it, and the size is remembered on each device |
 | Import / export | Import Mermaid flowcharts (subgraphs → frames), Markdown outlines (→ mind map), Excalidraw scenes, JSON. Export PNG, SVG, Markdown, the logic description, Mermaid, Excalidraw, JSON |

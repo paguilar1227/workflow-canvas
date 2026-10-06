@@ -205,7 +205,7 @@ export function HelpModal() {
   const touch = useApp((s) => s.compact || s.coarse);
   if (!open) return null;
   const rows: [string, string][] = [
-    ['Add child topic', 'Tab'], ['Add sibling topic', 'Enter'], ['Edit selected', 'F2 / double-click'], ['Delete', 'Delete / ⌫'],
+    ['Add child topic', 'Tab'], ['Add sibling topic', 'Enter'], ['Edit properties beside a node', 'Double-click it'], ['Edit text on the canvas', 'F2'], ['Delete', 'Delete / ⌫'],
     ['Collapse / expand branch', '/'], ['Navigate between topics', 'Arrow keys'], ['Nudge selection', 'Shift + arrows'], ['Undo / redo', '⌘Z / ⇧⌘Z'],
     ['Copy / cut / paste', '⌘C / ⌘X / ⌘V'], ['Duplicate', '⌘D'], ['Select all', '⌘A'], ['Frame (group) selection', '⌘G'],
     ['Connect selected in order', 'C'], ['New topic / sticky / text / frame (click to place; beside the selection if any)', 'N / S / T / F'], ['Place at view centre / cancel placing', 'Enter / Esc'], ['Select / hand tool', 'V / H'], ['Pan', 'Scroll, Space + drag, middle-drag'],
@@ -326,7 +326,7 @@ export function SelectionBar() {
   const touch = useApp((s) => s.compact || s.coarse);
   const sel = useApp((s) => s.selection);
   const doc = useApp((s) => s.doc);
-  const busy = useApp((s) => !!s.editingId || !!s.editingEdgeId || !!s.placing || s.areaSelect || !!s.drawer || s.searchOpen || s.session.mode !== 'select');
+  const busy = useApp((s) => !!s.editingId || !!s.editingEdgeId || !!s.nodeMenu || !!s.placing || s.areaSelect || !!s.drawer || s.searchOpen || s.session.mode !== 'select');
   if (!touch || busy || !doc || (!sel.nodes.length && !sel.edges.length)) return null;
   const one = sel.nodes.length === 1 ? doc.nodes.find((n) => n.id === sel.nodes[0]) : undefined;
   const edgeOnly = !sel.nodes.length && sel.edges.length === 1 ? sel.edges[0] : undefined;

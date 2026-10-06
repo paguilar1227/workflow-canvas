@@ -74,6 +74,7 @@ test('focus in zen mode and present in view mode', async ({ page, app, ev }) => 
     const before = await app.doc();
     await app.topic('Misses').dblclick();
     await expect(app.editor(), 'double-click does not open the editor').toHaveCount(0);
+    await expect(page.getByTestId('node-popover'), 'nor the quick-edit popover').toHaveCount(0);
     await app.topic('Wins').click();
     await expect.poll(async () => (await app.selection()).nodes, 'topics can still be selected').toEqual(['qr-wins']);
     for (const key of ['Tab', 'Enter', 'Delete', 'Backspace', 'n', 'p', 'F2', 'Meta+d', 'Meta+z']) await page.keyboard.press(key);

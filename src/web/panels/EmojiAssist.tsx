@@ -137,6 +137,7 @@ function Picker({ data, sheet, style, onPick, onClose }: { data: EmojiData | nul
  */
 export function EmojiAssist() {
   const touch = useApp((s) => s.coarse || s.compact);
+  const coarse = useApp((s) => s.coarse);
   const [field, setField] = useState<Field | null>(null);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const [token, setToken] = useState<Token | null>(null);
@@ -269,8 +270,8 @@ export function EmojiAssist() {
   return createPortal(
     <div className="emoji-ui">
       {!picker && field ? (
-        <button className="emoji-dock" style={dockStyle(rect, touch ? TOUCH_TARGET : MOUSE_TARGET)} aria-label="Insert emoji" title="Insert emoji (or type :name)" data-testid="emoji-button"
-          onMouseDown={keep} onClick={openPicker}><Smile size={touch ? 20 : 14} /></button>
+        <button className="emoji-dock" style={dockStyle(rect, coarse ? TOUCH_TARGET : MOUSE_TARGET)} aria-label="Insert emoji" title="Insert emoji (or type :name)" data-testid="emoji-button"
+          onMouseDown={keep} onClick={openPicker}><Smile size={coarse ? 20 : 14} /></button>
       ) : null}
       {!picker && token && items.length ? (
         <div className="emoji-suggest" role="listbox" aria-label="Emoji suggestions" data-testid="emoji-suggest" ref={listRef} style={floatStyle(rect, 260, 240)} onMouseDown={keep}>

@@ -1,5 +1,5 @@
 import { useEffect, useState, type KeyboardEvent } from 'react';
-import { AlignLeft, AlignCenterHorizontal, AlignRight, AlignStartVertical, AlignCenterVertical, AlignEndVertical, Columns3, Rows3, Frame, Link as LinkIcon, Trash2, Copy, ArrowLeftRight } from 'lucide-react';
+import { AlignLeft, AlignCenterHorizontal, AlignRight, AlignStartVertical, AlignCenterVertical, AlignEndVertical, Columns3, Rows3, Frame, Link as LinkIcon, Trash2, Copy, ArrowLeftRight, X } from 'lucide-react';
 import { useApp, set } from '../store';
 import { Picker, priorityOptions, roleOptions, shapeOptions, statusOptions } from './Picker';
 import * as actions from '../actions';
@@ -18,6 +18,10 @@ function Text({ label, value, onCommit, multiline, mono, testId, placeholder, no
     onKeyDown: (e: KeyboardEvent) => { e.stopPropagation(); if (e.key === 'Enter' && !multiline) (e.target as HTMLElement).blur(); },
   };
   return <div className="field"><label>{label}</label>{multiline ? <textarea {...common} /> : <input {...common} />}</div>;
+}
+
+export function nodeKindLabel(n: CanvasNode) {
+  return n.kind === 'frame' ? 'Frame' : n.kind === 'sticky' ? 'Sticky note' : n.kind === 'text' ? 'Text' : n.kind === 'drawing' ? 'Drawing' : 'Topic';
 }
 
 /** No priority, then P1 (highest) to P5: the levels the canvas marker shows. */
@@ -44,11 +48,12 @@ function Seg<T extends string>({ label, options, value, onPick, testPrefix }: { 
   );
 }
 
-function NodeInspector({ n }: { n: CanvasNode }) {
+/** The node's properties. `scope` keeps its pickers apart from another copy on screen (the quick-edit popover); `onClose` adds a close button. */
+export function NodeInspector({ n, scope = '', onClose }: { n: CanvasNode; scope?: string; onClose?: () => void }) {
   const up = (patch: Partial<CanvasNode>) => actions.updateNode(n.id, patch as never);
   return (
     <div data-testid="inspector-node">
-      <div className="panel-title"><span>{n.kind === 'frame' ? 'Frame' : n.kind === 'sticky' ? 'Sticky note' : n.kind === 'text' ? 'Text' : n.kind === 'drawing' ? 'Drawing' : 'Topic'}</span><span className="kbd">{n.id}</span></div>
+      <div className="panel-title"><span>{nodeKindLabel(n)}</span><span className="panel-title-end"><span className="kbd">{n.id}</span>{onClose ? <button className="btn icon" data-testid="node-popover-close" aria-label="Close" title="Close (Esc)" onClick={onClose}><X size={14} /></button> : null}</span></div>
       <Text label="Title" value={n.title} onCommit={(v) => up({ title: v })} testId="insp-title" multiline={n.kind === 'sticky' || n.kind === 'text'} placeholder={n.kind === 'sticky' || n.kind === 'text' ? 'Markdown and :emoji: supported' : undefined} />
       {n.kind !== 'sticky' ? <Text label={n.kind === 'frame' ? 'Subtitle' : 'Subtitle (monospace line)'} value={n.subtitle} mono onCommit={(v) => up({ subtitle: v })} testId="insp-subtitle" /> : null}
       {n.kind === 'topic' ? (
@@ -61,12 +66,12 @@ function NodeInspector({ n }: { n: CanvasNode }) {
       {n.kind === 'topic' ? (
         <>
           <div className="field-row">
-            <div className="field"><label>Logic role</label><Picker id="insp-role" label="Logic role" grid value={n.role ?? 'none'} options={roleOptions(NODE_ROLES, 'Step')} onPick={(r) => actions.setRole(r)} testId="role-picker" /></div>
-            <div className="field"><label>Shape</label><Picker id="insp-shape" label="Shape" grid value={n.shape ?? 'card'} options={shapeOptions(NODE_SHAPES)} onPick={(s) => actions.setShape(s)} testId="shape-picker" /></div>
+            <div className="field"><label>Logic role</label><Picker id={scope + 'insp-role'} label="Logic role" grid value={n.role ?? 'none'} options={roleOptions(NODE_ROLES, 'Step')} onPick={(r) => actions.setRole(r)} testId="role-picker" /></div>
+            <div className="field"><label>Shape</label><Picker id={scope + 'insp-shape'} label="Shape" grid value={n.shape ?? 'card'} options={shapeOptions(NODE_SHAPES)} onPick={(s) => actions.setShape(s)} testId="shape-picker" /></div>
           </div>
           <div className="field-row">
-            <div className="field"><label>Status</label><Picker id="insp-status" label="Status" value={n.status ?? 'none'} options={statusOptions(NODE_STATUSES)} onPick={(s) => actions.setStatus(s)} testId="status-picker" /></div>
-            <div className="field"><label>Priority</label><Picker id="insp-priority" label="Priority" value={n.priority ?? 0} options={priorityOptions(PRIORITIES)} onPick={(p) => up({ priority: p })} testId="priority-picker" /></div>
+            <div className="field"><label>Status</label><Picker id={scope + 'insp-status'} label="Status" value={n.status ?? 'none'} options={statusOptions(NODE_STATUSES)} onPick={(s) => actions.setStatus(s)} testId="status-picker" /></div>
+            <div className="field"><label>Priority</label><Picker id={scope + 'insp-priority'} label="Priority" value={n.priority ?? 0} options={priorityOptions(PRIORITIES)} onPick={(p) => up({ priority: p })} testId="priority-picker" /></div>
           </div>
         </>
       ) : null}
@@ -162,7 +167,7 @@ function DocInspector() {
       <p className="inspector-empty" style={{ marginTop: 14 }}>
         {touch
           ? <><b>Tip:</b> tap a topic, then use <b>Child</b> and <b>Sibling</b> in the bar above the toolbar. Long-press for more; double-tap empty canvas to add a topic.</>
-          : <><b>Tip:</b> select a topic and press <span className="kbd">Tab</span> for a child, <span className="kbd">Enter</span> for a sibling. Drag from a node's edge dot to connect. Double-click empty canvas to add a topic.</>}
+          : <><b>Tip:</b> select a topic and press <span className="kbd">Tab</span> for a child, <span className="kbd">Enter</span> for a sibling. Drag from a node's edge dot to connect. Double-click a node to edit it right beside it, or empty canvas to add a topic.</>}
       </p>
     </div>
   );

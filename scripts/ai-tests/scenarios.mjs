@@ -1175,7 +1175,7 @@ export const SCENARIOS = [
     slug: 'H-ai-saves-to-artifacts-folder',
     title: 'AI saves to the session artifacts folder with no click; the server autosaves after the person and the AI edit; a server without a shared folder hands the file back',
     model: 'gpt-6-sol',
-    environmentNote: "Scenario H: the AI's save_to_file names the scenario's artifacts/ folder (under the evidence folder in ~/Documents, which the test container shares at the same path with WFC_SAVE_ROOTS). The recorded tab's save/open dialogs are trapped (any call is recorded and cancelled) and the person never presses Save, so every write to artifacts/ comes from the server; the agent runs in codex's read-only sandbox for turns 1-2, so it cannot write the file itself. Between turns the harness acts as the person: it renames a step in the recorded tab (double-click, type, Enter) and polls the file until it holds the server copy. Turn 3 points the agent at a second server from the same image with no shared folder (like a hosted preview) and runs it in codex's workspace-write sandbox with only fallback-artifacts/ added, so the agent can write the handed-back file there itself.",
+    environmentNote: "Scenario H: the AI's save_to_file names the scenario's artifacts/ folder (under the evidence folder in ~/Documents, which the test container shares at the same path with WFC_SAVE_ROOTS). The recorded tab's save/open dialogs are trapped (any call is recorded and cancelled) and the person never presses Save, so every write to artifacts/ comes from the server; the agent runs in codex's read-only sandbox for turns 1-2, so it cannot write the file itself. Between turns the harness acts as the person: it renames a step in the recorded tab (select, F2, type, Enter) and polls the file until it holds the server copy. Turn 3 points the agent at a second server from the same image with no shared folder (like a hosted preview) and runs it in codex's workspace-write sandbox with only fallback-artifacts/ added, so the agent can write the handed-back file there itself.",
     initScript: pickerTrap,
     async setup(h) {
       const artifactsDir = path.join(h.dir, 'artifacts'), fallbackDir = path.join(h.dir, 'fallback-artifacts');
@@ -1206,7 +1206,8 @@ export const SCENARIOS = [
             await p.page.locator('[data-testid="fit-view"]').click().catch(() => {});
             await p.page.waitForTimeout(800);
             edit.mtimeBefore = fs.statSync(target).mtimeMs;
-            await p.page.locator('[data-testid="node-' + node.id + '"]').dblclick();
+            await p.page.locator('[data-testid="node-' + node.id + '"]').click();
+            await p.page.keyboard.press('F2');
             const box = p.page.locator('[data-testid="node-' + node.id + '"] textarea');
             await box.waitFor({ timeout: 10_000 });
             await box.selectText();

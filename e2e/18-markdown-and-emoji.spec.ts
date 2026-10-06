@@ -94,10 +94,11 @@ test('write Markdown notes and add emoji', async ({ page, app, ev }) => {
     await ev.snap('task-ticked');
   });
 
-  await test.step('double-click edits the raw Markdown; :par suggests emoji, arrows move, Enter and Tab pick, Esc closes only the list, :tada: converts live', async () => {
+  await test.step('F2 edits the raw Markdown; :par suggests emoji, arrows move, Enter and Tab pick, Esc closes only the list, :tada: converts live', async () => {
     const before = await title();
-    await sticky.locator('h2').dblclick();
-    await expect(editor, 'double-click opens the editor').toBeFocused();
+    await sticky.locator('h2').click();
+    await page.keyboard.press('F2');
+    await expect(editor, 'F2 opens the editor').toBeFocused();
     await expect(editor, 'the editor shows the raw Markdown').toHaveValue(before);
     await page.keyboard.press('ArrowRight');
     await page.keyboard.press('Enter');
