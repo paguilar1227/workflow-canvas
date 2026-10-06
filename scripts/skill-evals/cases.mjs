@@ -72,7 +72,7 @@ const E4_ACTOR = /\b(person|people|users?|human|editor|actor|customer|developer|
 const E4_ARTIFACT = /\bfiles?\b|\.excalidraw\b|\bdatabase\b|postgres|\bbucket\b|\bvolume\b/i;
 const E4_CODE_WORD = /\b(services?|api|modules?|packages?|engines?|layers?|handlers?|controllers?|routers?|server|librar(y|ies)|lib|sdk|hooks?|components?|(auto)?savers?|writers?|loaders?|readers?|watchers?|parsers?|workers?|managers?)\b/i;
 export const e4IsCode = (n) => !(E4_NONCODE_ROLES.has(n.role) || (!E4_CODE_WORD.test(n.title ?? '') && (E4_ACTOR.test(n.title ?? '') || E4_ARTIFACT.test(n.title ?? ''))));
-export const E4_PATH = /[\w.-]+\/[\w.*-]+|\w\.(tsx?|jsx?|mjs|cjs|json|css|html|ya?ml|sh)\b|\bDockerfile\b/;
+export const E4_PATH = /[\w.-]+\/[\w.*{},-]+|\w\.(tsx?|jsx?|mjs|cjs|json|css|html|ya?ml|sh)\b|\bDockerfile\b/;
 // Editing someone else's diagram: nodes in the way are existing nodes at or beyond the downstream end (Payments) along the insertion axis, inside the Orders-Payments band.
 export function e7Layout(seedDoc, doc) {
   const S = (re) => seedDoc.nodes.find((n) => re.test(n.title ?? ''));

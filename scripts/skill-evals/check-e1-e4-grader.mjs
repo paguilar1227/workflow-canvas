@@ -28,6 +28,8 @@ const mod = { title: 'Command engine', subtitle: 'src/shared/commands.ts' };
 e4('actor, external, file artifact without paths', true, [mod, { title: 'Person in the browser', subtitle: 'mouse' }, { title: 'stdio-only MCP client', subtitle: 'Claude Desktop' }, { title: 'Stripe', role: 'external', subtitle: 'payments' }, { title: 'Attached Excalidraw files', subtitle: 'browser file' }, { title: 'PostgreSQL', role: 'store', subtitle: 'optional' }]);
 e4('code module without a path', false, [mod, { title: 'Layout engine', subtitle: 'auto layout' }]);
 e4('config files named by file path', true, [mod, { title: 'Project configuration', subtitle: 'package.json · tsconfig.json' }]);
+e4('brace-grouped module paths', true, [mod, { title: 'Graph, sizing & layout', subtitle: 'shared/{graph,layout,sizes}.ts' }]);
+e4('braces without a path', false, [mod, { title: 'Layout options', subtitle: '{graph, tree, lanes}' }]);
 e4('format list is not a path', false, [mod, { title: 'Export formats', subtitle: 'PNG · SVG · Markdown · JSON' }]);
 e4('code node with an actor-like word', false, [mod, { title: 'User service', subtitle: 'accounts' }]);
 e4('client code without a path', false, [mod, { title: 'Realtime sync client', subtitle: 'websocket' }]);
