@@ -2,7 +2,7 @@ import { nanoid } from 'nanoid';
 import { get, set, toast } from './store';
 import { dispatch, callTool, undo as wsUndo, redo as wsRedo, updateSession, renderCanvasImage, openDocument } from './sync';
 import { flow, viewportCenter } from './flowApi';
-import type { CanvasNode, ColorName, NodeKind, NodeRole, NodeShape, NodeStatus, Side } from '../shared/types';
+import type { CanvasNode, ColorName, LayerDirection, NodeKind, NodeRole, NodeShape, NodeStatus, Side } from '../shared/types';
 import { ROLE_INFO, describeLogic, roleOf } from '../shared/logic';
 import type { CommandInput, EdgePatch, LayoutDirection, LayoutMode, NodePatch } from '../shared/commands';
 import { childrenMap, descendants } from '../shared/graph';
@@ -20,7 +20,7 @@ const nodeById = (id: string) => doc()?.nodes.find((n) => n.id === id);
 export function select(nodes: string[], edges: string[] = []) { set({ selection: { nodes, edges } }); }
 export function edit(id: string | null) { set({ editingId: id }); }
 
-export function arrangeSelection(direction: 'front' | 'back') {
+export function arrangeSelection(direction: LayerDirection) {
   if (get().session.viewMode) return;
   dispatch({ type: 'arrange_layers', nodeIds: sel().nodes, edgeIds: sel().edges, direction });
 }

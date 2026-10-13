@@ -11,7 +11,7 @@ const original = applyCommand(empty, normalizeCommand(empty, { type: 'batch', co
   { type: 'add_nodes', nodes: [
     { id: 'frame', kind: 'frame' }, { id: 'first', zIndex: 0 }, { id: 'second', zIndex: 4 }, { id: 'third' },
   ] },
-  { type: 'add_edges', edges: [{ id: 'wire', source: 'first', target: 'second', label: 'Label' }] },
+  { type: 'add_edges', edges: [{ id: 'wire', source: 'first', target: 'second', label: 'Label', labelOffset: { x: 35, y: -20 } }] },
 ] }, options));
 assert.equal(nodeLayer(original.nodes[0]), -1);
 assert.equal(nodeLayer(original.nodes[1]), 0);
@@ -31,5 +31,12 @@ for (const direction of ['front', 'back'] as const) {
   const imported = importExcalidraw(scene, 'copy-');
   for (const node of arranged.nodes) assert.equal(imported.nodes.find((item) => item.id === 'copy-' + node.id)?.zIndex, node.zIndex, 'import retains node layers');
   assert.equal(imported.edges[0].zIndex, arranged.edges[0].zIndex);
+  assert.deepEqual(imported.edges[0].labelOffset, { x: 35, y: -20 });
 }
+const stack = (doc: CanvasDocument) => [...doc.nodes.map((node) => ({ id: node.id, layer: nodeLayer(node) })), ...doc.edges.map((edge) => ({ id: edge.id, layer: edgeLabelLayer(edge) }))].sort((left, right) => left.layer - right.layer).map((item) => item.id);
+const forward = applyCommand(original, { type: 'arrange_layers', nodeIds: ['first'], edgeIds: [], direction: 'forward' });
+assert.deepEqual(stack(forward), ['frame', 'third', 'first', 'wire', 'second']);
+const backward = applyCommand(forward, { type: 'arrange_layers', nodeIds: ['first'], edgeIds: [], direction: 'backward' });
+assert.deepEqual(stack(backward), ['frame', 'first', 'third', 'wire', 'second']);
+assert.equal(applyCommand(forward, { type: 'arrange_layers', nodeIds: ['second'], edgeIds: [], direction: 'forward' }), forward, 'forward at the front is a no-op');
 console.log('Layer ordering, mixed selections, undo and Excalidraw round trips passed');

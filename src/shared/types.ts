@@ -8,6 +8,7 @@ export type NodeStatus = 'none' | 'todo' | 'doing' | 'done' | 'blocked';
 export type EdgeRouting = 'smooth' | 'bezier' | 'straight' | 'step';
 export type EdgeStyle = 'solid' | 'dashed' | 'dotted';
 export type ArrowMode = 'end' | 'start' | 'both' | 'none';
+export type LayerDirection = 'front' | 'back' | 'forward' | 'backward';
 export type TreeLayout = 'mindmap' | 'right' | 'left' | 'down';
 
 export const NODE_KINDS: NodeKind[] = ['topic', 'frame', 'sticky', 'text', 'drawing'];
@@ -55,6 +56,7 @@ export interface CanvasEdge {
   source: string;
   target: string;
   label?: string;
+  labelOffset?: { x: number; y: number };
   style: EdgeStyle;
   arrow: ArrowMode;
   routing: EdgeRouting;

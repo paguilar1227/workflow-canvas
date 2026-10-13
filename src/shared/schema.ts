@@ -35,6 +35,7 @@ export const nodePatchSchema = z.object({ id: z.string().min(1), ...nodeFieldSha
 
 export const edgeFieldShape = {
   label: z.string().nullable().optional().describe('Text shown in a pill on the connector (inline Markdown and :shortcode: emoji).'),
+  labelOffset: z.object({ x: z.number(), y: z.number() }).nullable().optional().describe('Move the label from its automatic position in canvas units; positive x is right and positive y is down. The offset follows the connector when nodes move. null resets it.'),
   style: z.enum(EDGE_STYLES as [string, ...string[]]).optional(),
   arrow: z.enum(ARROW_MODES as [string, ...string[]]).optional().describe("Arrowheads: 'end' (default), 'start', 'both', 'none'."),
   routing: z.enum(EDGE_ROUTINGS as [string, ...string[]]).optional().describe("'smooth' orthogonal with rounded corners (default), 'bezier', 'straight', 'step'."),
@@ -71,7 +72,7 @@ export const commandSchema: z.ZodType<unknown> = z.lazy(() => z.discriminatedUni
   z.object({ type: z.literal('add_edges'), edges: z.array(canvasEdgeSchema) }),
   z.object({ type: z.literal('update_edges'), updates: z.array(edgePatchSchema) }),
   z.object({ type: z.literal('delete_edges'), ids: z.array(z.string()) }),
-  z.object({ type: z.literal('arrange_layers'), nodeIds: z.array(z.string()), edgeIds: z.array(z.string()), direction: z.enum(['front', 'back']) }),
+  z.object({ type: z.literal('arrange_layers'), nodeIds: z.array(z.string()), edgeIds: z.array(z.string()), direction: z.enum(['front', 'back', 'forward', 'backward']) }),
   z.object({ type: z.literal('layout'), mode: layoutModeSchema, direction: layoutDirectionSchema.optional(), rootId: z.string().optional(), nodeIds: z.array(z.string()).optional(), spacing: z.number().positive().optional() }),
   z.object({ type: z.literal('align'), ids: z.array(z.string()), align: alignSchema }),
   z.object({ type: z.literal('distribute'), ids: z.array(z.string()), axis: z.enum(['horizontal', 'vertical']) }),

@@ -50,6 +50,8 @@ function Seg<T extends string>({ label, options, value, onPick, testPrefix }: { 
 
 function LayerControls() {
   return <div className="field" role="group" aria-label="Arrange"><span className="field-label">Arrange</span><div className="seg layer-controls">
+    <button data-testid="bring-forward" onClick={() => actions.arrangeSelection('forward')}>Bring forward</button>
+    <button data-testid="send-backward" onClick={() => actions.arrangeSelection('backward')}>Send backward</button>
     <button data-testid="bring-to-front" onClick={() => actions.arrangeSelection('front')}>Bring to front</button>
     <button data-testid="send-to-back" onClick={() => actions.arrangeSelection('back')}>Send to back</button>
   </div></div>;
@@ -142,6 +144,11 @@ function EdgeInspector({ e }: { e: CanvasEdge }) {
     <div data-testid="inspector-edge">
       <div className="panel-title"><span>Connector</span><span className="kbd">{e.id}</span></div>
       <Text label="Label" value={e.label} onCommit={(v) => up({ label: v })} testId="insp-edge-label" />
+      <div className="field-row">
+        <Text label="Label X offset" value={String(e.labelOffset?.x ?? 0)} noEmoji onCommit={(v) => { if (v.trim() && Number.isFinite(Number(v))) up({ labelOffset: { x: Number(v), y: e.labelOffset?.y ?? 0 } }); }} />
+        <Text label="Label Y offset" value={String(e.labelOffset?.y ?? 0)} noEmoji onCommit={(v) => { if (v.trim() && Number.isFinite(Number(v))) up({ labelOffset: { x: e.labelOffset?.x ?? 0, y: Number(v) } }); }} />
+      </div>
+      <button className="btn outline" data-testid="reset-label-position" onClick={() => up({ labelOffset: null as never })}>Reset label position</button>
       <LayerControls />
       <Seg label="Routing" options={EDGE_ROUTINGS} value={e.routing} onPick={(v) => up({ routing: v })} testPrefix="routing-" />
       <Seg label="Line" options={EDGE_STYLES} value={e.style} onPick={(v) => up({ style: v })} testPrefix="edgestyle-" />

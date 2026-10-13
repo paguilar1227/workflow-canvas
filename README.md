@@ -76,9 +76,10 @@ To use the skill without the plugin, copy that folder into your agent's skills d
 | Drop a topic on another (re-parent) | `reparent_node` |
 | Collapse / expand branches | `set_collapsed` |
 | Connect, label, style, reverse, delete connectors | `add_edges`, `update_edges`, `delete_edges` |
+| Drag or precisely reposition a connector label; reset its position | `update_edges` with `labelOffset: { x, y }` in canvas units, or `labelOffset: null` to reset |
 | Delete | `delete_nodes` |
 | Layout menu, align / distribute, fit frame | `auto_layout`, `align_nodes`, `distribute_nodes`, `fit_frame_to_contents` |
-| Bring to front / Send to back (inspector or context menu) | `arrange_layers` with `nodeIds` and/or `edgeIds`, and `direction: "front"` or `"back"` |
+| Arrange elements (inspector or context menu) | `arrange_layers` with `nodeIds` and/or `edgeIds`: `"forward"` / `"backward"` moves one layer; `"front"` / `"back"` moves all the way |
 | Mind-map structure & auto-arrange settings | `update_document` (`treeLayout`, `autoArrange`) |
 | Import / export menus | `import_content`, `export_document` |
 | Undo / redo | `undo`, `redo` (shared history) |

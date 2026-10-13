@@ -1,9 +1,10 @@
-import { memo, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
-import { BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath, getStraightPath, Position, useInternalNode, ViewportPortal, type EdgeProps } from '@xyflow/react';
+import { memo, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
+import { BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath, getStraightPath, Position, useInternalNode, useStore, ViewportPortal, type EdgeProps } from '@xyflow/react';
 import type { CanvasEdge, CanvasNode, NodeShape, Side } from '../../shared/types';
 import { COLOR_NAMES } from '../../shared/types';
 import { InlineEdit } from './nodes';
-import { useApp, set } from '../store';
+import { useApp, get, set } from '../store';
+import { flow } from '../flowApi';
 import { roughPath, seedOf, useSketch } from './sketch';
 import * as actions from '../actions';
 import { InlineMarkdown } from '../markdown';
@@ -148,10 +149,39 @@ export const SmartEdge = memo(function SmartEdge({ id, source, target, data, sel
   const s = useRect(source);
   const t = useRect(target);
   const editing = useApp((st) => st.editingEdgeId === id);
+  const locked = useApp((st) => st.session.viewMode || st.session.mode !== 'select');
+  const dragThreshold = useStore((state) => state.nodeDragThreshold);
   const sketch = useSketch();
   const neon = useNeon();
   const born = useApp((st) => !!st.newEdges[id]);
   const labelRef = useRef<HTMLDivElement>(null);
+  const labelDrag = useRef<{ pointerId: number; x: number; y: number; zoom: number; offset: { x: number; y: number }; moved: boolean; docId: string | null } | null>(null);
+  const suppressClick = useRef(false);
+  const [labelPreview, setLabelPreview] = useState<{ x: number; y: number } | null>(null);
+  const cancelDrag = () => { labelDrag.current = null; setLabelPreview(null); };
+  useEffect(() => {
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && labelDrag.current) {
+        suppressClick.current = labelDrag.current.moved;
+        labelDrag.current = null;
+        setLabelPreview(null);
+      }
+    };
+    window.addEventListener('keydown', escape);
+    return () => window.removeEventListener('keydown', escape);
+  }, []);
+  const dragOffset = (event: PointerEvent<HTMLDivElement>, drag: NonNullable<typeof labelDrag.current>) => ({
+    x: drag.offset.x + (event.clientX - drag.x) / drag.zoom,
+    y: drag.offset.y + (event.clientY - drag.y) / drag.zoom,
+  });
+  const finishDrag = (event: PointerEvent<HTMLDivElement>) => {
+    const drag = labelDrag.current;
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    labelDrag.current = null;
+    suppressClick.current = drag.moved;
+    if (drag.moved && !locked && !get().menu && get().docId === drag.docId) actions.updateEdge(id, { labelOffset: dragOffset(event, drag) });
+    setLabelPreview(null);
+  };
   const [labelHalf, setLabelHalf] = useState({ w: 0, h: 0 });
   useLayoutEffect(() => {
     const el = labelRef.current;
@@ -214,12 +244,33 @@ export const SmartEdge = memo(function SmartEdge({ id, source, target, data, sel
         <EdgeLabelRenderer>
           <div
             ref={labelRef}
-            className={'wfc-edge-label nodrag nopan' + (selected ? ' selected' : '')}
-            style={{ left: lx, top: ly, zIndex: edgeLabelLayer(e) }}
+            className={'wfc-edge-label nodrag nopan' + (selected ? ' selected' : '') + (labelPreview ? ' dragging' : '')}
+            style={{ left: lx + (labelPreview?.x ?? e.labelOffset?.x ?? 0), top: ly + (labelPreview?.y ?? e.labelOffset?.y ?? 0), zIndex: edgeLabelLayer(e) }}
             data-testid={'edge-label-' + id}
             data-edge-id={id}
-            onClick={(ev) => { ev.stopPropagation(); set({ selection: { nodes: [], edges: [id] } }); }}
-            onDoubleClick={(ev) => { ev.stopPropagation(); set({ editingEdgeId: id }); }}
+            title={locked ? undefined : 'Drag to move label · double-click to edit'}
+            onPointerDown={(event) => {
+              suppressClick.current = false;
+              if (locked || editing || event.button !== 0 || (event.target as HTMLElement).closest('a, input, textarea, button')) return;
+              event.stopPropagation();
+              event.currentTarget.setPointerCapture(event.pointerId);
+              labelDrag.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, zoom: flow()?.getZoom() ?? 1, offset: e.labelOffset ?? { x: 0, y: 0 }, moved: false, docId: get().docId };
+            }}
+            onPointerMove={(event) => {
+              const drag = labelDrag.current;
+              if (!drag || drag.pointerId !== event.pointerId || locked) return;
+              if (!drag.moved && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) <= dragThreshold) return;
+              drag.moved = true;
+              event.preventDefault();
+              event.stopPropagation();
+              set({ selection: { nodes: [], edges: [id] } });
+              setLabelPreview(dragOffset(event, drag));
+            }}
+            onPointerUp={finishDrag}
+            onPointerCancel={cancelDrag}
+            onLostPointerCapture={cancelDrag}
+            onClick={(ev) => { ev.stopPropagation(); if (suppressClick.current) { suppressClick.current = false; return; } set({ selection: { nodes: [], edges: [id] } }); }}
+            onDoubleClick={(ev) => { ev.stopPropagation(); if (!locked) set({ editingEdgeId: id }); }}
             onContextMenu={(ev) => { ev.preventDefault(); ev.stopPropagation(); actions.openContextMenu(ev.clientX, ev.clientY, undefined, id); }}
           >
             {editing ? (

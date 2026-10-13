@@ -333,12 +333,13 @@ input, textarea, select { font: inherit; color: var(--text); }
 .wfc-branch { fill: none; stroke-linecap: round; }
 .wfc-edge-label {
   position: absolute; transform: translate(-50%, -50%); pointer-events: all; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap;
-  background: var(--edge-label-bg); border: 1px solid var(--edge-label-border); color: var(--edge-label-text); cursor: pointer;
+  background: var(--edge-label-bg); border: 1px solid var(--edge-label-border); color: var(--edge-label-text); cursor: grab; touch-action: none;
 }
+.wfc-edge-label.dragging { cursor: grabbing; }
 .wfc-edge-label.selected { border-color: var(--selection); }
 .wfc-edge-label input { font: inherit; border: 0; outline: none; background: transparent; color: inherit; width: 140px; text-align: center; }
 .wfc-edge-label.empty { opacity: 0; }
-.layer-controls button { flex: 1; min-height: 36px; }
+.layer-controls button { flex: 1 1 45%; min-height: 36px; }
 
 
 /* ---------- Excalidraw-style sketch rendering & freehand ---------- */

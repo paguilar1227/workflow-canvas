@@ -1,4 +1,4 @@
-import type { CanvasDocument, CanvasEdge, CanvasNode, DocSettings, NodeKind, NodeShape, Side, TreeLayout } from './types';
+import type { CanvasDocument, CanvasEdge, CanvasNode, DocSettings, LayerDirection, NodeKind, NodeShape, Side, TreeLayout } from './types';
 import { ROLE_INFO, isRole } from './logic';
 import { arrangeLayers } from './layers';
 import { childrenMap, descendants, hiddenIds, isAncestor, nodeMap, rootOf } from './graph';
@@ -22,7 +22,7 @@ export type Command =
   | { type: 'add_edges'; edges: CanvasEdge[] }
   | { type: 'update_edges'; updates: EdgePatch[] }
   | { type: 'delete_edges'; ids: string[] }
-  | { type: 'arrange_layers'; nodeIds: string[]; edgeIds: string[]; direction: 'front' | 'back' }
+  | { type: 'arrange_layers'; nodeIds: string[]; edgeIds: string[]; direction: LayerDirection }
   | { type: 'layout'; mode: LayoutMode; direction?: LayoutDirection; rootId?: string; nodeIds?: string[]; spacing?: number }
   | { type: 'align'; ids: string[]; align: Align }
   | { type: 'distribute'; ids: string[]; axis: 'horizontal' | 'vertical' }
@@ -175,6 +175,7 @@ export function normalizeCommand(doc: CanvasDocument, input: CommandInput, opts:
           edgeIds.add(id);
           const e: CanvasEdge = { id, source: raw.source, target: raw.target, style: raw.style ?? 'solid', arrow: raw.arrow ?? 'end', routing: raw.routing ?? 'smooth' };
           if (raw.label) e.label = raw.label;
+          if (raw.labelOffset) e.labelOffset = { ...raw.labelOffset };
           if (raw.style === null) e.style = 'solid';
           if (raw.color) e.color = raw.color;
           if (raw.animated) e.animated = true;
@@ -304,7 +305,7 @@ function clearSpaceAround(doc: CanvasDocument, rootId: string): CanvasDocument {
 }
 
 const NODE_PATCH_KEYS = ['kind', 'title', 'subtitle', 'notes', 'badge', 'icon', 'shape', 'role', 'color', 'x', 'y', 'width', 'height', 'parentId', 'frameId', 'collapsed', 'tags', 'link', 'status', 'priority', 'locked', 'points', 'zIndex'] as const;
-const EDGE_PATCH_KEYS = ['source', 'target', 'label', 'style', 'arrow', 'routing', 'color', 'animated', 'sourceSide', 'targetSide', 'zIndex'] as const;
+const EDGE_PATCH_KEYS = ['source', 'target', 'label', 'labelOffset', 'style', 'arrow', 'routing', 'color', 'animated', 'sourceSide', 'targetSide', 'zIndex'] as const;
 
 function mergeDefined<T extends object>(base: T, patch: Record<string, unknown>, keys: readonly string[]): T {
   let changed = false;
@@ -518,7 +519,7 @@ export function summarizeCommand(cmd: Command): string {
     case 'add_edges': return 'connected ' + cmd.edges.length + ' edge' + (cmd.edges.length === 1 ? '' : 's');
     case 'update_edges': return 'edited ' + cmd.updates.length + ' edge' + (cmd.updates.length === 1 ? '' : 's');
     case 'delete_edges': return 'deleted ' + cmd.ids.length + ' edge' + (cmd.ids.length === 1 ? '' : 's');
-    case 'arrange_layers': return cmd.direction === 'front' ? 'brought selection to front' : 'sent selection to back';
+    case 'arrange_layers': return ({ front: 'brought selection to front', back: 'sent selection to back', forward: 'moved selection forward one layer', backward: 'moved selection backward one layer' })[cmd.direction];
     case 'layout': return 'arranged the canvas (' + cmd.mode + ')';
     case 'align': return 'aligned ' + cmd.ids.length + ' nodes';
     case 'distribute': return 'distributed ' + cmd.ids.length + ' nodes';

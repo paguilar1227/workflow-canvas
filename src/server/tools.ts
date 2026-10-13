@@ -317,7 +317,7 @@ export function createTools(store: Store, hub: Hub, files: FileSaver): ToolDef[]
       },
     },
     {
-      name: 'update_edges', title: 'Update connectors', description: 'Edit connector label, endpoints, arrows, style, routing, colour, animation or forced sides.',
+      name: 'update_edges', title: 'Update connectors', description: 'Edit connector label, labelOffset (x/y canvas units from its automatic position; null resets), endpoints, arrows, style, routing, colour, animation or forced sides.',
       input: { documentId: docIdArg, updates: z.array(edgePatchSchema).min(1) },
       run: async (a, ctx) => { const id = resolveDoc(a.documentId); return resultFor(id, run(id, { type: 'update_edges', updates: a.updates }, ctx)); },
     },
@@ -366,8 +366,8 @@ export function createTools(store: Store, hub: Hub, files: FileSaver): ToolDef[]
       },
     },
     {
-      name: 'arrange_layers', title: 'Arrange layers', description: 'Bring nodes and/or connectors to the front or send them to the back, preserving their relative order. Connector labels are above nodes by default. Layer changes are saved and undoable, just like the UI Arrange controls.',
-      input: { documentId: docIdArg, nodeIds: z.array(z.string()).optional(), edgeIds: z.array(z.string()).optional(), direction: z.enum(['front', 'back']) },
+      name: 'arrange_layers', title: 'Arrange layers', description: 'Arrange nodes and/or connectors, preserving their relative order. front/back goes all the way; forward/backward moves one step in the stack, allowing an item between two others. Connector labels are above nodes by default. Saved and undoable, just like the UI Arrange controls.',
+      input: { documentId: docIdArg, nodeIds: z.array(z.string()).optional(), edgeIds: z.array(z.string()).optional(), direction: z.enum(['front', 'back', 'forward', 'backward']) },
       run: async (a, ctx) => {
         const id = resolveDoc(a.documentId);
         const nodeIds = a.nodeIds ?? [], edgeIds = a.edgeIds ?? [];

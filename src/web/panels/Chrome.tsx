@@ -155,6 +155,8 @@ export function ContextMenu() {
           {item('Copy', actions.copy, '⌘C')}
           {item('Frame selection', actions.frameSelection, '⌘G')}
           {item('Bring to front', () => actions.arrangeSelection('front'), undefined, 'ctx-bring-to-front')}
+          {item('Bring forward', () => actions.arrangeSelection('forward'), undefined, 'ctx-bring-forward')}
+          {item('Send backward', () => actions.arrangeSelection('backward'), undefined, 'ctx-send-backward')}
           {item('Send to back', () => actions.arrangeSelection('back'), undefined, 'ctx-send-to-back')}
           {n.kind === 'frame' ? item('Fit frame to contents', () => actions.fitFrame(n.id)) : null}
           <div className="menu-label">Color</div>
@@ -167,6 +169,9 @@ export function ContextMenu() {
       ) : menu.edgeId ? (
         <>
           {item('Edit label', () => set({ editingEdgeId: menu.edgeId! }), undefined, 'ctx-edge-label')}
+          {item('Reset label position', () => actions.updateEdge(menu.edgeId!, { labelOffset: null } as never), undefined, 'ctx-reset-label')}
+          {item('Bring forward', () => actions.arrangeSelection('forward'), undefined, 'ctx-bring-forward')}
+          {item('Send backward', () => actions.arrangeSelection('backward'), undefined, 'ctx-send-backward')}
           {item('Bring to front', () => actions.arrangeSelection('front'), undefined, 'ctx-bring-to-front')}
           {item('Send to back', () => actions.arrangeSelection('back'), undefined, 'ctx-send-to-back')}
           {item('Reverse direction', () => actions.reverseEdge(menu.edgeId!))}

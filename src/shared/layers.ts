@@ -1,9 +1,9 @@
-import type { CanvasDocument, CanvasEdge, CanvasNode } from './types';
+import type { CanvasDocument, CanvasEdge, CanvasNode, LayerDirection } from './types';
 
 export const nodeLayer = (node: CanvasNode) => node.zIndex ?? (node.kind === 'frame' ? -1 : 1);
 export const edgeLabelLayer = (edge: CanvasEdge) => edge.zIndex ?? 3;
 
-export function arrangeLayers(doc: CanvasDocument, nodeIds: string[], edgeIds: string[], direction: 'front' | 'back'): CanvasDocument {
+export function arrangeLayers(doc: CanvasDocument, nodeIds: string[], edgeIds: string[], direction: LayerDirection): CanvasDocument {
   const nodes = new Set(nodeIds);
   const edges = new Set(edgeIds);
   const items = [
@@ -12,6 +12,26 @@ export function arrangeLayers(doc: CanvasDocument, nodeIds: string[], edgeIds: s
   ];
   const selected = items.filter((entry) => entry.selected).sort((left, right) => left.layer - right.layer);
   if (!selected.length) return doc;
+  if (direction === 'forward' || direction === 'backward') {
+    const ordered = [...items].sort((left, right) => left.layer - right.layer);
+    let moved = false;
+    const step = direction === 'forward' ? -1 : 1;
+    for (let index = step < 0 ? ordered.length - 2 : 1; index >= 0 && index < ordered.length; index += step) {
+      const other = index - step;
+      if (ordered[index].selected && !ordered[other].selected) {
+        [ordered[index], ordered[other]] = [ordered[other], ordered[index]];
+        moved = true;
+      }
+    }
+    if (!moved) return doc;
+    const first = Math.min(0, ...items.map((entry) => entry.layer));
+    const layers = new Map(ordered.map((entry, index) => [entry.item, first + index]));
+    return {
+      ...doc,
+      nodes: doc.nodes.map((node) => ({ ...node, zIndex: layers.get(node)! })),
+      edges: doc.edges.map((edge) => ({ ...edge, zIndex: layers.get(edge)! })),
+    };
+  }
   const remaining = items.filter((entry) => !entry.selected);
   const boundary = direction === 'front'
     ? Math.max(0, ...remaining.map((entry) => entry.layer)) + 1
