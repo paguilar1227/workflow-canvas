@@ -16,7 +16,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:e2e": "playwright test",
     "test:ai": "node scripts/ai-tests/run.mjs",
-    "test:unit": "tsx scripts/unit-tests/describe-logic.test.mts && tsx scripts/unit-tests/lanes-order.test.mts",
+    "test:unit": "tsx scripts/unit-tests/describe-logic.test.mts && tsx scripts/unit-tests/lanes-order.test.mts && tsx scripts/unit-tests/layers.test.mts",
     "test:plugin": "bash scripts/plugin-tests/ensure-canvas.test.sh"
   },
   "engines": {

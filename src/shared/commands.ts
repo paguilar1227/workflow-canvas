@@ -1,5 +1,6 @@
 import type { CanvasDocument, CanvasEdge, CanvasNode, DocSettings, NodeKind, NodeShape, Side, TreeLayout } from './types';
 import { ROLE_INFO, isRole } from './logic';
+import { arrangeLayers } from './layers';
 import { childrenMap, descendants, hiddenIds, isAncestor, nodeMap, rootOf } from './graph';
 import { defaultSize, bounds, center, containsPoint } from './sizes';
 import { alignNodes, distributeNodes, fitFrame, layoutGraph, layoutGrid, layoutLanes, layoutTree, type Align, type GraphDirection, type Pos } from './layout';
@@ -21,6 +22,7 @@ export type Command =
   | { type: 'add_edges'; edges: CanvasEdge[] }
   | { type: 'update_edges'; updates: EdgePatch[] }
   | { type: 'delete_edges'; ids: string[] }
+  | { type: 'arrange_layers'; nodeIds: string[]; edgeIds: string[]; direction: 'front' | 'back' }
   | { type: 'layout'; mode: LayoutMode; direction?: LayoutDirection; rootId?: string; nodeIds?: string[]; spacing?: number }
   | { type: 'align'; ids: string[]; align: Align }
   | { type: 'distribute'; ids: string[]; axis: 'horizontal' | 'vertical' }
@@ -92,7 +94,7 @@ export function normalizeCommand(doc: CanvasDocument, input: CommandInput, opts:
           order: ++order,
         };
         if (shape) node.shape = shape;
-        for (const k of ['subtitle', 'notes', 'badge', 'icon', 'role', 'color', 'collapsed', 'tags', 'link', 'status', 'priority', 'locked'] as const) {
+        for (const k of ['subtitle', 'notes', 'badge', 'icon', 'role', 'color', 'collapsed', 'tags', 'link', 'status', 'priority', 'locked', 'zIndex'] as const) {
           if (raw[k] !== undefined && raw[k] !== null && raw[k] !== '') (node as unknown as Record<string, unknown>)[k] = raw[k];
         }
         if (parentId) node.parentId = parentId;
@@ -178,6 +180,7 @@ export function normalizeCommand(doc: CanvasDocument, input: CommandInput, opts:
           if (raw.animated) e.animated = true;
           if (raw.sourceSide) e.sourceSide = raw.sourceSide as Side;
           if (raw.targetSide) e.targetSide = raw.targetSide as Side;
+          if (raw.zIndex != null) e.zIndex = raw.zIndex;
           return e;
         }),
       };
@@ -300,8 +303,8 @@ function clearSpaceAround(doc: CanvasDocument, rootId: string): CanvasDocument {
   return applyPositions(doc, moves);
 }
 
-const NODE_PATCH_KEYS = ['kind', 'title', 'subtitle', 'notes', 'badge', 'icon', 'shape', 'role', 'color', 'x', 'y', 'width', 'height', 'parentId', 'frameId', 'collapsed', 'tags', 'link', 'status', 'priority', 'locked', 'points'] as const;
-const EDGE_PATCH_KEYS = ['source', 'target', 'label', 'style', 'arrow', 'routing', 'color', 'animated', 'sourceSide', 'targetSide'] as const;
+const NODE_PATCH_KEYS = ['kind', 'title', 'subtitle', 'notes', 'badge', 'icon', 'shape', 'role', 'color', 'x', 'y', 'width', 'height', 'parentId', 'frameId', 'collapsed', 'tags', 'link', 'status', 'priority', 'locked', 'points', 'zIndex'] as const;
+const EDGE_PATCH_KEYS = ['source', 'target', 'label', 'style', 'arrow', 'routing', 'color', 'animated', 'sourceSide', 'targetSide', 'zIndex'] as const;
 
 function mergeDefined<T extends object>(base: T, patch: Record<string, unknown>, keys: readonly string[]): T {
   let changed = false;
@@ -317,6 +320,7 @@ function mergeDefined<T extends object>(base: T, patch: Record<string, unknown>,
 
 export function applyCommand(doc: CanvasDocument, cmd: Command): CanvasDocument {
   switch (cmd.type) {
+    case 'arrange_layers': return arrangeLayers(doc, cmd.nodeIds, cmd.edgeIds, cmd.direction);
     case 'add_nodes': {
       const existing = new Set(doc.nodes.map((n) => n.id));
       const fresh = cmd.nodes.filter((n) => !existing.has(n.id));
@@ -514,6 +518,7 @@ export function summarizeCommand(cmd: Command): string {
     case 'add_edges': return 'connected ' + cmd.edges.length + ' edge' + (cmd.edges.length === 1 ? '' : 's');
     case 'update_edges': return 'edited ' + cmd.updates.length + ' edge' + (cmd.updates.length === 1 ? '' : 's');
     case 'delete_edges': return 'deleted ' + cmd.ids.length + ' edge' + (cmd.ids.length === 1 ? '' : 's');
+    case 'arrange_layers': return cmd.direction === 'front' ? 'brought selection to front' : 'sent selection to back';
     case 'layout': return 'arranged the canvas (' + cmd.mode + ')';
     case 'align': return 'aligned ' + cmd.ids.length + ' nodes';
     case 'distribute': return 'distributed ' + cmd.ids.length + ' nodes';
@@ -527,6 +532,7 @@ export function summarizeCommand(cmd: Command): string {
 
 export function touchedNodeIds(cmd: Command): string[] {
   switch (cmd.type) {
+    case 'arrange_layers': return cmd.nodeIds;
     case 'add_nodes': return cmd.nodes.map((n) => n.id);
     case 'update_nodes': return cmd.updates.map((u) => u.id);
     case 'move_nodes': return cmd.moves.map((m) => m.id);

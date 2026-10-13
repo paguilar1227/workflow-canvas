@@ -8,8 +8,9 @@ import { roughPath, seedOf, useSketch } from './sketch';
 import * as actions from '../actions';
 import { InlineMarkdown } from '../markdown';
 import { neonBranch, useNeon } from './neon';
+import { edgeLabelLayer } from '../../shared/layers';
 
-export type Rect = { x: number; y: number; w: number; h: number; shape?: NodeShape };
+export type Rect = { x: number; y: number; w: number; h: number; shape?: NodeShape; zIndex?: number };
 const POS: Record<Side, Position> = { top: Position.Top, right: Position.Right, bottom: Position.Bottom, left: Position.Left };
 const NEON_ARROW_SIZE = 21;
 const NEON_DASH_GAP = 9;
@@ -19,7 +20,7 @@ function useRect(id: string): Rect | null {
   if (!n) return null;
   const p = n.internals.positionAbsolute;
   const node = (n.data as { node: CanvasNode }).node;
-  return { x: p.x, y: p.y, w: n.measured?.width ?? n.width ?? 0, h: n.measured?.height ?? n.height ?? 0, shape: node?.kind === 'topic' ? node.shape : undefined };
+  return { x: p.x, y: p.y, w: n.measured?.width ?? n.width ?? 0, h: n.measured?.height ?? n.height ?? 0, shape: node?.kind === 'topic' ? node.shape : undefined, zIndex: n.internals.z };
 }
 
 function anchor(r: Rect, side: Side) {
@@ -201,7 +202,7 @@ export const SmartEdge = memo(function SmartEdge({ id, source, target, data, sel
       {patterned && (startArrow || endArrow) ? <path d={terminalPath} className={'wfc-neon-terminal' + (selected ? ' selected' : '')} style={ecStyle} /> : null}
       {neon ? (
         <ViewportPortal>
-          {[a, b].map((p, i) => (i === 0 ? startArrow : endArrow) ? null : <span key={i} className="wfc-port-dot" style={{ ...ecStyle, transform: 'translate(' + p.x + 'px,' + p.y + 'px)' }} />)}
+          {[a, b].map((p, i) => (i === 0 ? startArrow : endArrow) ? null : <span key={i} className="wfc-port-dot" style={{ ...ecStyle, zIndex: ((i === 0 ? s : t).zIndex ?? 1) + 1, transform: 'translate(' + p.x + 'px,' + p.y + 'px)' }} />)}
         </ViewportPortal>
       ) : null}
       {sketch ? (
@@ -214,10 +215,12 @@ export const SmartEdge = memo(function SmartEdge({ id, source, target, data, sel
           <div
             ref={labelRef}
             className={'wfc-edge-label nodrag nopan' + (selected ? ' selected' : '')}
-            style={{ left: lx, top: ly }}
+            style={{ left: lx, top: ly, zIndex: edgeLabelLayer(e) }}
             data-testid={'edge-label-' + id}
+            data-edge-id={id}
             onClick={(ev) => { ev.stopPropagation(); set({ selection: { nodes: [], edges: [id] } }); }}
             onDoubleClick={(ev) => { ev.stopPropagation(); set({ editingEdgeId: id }); }}
+            onContextMenu={(ev) => { ev.preventDefault(); ev.stopPropagation(); actions.openContextMenu(ev.clientX, ev.clientY, undefined, id); }}
           >
             {editing ? (
               <InlineEdit className="wfc-edge-edit" value={e.label ?? ''} onDone={(v) => { set({ editingEdgeId: null }); if (v !== null && v !== (e.label ?? '')) actions.updateEdge(id, { label: v }); }} />

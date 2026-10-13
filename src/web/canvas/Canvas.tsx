@@ -12,6 +12,7 @@ import { childrenMap, descendants, hiddenIds, depthOf, branchAncestor, isAncesto
 import { containsPoint, defaultSize } from '../../shared/sizes';
 import { getTheme } from '../../shared/themes';
 import type { CanvasNode, Side } from '../../shared/types';
+import { nodeLayer } from '../../shared/layers';
 import { dispatch, reportSession } from '../sync';
 import { setFlow } from '../flowApi';
 import * as actions from '../actions';
@@ -113,7 +114,7 @@ export function Canvas() {
       };
       return {
         id: n.id, type: n.kind, position: { x: o?.x ?? n.x, y: o?.y ?? n.y }, data, width, height, measured: { width, height },
-        selected: sel.has(n.id), draggable: !n.locked && editingId !== n.id && !lockedView, zIndex: n.kind === 'frame' ? -1 : 1,
+        selected: sel.has(n.id), draggable: !n.locked && editingId !== n.id && !lockedView, zIndex: nodeLayer(n),
         className: n.kind === 'frame' ? 'is-frame' : undefined,
       } satisfies Node;
     });
@@ -143,7 +144,7 @@ export function Canvas() {
       const group = lanes.get([e.source, e.target].sort().join('|'))!;
       const i = group.indexOf(e.id);
       const offset = group.length > 1 ? (i - (group.length - 1) / 2) * PARALLEL_EDGE_GAP : 0;
-      out.push({ id: e.id, source: e.source, target: e.target, type: 'smart', data: { edge: e, offset, wire: wires?.get(e.id), slot: slots?.get(e.id) }, selected: sel.has(e.id), zIndex: 0 });
+      out.push({ id: e.id, source: e.source, target: e.target, type: 'smart', data: { edge: e, offset, wire: wires?.get(e.id), slot: slots?.get(e.id) }, selected: sel.has(e.id), zIndex: e.zIndex ?? 0 });
     }
     return out;
   }, [doc, selection.edges, neon, neon ? overlay : null]);
@@ -328,6 +329,7 @@ export function Canvas() {
       deleteKeyCode={null}
       disableKeyboardA11y
       elevateNodesOnSelect={false}
+      zIndexMode="manual"
       snapToGrid={session.snapToGrid}
       snapGrid={[theme.gap, theme.gap]}
       minZoom={MIN_ZOOM}
@@ -381,8 +383,9 @@ function useLongPressMenu() {
         // A press on a connection dot means its node: the dots sit on the node's edge.
         const el = document.elementFromPoint(x, y) as HTMLElement | null;
         const nodeId = (el?.closest('.react-flow__node') as HTMLElement | null)?.dataset.id;
-        const edgeEl = nodeId ? null : (el?.closest('.react-flow__edge') as HTMLElement | null);
-        const edgeId = edgeEl?.dataset.id && get().doc?.edges.some((d) => d.id === edgeEl.dataset.id) ? edgeEl.dataset.id : undefined;
+        const edgeEl = nodeId ? null : (el?.closest('.react-flow__edge, [data-edge-id]') as HTMLElement | null);
+        const candidate = edgeEl?.dataset.edgeId ?? edgeEl?.dataset.id;
+        const edgeId = candidate && get().doc?.edges.some((d) => d.id === candidate) ? candidate : undefined;
         if (nodeId && !get().selection.nodes.includes(nodeId)) set({ selection: { nodes: [nodeId], edges: [] } });
         if (edgeId) set({ selection: { nodes: [], edges: [edgeId] } });
         openCtx({ clientX: x, clientY: y } as MouseEvent, nodeId, edgeId);
@@ -547,6 +550,6 @@ function flowPoint(x: number, y: number) {
 }
 
 function openCtx(e: MouseEvent, nodeId?: string, edgeId?: string) {
-  set({ menu: { x: e.clientX, y: e.clientY, flow: flowPoint(e.clientX, e.clientY), nodeId, edgeId } });
+  actions.openContextMenu(e.clientX, e.clientY, nodeId, edgeId);
 }
 

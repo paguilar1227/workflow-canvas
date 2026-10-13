@@ -126,7 +126,7 @@ export function App() {
   const canvasRef = useRef<HTMLDivElement>(null);
   useDockLayout(canvasRef, [viewMode, zen, minimap, !!doc, compact]);
   return (
-    <ReactFlowProvider>
+    <ReactFlowProvider zIndexMode="manual">
       <div className={'app' + (zen ? ' zen' : '') + (viewMode ? ' view-mode' : '') + (compact ? ' compact' : '')} onClick={() => useApp.getState().menu && set({ menu: null })}>
         <TopBar />
         <div className="main">

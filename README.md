@@ -6,7 +6,7 @@ Workflow Canvas combines XMind-style mind mapping with free-form diagramming (ca
 
 ![An architecture map in the Neon Flow theme](docs/images/architecture.png)
 
-- **Built for human + AI collaboration.** 36 MCP tools mirror the UI, from adding a node to switching themes. Changes stream live to every open tab with an activity feed; undo/redo is shared.
+- **Built for human + AI collaboration.** 37 MCP tools mirror the UI, from adding a node to switching themes. Changes stream live to every open tab with an activity feed; undo/redo is shared.
 - **Diagrams an agent can understand.** Logic roles plus `describe_logic` turn a drawing into a numbered flow with branch conditions, loops, owners and data access, and list the gaps.
 - **A plugin for Codex and GitHub Copilot CLI.** It bundles the MCP server and a skill that teaches the agent when and how to use the canvas, and it starts the canvas for you if it is not running.
 - **Mind maps and diagrams in one place.** Tab/Enter mind-mapping, auto-arranged branches, swimlanes, dagre layouts, Markdown and emoji everywhere.
@@ -62,9 +62,9 @@ To use the skill without the plugin, copy that folder into your agent's skills d
 | Script | `node scripts/mcp-call.mjs list` or `node scripts/mcp-call.mjs call <tool> '<json>' [--save shot.png]` |
 
 <details>
-<summary>All 36 tools, and how they map to the UI</summary>
+<summary>All 37 tools, and how they map to the UI</summary>
 
-`get_canvas_state`, `list_documents`, `get_document`, `describe_logic`, `find_nodes`, `create_document`, `open_document`, `update_document`, `duplicate_document`, `delete_document`, `add_nodes`, `update_nodes`, `delete_nodes`, `move_nodes`, `duplicate_nodes`, `reparent_node`, `set_collapsed`, `add_edges`, `update_edges`, `delete_edges`, `create_diagram`, `auto_layout`, `align_nodes`, `distribute_nodes`, `fit_frame_to_contents`, `import_content`, `export_document`, `capture_screenshot`, `undo`, `redo`, `select`, `control_view`, `list_themes`, `set_theme`, `set_ui`, `save_to_file`.
+`get_canvas_state`, `list_documents`, `get_document`, `describe_logic`, `find_nodes`, `create_document`, `open_document`, `update_document`, `duplicate_document`, `delete_document`, `add_nodes`, `update_nodes`, `delete_nodes`, `move_nodes`, `duplicate_nodes`, `reparent_node`, `set_collapsed`, `add_edges`, `update_edges`, `delete_edges`, `create_diagram`, `auto_layout`, `arrange_layers`, `align_nodes`, `distribute_nodes`, `fit_frame_to_contents`, `import_content`, `export_document`, `capture_screenshot`, `undo`, `redo`, `select`, `control_view`, `list_themes`, `set_theme`, `set_ui`, `save_to_file`.
 
 | Human action in the UI | AI tool |
 | --- | --- |
@@ -78,6 +78,7 @@ To use the skill without the plugin, copy that folder into your agent's skills d
 | Connect, label, style, reverse, delete connectors | `add_edges`, `update_edges`, `delete_edges` |
 | Delete | `delete_nodes` |
 | Layout menu, align / distribute, fit frame | `auto_layout`, `align_nodes`, `distribute_nodes`, `fit_frame_to_contents` |
+| Bring to front / Send to back (inspector or context menu) | `arrange_layers` with `nodeIds` and/or `edgeIds`, and `direction: "front"` or `"back"` |
 | Mind-map structure & auto-arrange settings | `update_document` (`treeLayout`, `autoArrange`) |
 | Import / export menus | `import_content`, `export_document` |
 | Undo / redo | `undo`, `redo` (shared history) |

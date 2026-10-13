@@ -366,6 +366,18 @@ export function createTools(store: Store, hub: Hub, files: FileSaver): ToolDef[]
       },
     },
     {
+      name: 'arrange_layers', title: 'Arrange layers', description: 'Bring nodes and/or connectors to the front or send them to the back, preserving their relative order. Connector labels are above nodes by default. Layer changes are saved and undoable, just like the UI Arrange controls.',
+      input: { documentId: docIdArg, nodeIds: z.array(z.string()).optional(), edgeIds: z.array(z.string()).optional(), direction: z.enum(['front', 'back']) },
+      run: async (a, ctx) => {
+        const id = resolveDoc(a.documentId);
+        const nodeIds = a.nodeIds ?? [], edgeIds = a.edgeIds ?? [];
+        if (!nodeIds.length && !edgeIds.length) throw new CommandError('Select at least one node or connector');
+        requireIds(id, nodeIds, 'node');
+        requireIds(id, edgeIds, 'edge');
+        return resultFor(id, run(id, { type: 'arrange_layers', nodeIds, edgeIds, direction: a.direction }, ctx));
+      },
+    },
+    {
       name: 'align_nodes', title: 'Align nodes', description: 'Align 2+ nodes: left, center, right, top, middle, bottom.',
       input: { documentId: docIdArg, ids: z.array(z.string()).min(2), align: z.enum(['left', 'center', 'right', 'top', 'middle', 'bottom']) },
       run: async (a, ctx) => { const id = resolveDoc(a.documentId); return resultFor(id, run(id, { type: 'align', ids: a.ids, align: a.align }, ctx)); },

@@ -26,6 +26,7 @@ export const nodeFieldShape = {
   status: z.enum(NODE_STATUSES as [string, ...string[]]).nullable().optional().describe('Task marker.'),
   priority: z.number().int().min(0).max(9).nullable().optional().describe('Priority marker 1-9 (0 clears), as in XMind.'),
   locked: z.boolean().nullable().optional().describe('Locked nodes cannot be dragged in the UI.'),
+  zIndex: z.number().int().nullable().optional().describe('Stacking order; higher is in front. Defaults to 1 for nodes, -1 for frames. Use arrange_layers for front/back.'),
   points: z.array(z.array(z.number()).length(2)).min(2).nullable().optional().describe("Freehand stroke for kind 'drawing'. On add_nodes without x/y these are absolute canvas coordinates; otherwise relative to the node's top-left."),
 };
 
@@ -41,6 +42,7 @@ export const edgeFieldShape = {
   animated: z.boolean().nullable().optional().describe('Animated flowing dashes (good for data flow).'),
   sourceSide: sideSchema.nullable().optional().describe('Force the side the connector leaves from; omit for automatic.'),
   targetSide: sideSchema.nullable().optional(),
+  zIndex: z.number().int().nullable().optional().describe('Stacking order for the connector and its label. By default the line is behind nodes and the label is in front. Use arrange_layers for front/back.'),
 };
 
 export const edgeInputSchema = z.object({ id: z.string().min(1).optional(), source: z.string().min(1), target: z.string().min(1), ...edgeFieldShape });
@@ -69,6 +71,7 @@ export const commandSchema: z.ZodType<unknown> = z.lazy(() => z.discriminatedUni
   z.object({ type: z.literal('add_edges'), edges: z.array(canvasEdgeSchema) }),
   z.object({ type: z.literal('update_edges'), updates: z.array(edgePatchSchema) }),
   z.object({ type: z.literal('delete_edges'), ids: z.array(z.string()) }),
+  z.object({ type: z.literal('arrange_layers'), nodeIds: z.array(z.string()), edgeIds: z.array(z.string()), direction: z.enum(['front', 'back']) }),
   z.object({ type: z.literal('layout'), mode: layoutModeSchema, direction: layoutDirectionSchema.optional(), rootId: z.string().optional(), nodeIds: z.array(z.string()).optional(), spacing: z.number().positive().optional() }),
   z.object({ type: z.literal('align'), ids: z.array(z.string()), align: alignSchema }),
   z.object({ type: z.literal('distribute'), ids: z.array(z.string()), axis: z.enum(['horizontal', 'vertical']) }),

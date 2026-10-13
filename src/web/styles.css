@@ -115,7 +115,7 @@ input, textarea, select { font: inherit; color: var(--text); }
 .outline-empty { color: var(--text-3); font-size: 12px; padding: 6px 4px; }
 
 .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
-.field label { font-size: 11px; color: var(--text-3); font-weight: 600; }
+.field label, .field-label { font-size: 11px; color: var(--text-3); font-weight: 600; }
 .field input, .field textarea, .field select {
   width: 100%; background: var(--panel-2); border: 1px solid var(--panel-border); border-radius: var(--ui-radius); padding: 6px 8px; outline: none;
 }
@@ -338,6 +338,7 @@ input, textarea, select { font: inherit; color: var(--text); }
 .wfc-edge-label.selected { border-color: var(--selection); }
 .wfc-edge-label input { font: inherit; border: 0; outline: none; background: transparent; color: inherit; width: 140px; text-align: center; }
 .wfc-edge-label.empty { opacity: 0; }
+.layer-controls button { flex: 1; min-height: 36px; }
 
 
 /* ---------- Excalidraw-style sketch rendering & freehand ---------- */
@@ -660,8 +661,7 @@ input, textarea, select { font: inherit; color: var(--text); }
   .wfc-neon-burst { display: none; }
   .wfc-edge-path.neon.born:not(.animated), .wfc-neon-drag .ring { animation: none; }
 }
-/* Port dots live in React Flow's viewport portal; cards are z-index 1 and the connection line 1001, so 2 puts the dots on the card edge. */
-:root[data-neon] .react-flow__viewport-portal { z-index: 2; pointer-events: none; }
+:root[data-neon] .react-flow__viewport-portal { pointer-events: none; }
 .wfc-port-dot {
   position: absolute; left: -5px; top: -5px; width: 10px; height: 10px; border-radius: 50%; pointer-events: none;
   background: var(--ec); box-shadow: 0 0 0 2px var(--node-bg), 0 0 8px color-mix(in srgb, var(--ec) 80%, transparent);

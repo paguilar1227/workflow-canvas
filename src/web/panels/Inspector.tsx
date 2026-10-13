@@ -48,6 +48,13 @@ function Seg<T extends string>({ label, options, value, onPick, testPrefix }: { 
   );
 }
 
+function LayerControls() {
+  return <div className="field" role="group" aria-label="Arrange"><span className="field-label">Arrange</span><div className="seg layer-controls">
+    <button data-testid="bring-to-front" onClick={() => actions.arrangeSelection('front')}>Bring to front</button>
+    <button data-testid="send-to-back" onClick={() => actions.arrangeSelection('back')}>Send to back</button>
+  </div></div>;
+}
+
 /** The node's properties. `scope` keeps its pickers apart from another copy on screen (the quick-edit popover); `onClose` adds a close button. */
 export function NodeInspector({ n, scope = '', onClose }: { n: CanvasNode; scope?: string; onClose?: () => void }) {
   const up = (patch: Partial<CanvasNode>) => actions.updateNode(n.id, patch as never);
@@ -83,6 +90,7 @@ export function NodeInspector({ n, scope = '', onClose }: { n: CanvasNode; scope
         <Text label="Height" value={String(n.height)} onCommit={(v) => Number(v) > 0 && up({ height: Number(v) })} noEmoji />
       </div>
       <div className="toggle-row"><span>Locked</span><button className={'switch' + (n.locked ? ' on' : '')} aria-label="Toggle lock" onClick={() => up({ locked: !n.locked })} /></div>
+      <LayerControls />
       {n.link ? <a className="btn outline" href={n.link} target="_blank" rel="noreferrer"><LinkIcon size={14} />Open link</a> : null}
       <div className="seg" style={{ marginTop: 10 }}>
         {n.kind === 'frame' ? <button onClick={() => actions.fitFrame(n.id)} data-testid="fit-frame"><Frame size={12} /> Fit to contents</button> : null}
@@ -98,6 +106,7 @@ function MultiInspector({ ids }: { ids: string[] }) {
     <div data-testid="inspector-multi">
       <div className="panel-title"><span>{ids.length} selected</span></div>
       <Colors onPick={(c) => actions.setColor(c)} />
+      <LayerControls />
       <div className="field"><label>Shape</label><Picker id="multi-shape" label="Shape" grid placeholder="Set shape for all…" options={shapeOptions(NODE_SHAPES)} onPick={(s) => actions.setShape(s)} testId="shape-picker" /></div>
       <div className="field"><label>Align</label>
         <div className="seg">
@@ -133,6 +142,7 @@ function EdgeInspector({ e }: { e: CanvasEdge }) {
     <div data-testid="inspector-edge">
       <div className="panel-title"><span>Connector</span><span className="kbd">{e.id}</span></div>
       <Text label="Label" value={e.label} onCommit={(v) => up({ label: v })} testId="insp-edge-label" />
+      <LayerControls />
       <Seg label="Routing" options={EDGE_ROUTINGS} value={e.routing} onPick={(v) => up({ routing: v })} testPrefix="routing-" />
       <Seg label="Line" options={EDGE_STYLES} value={e.style} onPick={(v) => up({ style: v })} testPrefix="edgestyle-" />
       <Seg label="Arrows" options={ARROW_MODES} value={e.arrow} onPick={(v) => up({ arrow: v })} testPrefix="arrow-" />

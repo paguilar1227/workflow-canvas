@@ -20,6 +20,16 @@ const nodeById = (id: string) => doc()?.nodes.find((n) => n.id === id);
 export function select(nodes: string[], edges: string[] = []) { set({ selection: { nodes, edges } }); }
 export function edit(id: string | null) { set({ editingId: id }); }
 
+export function arrangeSelection(direction: 'front' | 'back') {
+  if (get().session.viewMode) return;
+  dispatch({ type: 'arrange_layers', nodeIds: sel().nodes, edgeIds: sel().edges, direction });
+}
+
+export function openContextMenu(x: number, y: number, nodeId?: string, edgeId?: string) {
+  if (edgeId && !sel().edges.includes(edgeId)) select([], [edgeId]);
+  set({ menu: { x, y, flow: flow()?.screenToFlowPosition({ x, y }) ?? { x: 0, y: 0 }, nodeId, edgeId } });
+}
+
 function created(cmd: ReturnType<typeof dispatch>): string[] {
   if (!cmd) return [];
   if (cmd.type === 'add_nodes') return cmd.nodes.map((n) => n.id);

@@ -154,6 +154,8 @@ export function ContextMenu() {
           {item('Duplicate', actions.duplicate, '⌘D')}
           {item('Copy', actions.copy, '⌘C')}
           {item('Frame selection', actions.frameSelection, '⌘G')}
+          {item('Bring to front', () => actions.arrangeSelection('front'), undefined, 'ctx-bring-to-front')}
+          {item('Send to back', () => actions.arrangeSelection('back'), undefined, 'ctx-send-to-back')}
           {n.kind === 'frame' ? item('Fit frame to contents', () => actions.fitFrame(n.id)) : null}
           <div className="menu-label">Color</div>
           <div className="swatches" style={{ padding: '2px 8px 6px' }}>
@@ -165,6 +167,8 @@ export function ContextMenu() {
       ) : menu.edgeId ? (
         <>
           {item('Edit label', () => set({ editingEdgeId: menu.edgeId! }), undefined, 'ctx-edge-label')}
+          {item('Bring to front', () => actions.arrangeSelection('front'), undefined, 'ctx-bring-to-front')}
+          {item('Send to back', () => actions.arrangeSelection('back'), undefined, 'ctx-send-to-back')}
           {item('Reverse direction', () => actions.reverseEdge(menu.edgeId!))}
           {item('Toggle dashed', () => { const e = get().doc?.edges.find((x) => x.id === menu.edgeId); if (e) actions.updateEdge(e.id, { style: e.style === 'dashed' ? 'solid' : 'dashed' }); })}
           {item('Toggle animated flow', () => { const e = get().doc?.edges.find((x) => x.id === menu.edgeId); if (e) actions.updateEdge(e.id, { animated: !e.animated }); })}

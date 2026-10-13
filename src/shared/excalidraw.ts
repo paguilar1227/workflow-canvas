@@ -218,12 +218,19 @@ export function importExcalidraw(content: string | Record<string, unknown>, pref
     if (treeParents.has(id(t) + '<' + id(s))) continue;
     const start = !!e.startArrowhead, end = e.type === 'arrow' && !!e.endArrowhead;
     const edge: EdgeInput = { id: id(e.id), source: id(s), target: id(t), arrow: start && end ? 'both' : end ? 'end' : start ? 'start' : 'none', style: e.strokeStyle === 'dashed' ? 'dashed' : e.strokeStyle === 'dotted' ? 'dotted' : 'solid' };
+    const stored = (e.customData as { workflowCanvas?: { edge?: CanvasEdge } } | undefined)?.workflowCanvas?.edge;
+    if (stored?.zIndex != null) edge.zIndex = stored.zIndex;
     const label = textFor.get(e.id);
     if (label) edge.label = label;
     const c = nearestColor(e.strokeColor);
     if (c) edge.color = c;
     if (e.elbowed) edge.routing = 'step';
     out.edges.push(edge);
+  }
+  for (const node of out.nodes) {
+    const element = byId.get(String(node.id).slice(prefix.length));
+    const stored = (element?.customData as { workflowCanvas?: { node?: CanvasNode } } | undefined)?.workflowCanvas?.node;
+    if (stored?.zIndex != null) node.zIndex = stored.zIndex;
   }
   return out;
 }

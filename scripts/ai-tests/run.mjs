@@ -11,7 +11,7 @@
 // batch's checks would see); its watcher tab and video start only when it starts.
 //
 //   node scripts/ai-tests/run.mjs [--base http://localhost:8790] [--out <dir>] [--only A,C] [--timeout-min 25] [--headed]
-//                                 [--container wfc-ai-test] [--expect-tools 36]
+//                                 [--container wfc-ai-test] [--expect-tools 37]
 //                                 [--fallback-base http://127.0.0.1:8799] [--fallback-container wfc-ai-test-nomount]
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -34,7 +34,7 @@ const REASONING = 'medium';
 const MCP_NAME = 'workflow_canvas';
 const BASELINE_THEME = 'neon-flow';
 const REQUIRED_AI_TOOLS = ['add_nodes', 'update_nodes', 'create_diagram', 'save_to_file', 'describe_logic'];
-const EXPECTED_TOOL_COUNT = Number(args['expect-tools'] ?? 36);
+const EXPECTED_TOOL_COUNT = Number(args['expect-tools'] ?? 37);
 const CONTAINER = args.container ? String(args.container) : null;
 // A second server with no shared folder (like a hosted preview), for scenarios that need one.
 const FALLBACK_BASE = args['fallback-base'] ? String(args['fallback-base']).replace(/\/$/, '') : null;

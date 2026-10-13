@@ -45,6 +45,7 @@ export interface CanvasNode {
   status?: NodeStatus;
   priority?: number;
   locked?: boolean;
+  zIndex?: number;
   /** Freehand stroke (kind 'drawing'), relative to the node's top-left in its original size. */
   points?: [number, number][];
 }
@@ -61,6 +62,7 @@ export interface CanvasEdge {
   animated?: boolean;
   sourceSide?: Side | null;
   targetSide?: Side | null;
+  zIndex?: number;
 }
 
 export interface DocSettings {
