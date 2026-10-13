@@ -6,7 +6,7 @@ import {
 const PROMPT = 'nf-prompt', NOISE = 'nf-noise', SAMPLER = 'nf-sampler', PROC = 'nf-proc', PREVIEW = 'nf-preview';
 
 test('connect a pipeline in the Neon Flow theme', async ({ page, app, ev, browser, request }, info) => {
-  ev.proves('A mouse user builds a small node-graph pipeline in Neon Flow, the first theme in the Theme menu: connectors are 3px neon wires with a glow, a palette colour when they have none (wires converging on one card all differ, and an automatic colour steps aside for an explicitly coloured wire into that card), bezier curves without arrowheads and a coloured dot on both ends drawn above the cards; cards show a grip and white ports. Wires that share a side of a card each get their own port, evenly spaced at 1/(n+1) … n/(n+1) and ordered by where the other end sits, so three wires into Processing meet it at 1/4, 1/2 and 3/4 and never cross, and a single wire meets the middle. Dragging from a port draws a white wire that sparks with a ring once it is near another card\'s port, the spark colour (--zc) is the colour the new wire ends up with, the connect ripple appears at the new wire\'s own port and the burst is gone after about 1.6 s; a connector added by the AI also bursts at its port, and its ripple stays centred on its own port dot when another wire into that side is hidden inside a collapsed branch (bug K2); dragging a source card re-orders the target\'s ports live, and dragging the target card carries its evenly spaced ports along live; clicking a wire shows the selection halo; with reduced motion the ring is still and no burst is shown (side-by-side.mp4: reduced motion left, normal right); switching to Lens Dark restores arrowheads, plain lines meeting the middle of the side, and no port dots.');
+  ev.proves('A mouse user builds a small node-graph pipeline in Neon Flow, the first theme in the Theme menu: connectors are 3px neon wires with a glow, a palette colour when they have none (wires converging on one card all differ, and an automatic colour steps aside for an explicitly coloured wire into that card), bezier curves with the configured arrowheads and a coloured dot on both ends drawn above the cards; cards show a grip and white ports. Wires that share a side of a card each get their own port, evenly spaced at 1/(n+1) … n/(n+1) and ordered by where the other end sits, so three wires into Processing meet it at 1/4, 1/2 and 3/4 and never cross, and a single wire meets the middle. Dragging from a port draws a white wire that sparks with a ring once it is near another card\'s port, the spark colour (--zc) is the colour the new wire ends up with, the connect ripple appears at the new wire\'s own port and the burst is gone after about 1.6 s; a connector added by the AI also bursts at its port, and its ripple stays centred on its own port dot when another wire into that side is hidden inside a collapsed branch (bug K2); dragging a source card re-orders the target\'s ports live, and dragging the target card carries its evenly spaced ports along live; clicking a wire shows the selection halo; with reduced motion the ring is still and no burst is shown (side-by-side.mp4: reduced motion left, normal right); switching to Lens Dark keeps arrowheads and restores plain lines meeting the middle of the side, and no port dots.');
   const docId = await app.newDoc('Neon pipeline');
   await app.tool('add_nodes', { documentId: docId, nodes: [
     { id: PROMPT, title: 'Prompt', subtitle: 'text', x: 0, y: 0 },
@@ -84,7 +84,7 @@ test('connect a pipeline in the Neon Flow theme', async ({ page, app, ev, browse
     await burst.gone();
   });
 
-  await test.step('wires are 3px neon bezier curves with a glow, no arrowheads and a dot on both ends above the cards', async () => {
+  await test.step('wires are 3px neon bezier curves with a glow, arrowheads and a dot on both ends above the cards', async () => {
     const edges = await neonEdges(page);
     expect(edges.map((e) => e.id).sort()).toEqual(['nf-e1', 'nf-e2']);
     for (const e of edges) {
@@ -92,11 +92,12 @@ test('connect a pipeline in the Neon Flow theme', async ({ page, app, ev, browse
       expect(e.width, e.id + ' is 3px wide').toBe('3px');
       expect(e.filter, e.id + ' glows').toContain('drop-shadow');
       expect(isBezier(e.d), e.id + ' is one bezier curve: ' + e.d).toBe(true);
-      expect([e.markerStart, e.markerEnd], e.id + ' has no arrowheads').toEqual([null, null]);
+      expect(e.markerStart, e.id + ' has no start arrow').toBeNull();
+      expect(e.markerEnd, e.id + ' has an end arrow').toMatch(/^url\(#wfc-arrow-/);
       expect(e.haloBeforePath, e.id + ' has a soft halo under the wire').toBe(true);
       expect(e.stroke, e.id + ' is drawn in its colour').toBe(await rgbOf(page, e.ec));
     }
-    await expect(page.locator('.react-flow__edge path[marker-end], .react-flow__edge path[marker-start]'), 'no arrowheads anywhere').toHaveCount(0);
+    await expect(page.locator('.react-flow__edge path[marker-end]'), 'each wire has an end arrow').toHaveCount(edges.length);
     const dots = await portDots(page);
     expect(dots, 'two port dots per visible connector').toHaveLength(2 * edges.length);
     for (const e of edges) {

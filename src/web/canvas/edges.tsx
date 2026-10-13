@@ -140,8 +140,8 @@ export const SmartEdge = memo(function SmartEdge({ id, source, target, data, sel
         className={cls}
         interactionWidth={18}
         style={ecStyle}
-        markerEnd={!neon && (e.arrow === 'end' || e.arrow === 'both') ? markerUrl(e.color, !!selected) : undefined}
-        markerStart={!neon && (e.arrow === 'start' || e.arrow === 'both') ? markerUrl(e.color, !!selected) : undefined}
+        markerEnd={e.arrow === 'end' || e.arrow === 'both' ? markerUrl(colorName, !neon && !!selected) : undefined}
+        markerStart={e.arrow === 'start' || e.arrow === 'both' ? markerUrl(colorName, !neon && !!selected) : undefined}
       />
       {neon ? (
         <ViewportPortal>
@@ -199,12 +199,13 @@ export const BranchEdge = memo(function BranchEdge({ id, source, target, data }:
 export const edgeTypes = { smart: SmartEdge, branch: BranchEdge };
 
 export function MarkerDefs() {
+  const neon = useNeon();
   const colors = ['default', 'selected', ...COLOR_NAMES.filter((c) => c !== 'default')];
   return (
     <svg style={{ position: 'absolute', width: 0, height: 0 }} aria-hidden>
       <defs>
         {colors.map((c) => (
-          <marker key={c} id={'wfc-arrow-' + c} viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <marker key={c} id={'wfc-arrow-' + c} viewBox="0 0 10 10" refX={neon ? 14 : 8.5} refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" style={{ fill: c === 'default' ? 'var(--edge)' : c === 'selected' ? 'var(--selection)' : 'var(--c-' + c + ')' }} />
           </marker>
         ))}

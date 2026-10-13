@@ -1390,9 +1390,10 @@ export const SCENARIOS = [
       const rendered = dom?.edges ?? [];
       const notNeon = doc.edges.filter((e) => {
         const x = rendered.find((r) => r.id === e.id);
-        return !(x?.classes && x.classes.includes('neon') && x.strokeWidth === (x.classes.includes('selected') ? '4px' : '3px') && x.glow && x.halo && !x.markerStart && !x.markerEnd);
+        return !(x?.classes && x.classes.includes('neon') && x.strokeWidth === (x.classes.includes('selected') ? '4px' : '3px') && x.glow && x.halo &&
+          !!x.markerStart === (e.arrow === 'start' || e.arrow === 'both') && !!x.markerEnd === (e.arrow === 'end' || e.arrow === 'both'));
       });
-      check('every connector renders as a 3px glowing neon wire (.wfc-edge-path.neon) with no arrowheads and 2 port dots per connector', doc.edges.length > 0 && rendered.length === doc.edges.length && notNeon.length === 0 && dom.portDots === 2 * rendered.length,
+      check('every connector renders as a 3px glowing neon wire (.wfc-edge-path.neon) with its configured arrowheads and 2 port dots per connector', doc.edges.length > 0 && rendered.length === doc.edges.length && notNeon.length === 0 && dom.portDots === 2 * rendered.length,
         { edges: doc.edges.length, rendered: rendered.length, portDots: dom?.portDots ?? null, notNeon: notNeon.map((e) => rendered.find((r) => r.id === e.id) ?? { id: e.id, rendered: false }), sample: rendered[0] ?? null });
       const ports = judgePorts(data.ports, I_INPUTS.length);
       check('the ' + I_INPUTS.length + ' wires into the merge card (' + I_CHAIN[0] + ') meet one side of it at ' + I_INPUTS.length + ' distinct ports, each with its own port dot (not one shared dot)', ports.ok, ports);

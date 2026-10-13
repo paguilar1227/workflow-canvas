@@ -3,7 +3,7 @@ import { neonEdges } from '../support/neon';
 import { DEFAULT_SESSION } from '../../src/shared/types';
 
 test('swap the theme of a diagram', async ({ page, app, ev, phone }) => {
-  ev.proves('Phone version: a new session opens in Neon Flow, the default theme, which the More sheet lists first with Lens Dark second. A person opens the More sheet and switches the same diagram through all 10 themes listed there (including the hand-drawn Excalidraw Sketch in light and dark, and Neon Flow), with a screenshot per theme; each switch changes the canvas palette (--bg) to that theme’s swatch colour, the sketch themes draw rough outlines in a hand-written font that does not leak into the next theme, only Neon Flow draws 3px neon wires without arrowheads, a dot on both ends of every connector and neon mind-map branches (leaving it brings the arrowheads back and removes the dots), the phone chrome stays ergonomic in every theme, and the chosen theme survives a reload.');
+  ev.proves('Phone version: a new session opens in Neon Flow, the default theme, which the More sheet lists first with Lens Dark second. A person opens the More sheet and switches the same diagram through all 10 themes listed there (including the hand-drawn Excalidraw Sketch in light and dark, and Neon Flow), with a screenshot per theme; each switch changes the canvas palette (--bg) to that theme’s swatch colour, the sketch themes draw rough outlines in a hand-written font that does not leak into the next theme, only Neon Flow draws 3px neon wires with the configured arrowheads, a dot on both ends of every connector and neon mind-map branches (leaving it keeps the arrowheads and removes the dots), the phone chrome stays ergonomic in every theme, and the chosen theme survives a reload.');
   const docId = await app.newDoc('Theme gallery', 'architecture');
   await app.tool('add_nodes', { documentId: docId, nodes: [
     { id: 'tg-root', title: 'Launch v2', shape: 'pill', color: 'blue', x: 40, y: 470 },
@@ -30,7 +30,10 @@ test('swap the theme of a diagram', async ({ page, app, ev, phone }) => {
     await expect(page.locator('html'), where + ': the page is in Neon Flow mode').toHaveAttribute('data-neon', '');
     const edges = await neonEdges(page);
     expect(edges.map((e) => e.id).sort(), where + ': every connector is drawn').toEqual((await app.doc()).edges.map((e) => e.id).sort());
-    for (const e of edges) expect([e.cls.includes('neon'), e.width, e.markerEnd], where + ': ' + e.id + ' is a 3px neon wire without an arrowhead').toEqual([true, '3px', null]);
+    for (const e of edges) {
+      expect([e.cls.includes('neon'), e.width], where + ': ' + e.id + ' is a 3px neon wire').toEqual([true, '3px']);
+      expect(e.markerEnd, where + ': ' + e.id + ' has an end arrow').toMatch(/^url\(#wfc-arrow-/);
+    }
     await expect(page.locator('.wfc-port-dot'), where + ': a dot on both ends of every connector').toHaveCount(2 * edges.length);
     await expect(page.locator('.wfc-branch.neon'), where + ': both mind-map branches (Docs, Pricing) are neon too').toHaveCount(2);
     const branches = await page.locator('.wfc-branch.neon').evaluateAll((els) => els.map((el) => ({ len: (el as SVGPathElement).getTotalLength(), stroke: getComputedStyle(el).stroke })));
@@ -92,7 +95,7 @@ test('swap the theme of a diagram', async ({ page, app, ev, phone }) => {
     });
   }
 
-  await test.step('leaving Neon Flow brings back arrowheads and removes the port dots', async () => {
+  await test.step('leaving Neon Flow keeps arrowheads and removes the port dots', async () => {
     if ((await app.state()).session.theme !== 'neon-flow') await pick('neon-flow');
     await neonLook(true, 'Neon Flow');
     await pick('lens-dark');
