@@ -370,7 +370,7 @@ export function neonPorts({ cardId, wires, tol }) {
     const vertical = side === 'left' || side === 'right';
     const near = dots.map((d, i) => ({ i, dist: Math.hypot(d.x - end.x, d.y - end.y) })).sort((a, b) => a.dist - b.dist)[0];
     const o = rectOf(other);
-    return { id, end, side, along: side ? (vertical ? (end.y - r.y) / r.h : (end.x - r.x) / r.w) : null, dot: near && near.dist <= tol ? near.i : null, dotDistance: near?.dist ?? null,
+    return { id, end, side, along: side ? (vertical ? (end.y - r.y) / r.h : (end.x - r.x) / r.w) : null, arrow: !!p.getAttribute('marker-end'), dot: near && near.dist <= tol ? near.i : null, dotDistance: near?.dist ?? null,
       otherCentre: o && side ? (vertical ? o.y + o.h / 2 : o.x + o.w / 2) : null };
   }) };
 }
@@ -378,12 +378,12 @@ export function neonPorts({ cardId, wires, tol }) {
 export function judgePorts(ports, expected) {
   const wires = ports?.wires ?? [];
   const sides = [...new Set(wires.map((w) => w.side))];
-  const dots = new Set(wires.map((w) => w.dot).filter((d) => d != null));
+  const portsSeen = new Set(wires.map((w) => w.arrow ? w.id : w.dot).filter((port) => port != null));
   const distinct = wires.every((a, i) => wires.every((b, j) => i === j || (!!a.end && !!b.end && Math.hypot(a.end.x - b.end.x, a.end.y - b.end.y) > PORT_TOL)));
   const byPort = [...wires].sort((a, b) => a.along - b.along).map((w) => w.from);
   const byOther = [...wires].sort((a, b) => a.otherCentre - b.otherCentre).map((w) => w.from);
-  const ok = wires.length === expected && wires.every((w) => w.side && w.dot != null) && sides.length === 1 && dots.size === expected && distinct;
-  return { ok, card: ports?.card ?? null, side: sides.length === 1 ? sides[0] : sides, distinctPoints: distinct, ownDots: dots.size,
+  const ok = wires.length === expected && wires.every((w) => w.side && (w.arrow || w.dot != null)) && sides.length === 1 && portsSeen.size === expected && distinct;
+  return { ok, card: ports?.card ?? null, side: sides.length === 1 ? sides[0] : sides, distinctPoints: distinct, ownPorts: portsSeen.size,
     wires: wires.map((w) => ({ from: w.from, side: w.side, along: w.along == null ? null : Math.round(w.along * 1000) / 1000, end: w.end && { x: Math.round(w.end.x * 10) / 10, y: Math.round(w.end.y * 10) / 10 }, dotDistance: w.dotDistance == null ? null : Math.round(w.dotDistance * 1000) / 1000 })),
     observed: { evenlySpaced: wires.length > 0 && [...wires].sort((a, b) => a.along - b.along).every((w, i) => Math.abs(w.along - (i + 1) / (wires.length + 1)) < 0.01), portOrder: byPort, otherCardOrder: byOther, ordersMatch: byPort.join() === byOther.join() },
     tolerance: PORT_TOL + ' flow px' };
@@ -1393,10 +1393,11 @@ export const SCENARIOS = [
         return !(x?.classes && x.classes.includes('neon') && x.strokeWidth === (x.classes.includes('selected') ? '4px' : '3px') && x.glow && x.halo &&
           !!x.markerStart === (e.arrow === 'start' || e.arrow === 'both') && !!x.markerEnd === (e.arrow === 'end' || e.arrow === 'both'));
       });
-      check('every connector renders as a 3px glowing neon wire (.wfc-edge-path.neon) with its configured arrowheads and 2 port dots per connector', doc.edges.length > 0 && rendered.length === doc.edges.length && notNeon.length === 0 && dom.portDots === 2 * rendered.length,
+      const expectedDots = doc.edges.reduce((count, edge) => count + (edge.arrow === 'start' || edge.arrow === 'both' ? 0 : 1) + (edge.arrow === 'end' || edge.arrow === 'both' ? 0 : 1), 0);
+      check('every connector renders as a 3px glowing neon wire (.wfc-edge-path.neon) with its configured arrowheads and dots only at unheaded ends', doc.edges.length > 0 && rendered.length === doc.edges.length && notNeon.length === 0 && dom.portDots === expectedDots,
         { edges: doc.edges.length, rendered: rendered.length, portDots: dom?.portDots ?? null, notNeon: notNeon.map((e) => rendered.find((r) => r.id === e.id) ?? { id: e.id, rendered: false }), sample: rendered[0] ?? null });
       const ports = judgePorts(data.ports, I_INPUTS.length);
-      check('the ' + I_INPUTS.length + ' wires into the merge card (' + I_CHAIN[0] + ') meet one side of it at ' + I_INPUTS.length + ' distinct ports, each with its own port dot (not one shared dot)', ports.ok, ports);
+      check('the ' + I_INPUTS.length + ' wires into the merge card (' + I_CHAIN[0] + ') meet one side of it at ' + I_INPUTS.length + ' distinct ports, each marked by its own arrow or dot', ports.ok, ports);
       const wires = judgeWires(doc, dom);
       check('uncoloured wires take palette colours (amber/pink/purple/red/teal) and wires into the same card are distinct (up to 5)', wires.ok && wires.cards.some((cd) => cd.auto.length >= 2), wires);
       const bursts = judgeBursts(doc, log, c.calls);

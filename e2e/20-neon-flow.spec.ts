@@ -6,7 +6,7 @@ import {
 const PROMPT = 'nf-prompt', NOISE = 'nf-noise', SAMPLER = 'nf-sampler', PROC = 'nf-proc', PREVIEW = 'nf-preview';
 
 test('connect a pipeline in the Neon Flow theme', async ({ page, app, ev, browser, request }, info) => {
-  ev.proves('A mouse user builds a small node-graph pipeline in Neon Flow, the first theme in the Theme menu: connectors are 3px neon wires with a glow, a palette colour when they have none (wires converging on one card all differ, and an automatic colour steps aside for an explicitly coloured wire into that card), bezier curves with the configured arrowheads and a coloured dot on both ends drawn above the cards; cards show a grip and white ports. Wires that share a side of a card each get their own port, evenly spaced at 1/(n+1) … n/(n+1) and ordered by where the other end sits, so three wires into Processing meet it at 1/4, 1/2 and 3/4 and never cross, and a single wire meets the middle. Dragging from a port draws a white wire that sparks with a ring once it is near another card\'s port, the spark colour (--zc) is the colour the new wire ends up with, the connect ripple appears at the new wire\'s own port and the burst is gone after about 1.6 s; a connector added by the AI also bursts at its port, and its ripple stays centred on its own port dot when another wire into that side is hidden inside a collapsed branch (bug K2); dragging a source card re-orders the target\'s ports live, and dragging the target card carries its evenly spaced ports along live; clicking a wire shows the selection halo; with reduced motion the ring is still and no burst is shown (side-by-side.mp4: reduced motion left, normal right); switching to Lens Dark keeps arrowheads and restores plain lines meeting the middle of the side, and no port dots.');
+  ev.proves('A mouse user builds a small node-graph pipeline in Neon Flow, the first theme in the Theme menu: connectors are 3px neon wires with a glow, a palette colour when they have none (wires converging on one card all differ, and an automatic colour steps aside for an explicitly coloured wire into that card), bezier curves with the configured arrowheads and a coloured source dot drawn above the cards; cards show a grip and white ports. Wires that share a side of a card each get their own port, evenly spaced at 1/(n+1) … n/(n+1) and ordered by where the other end sits, so three wires into Processing meet it at 1/4, 1/2 and 3/4 and never cross, and a single wire meets the middle. Dragging from a port draws a white wire that sparks with a ring once it is near another card\'s port, the spark colour (--zc) is the colour the new wire ends up with, the connect ripple appears at the new wire\'s own port and the burst is gone after about 1.6 s; a connector added by the AI also bursts at its port, and its ripple stays centred on its own arrow tip when another wire into that side is hidden inside a collapsed branch (bug K2); dragging a source card re-orders the target\'s ports live, and dragging the target card carries its evenly spaced ports along live; clicking a wire shows the selection halo; with reduced motion the ring is still and no burst is shown (side-by-side.mp4: reduced motion left, normal right); switching to Lens Dark keeps arrowheads and restores plain lines meeting the middle of the side, and no port dots.');
   const docId = await app.newDoc('Neon pipeline');
   await app.tool('add_nodes', { documentId: docId, nodes: [
     { id: PROMPT, title: 'Prompt', subtitle: 'text', x: 0, y: 0 },
@@ -84,7 +84,7 @@ test('connect a pipeline in the Neon Flow theme', async ({ page, app, ev, browse
     await burst.gone();
   });
 
-  await test.step('wires are 3px neon bezier curves with a glow, arrowheads and a dot on both ends above the cards', async () => {
+  await test.step('wires are 3px neon bezier curves with a glow, arrowheads and a source dot above the cards', async () => {
     const edges = await neonEdges(page);
     expect(edges.map((e) => e.id).sort()).toEqual(['nf-e1', 'nf-e2']);
     for (const e of edges) {
@@ -99,9 +99,9 @@ test('connect a pipeline in the Neon Flow theme', async ({ page, app, ev, browse
     }
     await expect(page.locator('.react-flow__edge path[marker-end]'), 'each wire has an end arrow').toHaveCount(edges.length);
     const dots = await portDots(page);
-    expect(dots, 'two port dots per visible connector').toHaveLength(2 * edges.length);
+    expect(dots, 'one source dot per visible connector').toHaveLength(edges.length);
     for (const e of edges) {
-      for (const end of [e.start, e.end]) {
+      for (const end of [e.start]) {
         const here = dots.filter((d) => Math.hypot(d.x - end.x, d.y - end.y) < 1.5).map((d) => d.fill);
         expect(here, e.id + ' has a dot in its colour at ' + JSON.stringify(end)).toContain(e.stroke);
       }
@@ -225,13 +225,11 @@ test('connect a pipeline in the Neon Flow theme', async ({ page, app, ev, browse
     await expectEvenPorts(page, TARGET, 'left', ['k2-e1', 'k2-e4', 'k2-e2'], 'after the AI adds Four → Target');
     const wire = await edgeById('k2-e4');
     expect(burst.color, 'the burst is the new wire\'s colour').toBe(wire.ec);
-    const dot = (await portDots(page)).map((d) => ({ ...d, gap: Math.hypot(d.x - wire.end.x, d.y - wire.end.y) })).sort((a, b) => a.gap - b.gap)[0];
-    expect(dot.gap, 'Four → Target has its own port dot on Target').toBeLessThanOrEqual(1);
     const box = await app.box(app.rfNode(TARGET));
     const along = (y: number) => ((y - box.y) / box.height).toFixed(3);
-    const off = Math.hypot(burst.ripple.x - dot.x, burst.ripple.y - dot.y);
-    ev.note('Leaf → Target hidden in the collapsed branch: the ripple of the AI wire Four → Target is ' + off.toFixed(2) + 'px from its port dot (ripple at ' + along(burst.ripple.y) + ', dot at ' + along(dot.y) + ' of Target\'s left side)');
-    expect(off, 'the ripple is centred on the new wire\'s port dot (ripple at ' + along(burst.ripple.y) + ', dot at ' + along(dot.y) + ' of the side)').toBeLessThanOrEqual(1);
+    const off = Math.hypot(burst.ripple.x - wire.end.x, burst.ripple.y - wire.end.y);
+    ev.note('Leaf → Target hidden in the collapsed branch: the ripple of the AI wire Four → Target is ' + off.toFixed(2) + 'px from its arrow tip (ripple at ' + along(burst.ripple.y) + ', tip at ' + along(wire.end.y) + ' of Target\'s left side)');
+    expect(off, 'the ripple is centred on the new wire\'s arrow tip').toBeLessThanOrEqual(1);
     await ev.snap('hidden-branch-ripple-at-port');
     await burst.gone();
     await app.open(docId);

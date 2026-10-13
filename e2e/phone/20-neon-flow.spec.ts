@@ -8,7 +8,7 @@ const PROMPT = 'nf-prompt', NOISE = 'nf-noise', SAMPLER = 'nf-sampler', PROC = '
 const NOTE = 'nf-note', CAPTION = 'nf-caption';
 
 test('connect a pipeline in the Neon Flow theme', async ({ page, app, ev, phone }) => {
-  ev.proves('Phone version: a person picks Neon Flow from the More sheet (10 themes) and the pipeline renders cleanly at phone size: 3px neon bezier wires with the configured arrowheads, a dot in the wire colour on both ends drawn above the cards, no sideways overflow and an ergonomic phone chrome. Once a card is selected its white ports keep their enlarged 44px touch areas. A one-finger drag from a port draws a white wire to the finger, then a spark and ring near Processing\'s port in the colour (--zc) the new wire ends up with; lifting the finger connects the cards, the three wires into Processing all differ in colour, and the burst on Processing is gone after about 1.6 s. A sticky note\'s and a text label\'s four ports are drawn whole (not clipped by the note, not covered by the text) and keep touch areas of at least 44 card units on every side, in Lens Dark and in Neon Flow.');
+  ev.proves('Phone version: a person picks Neon Flow from the More sheet (10 themes) and the pipeline renders cleanly at phone size: 3px neon bezier wires with the configured arrowheads, a source dot in the wire colour drawn above the cards, no sideways overflow and an ergonomic phone chrome. Once a card is selected its white ports keep their enlarged 44px touch areas. A one-finger drag from a port draws a white wire to the finger, then a spark and ring near Processing\'s port in the colour (--zc) the new wire ends up with; lifting the finger connects the cards, the three wires into Processing all differ in colour, and the burst on Processing is gone after about 1.6 s. A sticky note\'s and a text label\'s four ports are drawn whole (not clipped by the note, not covered by the text) and keep touch areas of at least 44 card units on every side, in Lens Dark and in Neon Flow.');
   const docId = await app.newDoc('Neon pipeline');
   await app.tool('add_nodes', { documentId: docId, nodes: [
     { id: PROMPT, title: 'Prompt', subtitle: 'text', x: 0, y: 0 },
@@ -48,7 +48,7 @@ test('connect a pipeline in the Neon Flow theme', async ({ page, app, ev, phone 
       expect(e.stroke, where + ': ' + e.id + ' is drawn in its colour').toBe(await rgbOf(page, e.ec));
     }
     const dots = await portDots(page);
-    expect(dots, where + ': two port dots per connector').toHaveLength(2 * edges.length);
+    expect(dots, where + ': one source dot per connector').toHaveLength(edges.length);
     for (const e of edges) {
       const dot = dots.find((d) => Math.hypot(d.x - e.start.x, d.y - e.start.y) < 1.5 && d.fill === e.stroke);
       expect(dot, where + ': ' + e.id + ' has a dot in its colour where it leaves its card').toBeTruthy();

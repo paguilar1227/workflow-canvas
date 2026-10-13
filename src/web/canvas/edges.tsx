@@ -1,6 +1,6 @@
 import { memo, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath, getStraightPath, Position, useInternalNode, ViewportPortal, type EdgeProps } from '@xyflow/react';
-import type { CanvasEdge, Side } from '../../shared/types';
+import type { CanvasEdge, CanvasNode, NodeShape, Side } from '../../shared/types';
 import { COLOR_NAMES } from '../../shared/types';
 import { InlineEdit } from './nodes';
 import { useApp, set } from '../store';
@@ -9,14 +9,17 @@ import * as actions from '../actions';
 import { InlineMarkdown } from '../markdown';
 import { neonBranch, useNeon } from './neon';
 
-export type Rect = { x: number; y: number; w: number; h: number };
+export type Rect = { x: number; y: number; w: number; h: number; shape?: NodeShape };
 const POS: Record<Side, Position> = { top: Position.Top, right: Position.Right, bottom: Position.Bottom, left: Position.Left };
+const NEON_ARROW_SIZE = 21;
+const NEON_DASH_GAP = 9;
 
 function useRect(id: string): Rect | null {
   const n = useInternalNode(id);
   if (!n) return null;
   const p = n.internals.positionAbsolute;
-  return { x: p.x, y: p.y, w: n.measured?.width ?? n.width ?? 0, h: n.measured?.height ?? n.height ?? 0 };
+  const node = (n.data as { node: CanvasNode }).node;
+  return { x: p.x, y: p.y, w: n.measured?.width ?? n.width ?? 0, h: n.measured?.height ?? n.height ?? 0, shape: node?.kind === 'topic' ? node.shape : undefined };
 }
 
 function anchor(r: Rect, side: Side) {
@@ -50,11 +53,49 @@ export function clearLabelPoint(path: string, rects: Rect[], half: { w: number; 
 
 /** A point a fraction of the way along one side of a node (0.5 is the side's middle). */
 function alongSide(r: Rect, side: Side, f: number) {
+  const horizontal = side === 'top' || side === 'bottom';
+  let across = side === 'left' || side === 'top' ? 0 : 1;
+  const direction = across ? 1 : -1;
+  if (r.shape === 'circle') across = 0.5 + direction * Math.sqrt(Math.max(0, 0.49 ** 2 - (f - 0.5) ** 2));
+  if (r.shape === 'diamond') across = 0.5 + direction * Math.max(0, 0.49 - Math.abs(f - 0.5));
+  if (r.shape === 'pill') {
+    const radius = Math.min(r.w, r.h) / 2;
+    const length = horizontal ? r.w : r.h;
+    const fromCorner = Math.max(radius - length * f, length * f - length + radius, 0);
+    const inset = radius - Math.sqrt(Math.max(0, radius ** 2 - fromCorner ** 2));
+    across -= direction * inset / (horizontal ? r.h : r.w);
+  }
+  if (r.shape === 'cylinder') {
+    if (horizontal) across = (side === 'top' ? 0.14 : 0.86) + direction * 0.13 * Math.sqrt(Math.max(0, 1 - ((f - 0.5) / 0.49) ** 2));
+    else {
+      const capDistance = Math.max(0.14 - f, f - 0.86, 0) / 0.13;
+      across = 0.5 + direction * 0.49 * Math.sqrt(Math.max(0, 1 - capDistance ** 2));
+    }
+  }
+  const polygons: Partial<Record<NodeShape, number[][]>> = {
+    hexagon: [[0.14, 0.01], [0.86, 0.01], [0.99, 0.5], [0.86, 0.99], [0.14, 0.99], [0.01, 0.5]],
+    parallelogram: [[0.07, 0.01], [1.07, 0.01], [0.93, 0.99], [-0.07, 0.99]],
+  };
+  const polygon = r.shape && polygons[r.shape];
+  if (polygon) {
+    const hits = polygon.flatMap((point, index) => {
+      const next = polygon[(index + 1) % polygon.length];
+      const axis = horizontal ? 0 : 1;
+      const delta = next[axis] - point[axis];
+      const fraction = delta ? (f - point[axis]) / delta : -1;
+      return fraction >= 0 && fraction <= 1 ? [point[1 - axis] + fraction * (next[1 - axis] - point[1 - axis])] : [];
+    });
+    if (hits.length) across = direction < 0 ? Math.min(...hits) : Math.max(...hits);
+  }
+  return horizontal ? { x: r.x + r.w * f, y: r.y + r.h * across } : { x: r.x + r.w * across, y: r.y + r.h * f };
+}
+
+function arrowBase(point: { x: number; y: number }, side: Side, length: number) {
   switch (side) {
-    case 'top': return { x: r.x + r.w * f, y: r.y };
-    case 'bottom': return { x: r.x + r.w * f, y: r.y + r.h };
-    case 'left': return { x: r.x, y: r.y + r.h * f };
-    case 'right': return { x: r.x + r.w, y: r.y + r.h * f };
+    case 'top': return { x: point.x, y: point.y - length };
+    case 'bottom': return { x: point.x, y: point.y + length };
+    case 'left': return { x: point.x - length, y: point.y };
+    case 'right': return { x: point.x + length, y: point.y };
   }
 }
 
@@ -121,12 +162,26 @@ export const SmartEdge = memo(function SmartEdge({ id, source, target, data, sel
   const ts = (e.targetSide as Side) || at;
   const a = neon && slot ? alongSide(s, ss, slot.s) : shift(anchor(s, ss), ss, offset);
   const b = neon && slot ? alongSide(t, ts, slot.t) : shift(anchor(t, ts), ts, offset);
-  const params = { sourceX: a.x, sourceY: a.y, sourcePosition: POS[ss], targetX: b.x, targetY: b.y, targetPosition: POS[ts] };
+  const startArrow = e.arrow === 'start' || e.arrow === 'both';
+  const endArrow = e.arrow === 'end' || e.arrow === 'both';
+  const patterned = neon && (e.style !== 'solid' || !!e.animated);
+  const terminalLength = NEON_ARROW_SIZE + (patterned ? NEON_DASH_GAP : 0);
   const routing = neon && e.routing === 'smooth' ? 'bezier' : e.routing;
-  const [path, mx, my] = routing === 'bezier' ? getBezierPath(params)
+  const startLead = neon && startArrow && routing !== 'straight';
+  const endLead = neon && endArrow && routing !== 'straight';
+  const routeStart = startLead ? arrowBase(a, ss, terminalLength) : a;
+  const routeEnd = endLead ? arrowBase(b, ts, terminalLength) : b;
+  const params = { sourceX: routeStart.x, sourceY: routeStart.y, sourcePosition: POS[ss], targetX: routeEnd.x, targetY: routeEnd.y, targetPosition: POS[ts] };
+  const [body, mx, my] = routing === 'bezier' ? getBezierPath(params)
     : routing === 'straight' ? getStraightPath(params)
     : getSmoothStepPath({ ...params, borderRadius: routing === 'step' ? 0 : 10, offset: 18 });
-  const { x: lx, y: ly } = routing === 'bezier' && (e.label || editing) ? clearLabelPoint(path, [s, t], labelHalf, { x: mx, y: my }) : { x: mx, y: my };
+  const path = (startLead ? body.replace(/^M[^A-Za-z]+/, 'M' + a.x + ',' + a.y + ' L' + routeStart.x + ',' + routeStart.y + ' ') : body) + (endLead ? ' L' + b.x + ',' + b.y : '');
+  const distance = Math.hypot(b.x - a.x, b.y - a.y);
+  const straightScale = distance ? Math.min(terminalLength, distance / 2) / distance : 0;
+  const sourceStem = routing === 'straight' ? { x: a.x + (b.x - a.x) * straightScale, y: a.y + (b.y - a.y) * straightScale } : routeStart;
+  const targetStem = routing === 'straight' ? { x: b.x - (b.x - a.x) * straightScale, y: b.y - (b.y - a.y) * straightScale } : routeEnd;
+  const terminalPath = [startArrow ? 'M' + a.x + ',' + a.y + ' L' + sourceStem.x + ',' + sourceStem.y : '', endArrow ? 'M' + targetStem.x + ',' + targetStem.y + ' L' + b.x + ',' + b.y : ''].join(' ');
+  const { x: lx, y: ly } = routing === 'bezier' && (e.label || editing) ? clearLabelPoint(body, [s, t], labelHalf, { x: mx, y: my }) : { x: mx, y: my };
   const cls = ['wfc-edge-path', selected ? 'selected' : '', e.animated ? 'animated' : e.style !== 'solid' ? e.style : '', sketch ? 'sk-base' : '', neon ? 'neon' : '', neon && born ? 'born' : ''].join(' ');
   const colorName = neon && wire ? wire : e.color;
   const color = colorName && colorName !== 'default' ? 'var(--c-' + colorName + ')' : undefined;
@@ -140,12 +195,13 @@ export const SmartEdge = memo(function SmartEdge({ id, source, target, data, sel
         className={cls}
         interactionWidth={18}
         style={ecStyle}
-        markerEnd={e.arrow === 'end' || e.arrow === 'both' ? markerUrl(colorName, !neon && !!selected) : undefined}
-        markerStart={e.arrow === 'start' || e.arrow === 'both' ? markerUrl(colorName, !neon && !!selected) : undefined}
+        markerEnd={endArrow ? markerUrl(colorName, !neon && !!selected) : undefined}
+        markerStart={startArrow ? markerUrl(colorName, !neon && !!selected) : undefined}
       />
+      {patterned && (startArrow || endArrow) ? <path d={terminalPath} className={'wfc-neon-terminal' + (selected ? ' selected' : '')} style={ecStyle} /> : null}
       {neon ? (
         <ViewportPortal>
-          {[a, b].map((p, i) => <span key={i} className="wfc-port-dot" style={{ ...ecStyle, transform: 'translate(' + p.x + 'px,' + p.y + 'px)' }} />)}
+          {[a, b].map((p, i) => (i === 0 ? startArrow : endArrow) ? null : <span key={i} className="wfc-port-dot" style={{ ...ecStyle, transform: 'translate(' + p.x + 'px,' + p.y + 'px)' }} />)}
         </ViewportPortal>
       ) : null}
       {sketch ? (
@@ -205,7 +261,7 @@ export function MarkerDefs() {
     <svg style={{ position: 'absolute', width: 0, height: 0 }} aria-hidden>
       <defs>
         {colors.map((c) => (
-          <marker key={c} id={'wfc-arrow-' + c} viewBox="0 0 10 10" refX={neon ? 14 : 8.5} refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <marker key={c} id={'wfc-arrow-' + c} viewBox="0 0 10 10" refX={neon ? 10 : 8.5} refY="5" markerWidth={neon ? NEON_ARROW_SIZE : 7} markerHeight={neon ? NEON_ARROW_SIZE : 7} markerUnits={neon ? 'userSpaceOnUse' : 'strokeWidth'} orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" style={{ fill: c === 'default' ? 'var(--edge)' : c === 'selected' ? 'var(--selection)' : 'var(--c-' + c + ')' }} />
           </marker>
         ))}

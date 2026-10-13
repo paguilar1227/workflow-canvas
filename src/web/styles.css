@@ -606,8 +606,9 @@ input, textarea, select { font: inherit; color: var(--text); }
 }
 :root[data-neon] .wfc-handle.react-flow__handle { --hb: 2px; background: #f4f4f5; border: var(--hb) solid var(--node-bg); box-shadow: 0 0 0 1px rgba(255,255,255,.16); }
 :root[data-neon] .react-flow__handle.connectingto, :root[data-neon] .react-flow__handle.valid { background: #fff; box-shadow: 0 0 0 1px rgba(255,255,255,.5), 0 0 12px rgba(255,255,255,.55); }
-.wfc-edge-path.neon { --xy-edge-stroke-selected: var(--ec); stroke-width: 3; stroke-linecap: round; filter: drop-shadow(0 0 3px color-mix(in srgb, var(--ec) 70%, transparent)); }
-.wfc-edge-path.neon.selected { stroke: var(--ec); stroke-width: 4; }
+.wfc-edge-path.neon, .wfc-neon-terminal { --xy-edge-stroke-selected: var(--ec); stroke-width: 3; stroke-linecap: round; filter: drop-shadow(0 0 3px color-mix(in srgb, var(--ec) 70%, transparent)); }
+.wfc-edge-path.neon.selected, .wfc-neon-terminal.selected { stroke: var(--ec); stroke-width: 4; }
+.wfc-neon-terminal { fill: none; stroke: var(--ec); pointer-events: none; }
 .wfc-edge-path.neon.dashed { stroke-dasharray: 8 9; }
 .wfc-edge-path.neon.dotted { stroke-dasharray: .1 7; }
 .wfc-edge-path.neon.animated { stroke-dasharray: 8 9; animation: neon-dash .9s linear infinite; }

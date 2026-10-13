@@ -131,7 +131,7 @@ export const rgbParts = (rgb: string) => (rgb.match(/\d+(\.\d+)?/g) ?? []).slice
 /** Largest per-channel difference between two colours. */
 export const colourGap = (a: number[], b: number[]) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
 /** Path data drawn as one cubic bezier (M … C …) with no straight or rounded-corner segments. */
-export const isBezier = (d: string) => /^M[^A-Za-z]+C[^A-Za-z]+$/.test(d.trim());
+export const isBezier = (d: string) => /^M[^A-Za-z]+(?:L[^A-Za-z]+)?C[^A-Za-z]+(?:L[^A-Za-z]+)?$/.test(d.trim());
 
 /**
  * Times the connect burst on a card: waits for it to appear after \`releasedAt\`, then for it to be removed.
