@@ -91,7 +91,12 @@ export class Phone {
       const c = cands.find((q) => q.x > 0 && q.y > 0 && q.x < innerWidth && q.y < innerHeight && ok(q.x, q.y));
       return c ? { x: c.x, y: c.y } : null;
     });
-    expect(p, 'a finger can reach the element').toBeTruthy();
+    const blocked = p ? '' : await l.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      return JSON.stringify({ box: r.toJSON(), hit: hit?.className, text: hit?.textContent?.slice(0, 80) });
+    });
+    expect(p, 'a finger can reach the element ' + blocked).toBeTruthy();
     return p!;
   }
 

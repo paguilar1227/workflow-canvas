@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Background, BackgroundVariant, ConnectionMode, MiniMap, ReactFlow, SelectionMode,
+  Background, BackgroundVariant, ConnectionMode, MiniMap, ReactFlow, SelectionMode, useStore, useStoreApi, useNodesInitialized,
   type Edge, type Node, type NodeChange, type EdgeChange, type Connection, type OnNodeDrag, type Viewport,
 } from '@xyflow/react';
 import { useApp, get, set } from '../store';
 import { nodeTypes, type NodeData } from './nodes';
 import { edgeTypes, MarkerDefs, portSlots, type Rect } from './edges';
 import { NEON_BURST_MS, NEON_SNAP_RADIUS, NeonConnectionLine, neonWireColors } from './neon';
+import { placeLabels, type LabelGeometry } from './labels';
 import { strokePath } from './sketch';
 import { childrenMap, descendants, hiddenIds, depthOf, branchAncestor, isAncestor } from '../../shared/graph';
 import { containsPoint, defaultSize } from '../../shared/sizes';
@@ -74,6 +75,12 @@ export function Canvas() {
   /** On touch one finger pans (React Flow's touch default); the Area tool arms a single box-select drag. */
   const areaSelect = useApp((s) => s.areaSelect);
   const selection = useApp((s) => s.selection);
+  const flowStore = useStoreApi();
+  useEffect(() => {
+    // An area selection can outlive the shared selection after creating a child.
+    // Its group-drag overlay must not cover an ordinary single selected node.
+    if (selection.nodes.length < 2) flowStore.setState({ nodesSelectionActive: false });
+  }, [flowStore, selection.nodes.length]);
   const overlay = useApp((s) => s.overlay);
   const editingId = useApp((s) => s.editingId);
   const flashing = useApp((s) => s.flashing);
@@ -83,6 +90,14 @@ export function Canvas() {
   const searchIndex = useApp((s) => s.searchIndex);
   const theme = getTheme(session.theme);
   const neon = !!theme.neon;
+  const drafting = theme.connectionStyle === 'draft';
+  const [labelGeometry, setLabelGeometry] = useState<Record<string, LabelGeometry>>({});
+  const registerLabel = useCallback((id: string, geometry: LabelGeometry | null) => {
+    setLabelGeometry((current) => {
+      if (!geometry) { if (!current[id]) return current; const next = { ...current }; delete next[id]; return next; }
+      return JSON.stringify(current[id]) === JSON.stringify(geometry) ? current : { ...current, [id]: geometry };
+    });
+  }, []);
   useNeonBursts(neon);
   const drag = useRef<{ start: Map<string, { x: number; y: number }>; companions: string[]; anchorId: string } | null>(null);
 
@@ -120,6 +135,9 @@ export function Canvas() {
     });
   }, [doc, selection.nodes, overlay, editingId, flashing, dropTargetId, matches, searchIndex, lockedView]);
 
+  const obstacles = useMemo(() => rfNodes.filter((n) => n.type !== 'frame').map((n) => ({ ...n.position, width: n.width ?? 0, height: n.height ?? 0 })), [rfNodes]);
+  const labelPositions = useMemo(() => placeLabels(doc?.edges ?? [], labelGeometry, obstacles), [doc?.edges, labelGeometry, obstacles]);
+
   const rfEdges: Edge[] = useMemo(() => {
     if (!doc) return [];
     const hidden = hiddenIds(doc);
@@ -131,9 +149,9 @@ export function Canvas() {
       const branch = branchAncestor(doc, n.id);
       out.push({ id: 'tree:' + n.id, source: n.parentId, target: n.id, type: 'branch', selectable: false, focusable: false, data: { color: branch?.color, branchId: branch?.id, depth: depthOf(doc, n.id) } });
     }
-    const wires = neon ? neonWireColors(doc.edges) : null;
+    const wires = neon || drafting ? neonWireColors(doc.edges) : null;
     const visible = doc.edges.filter((e) => !hidden.has(e.source) && !hidden.has(e.target));
-    const slots = neon ? portSlots(new Map<string, Rect>(doc.nodes.map((n) => { const o = overlay[n.id]; return [n.id, { x: o?.x ?? n.x, y: o?.y ?? n.y, w: o?.width ?? n.width, h: o?.height ?? n.height }]; })), visible) : null;
+    const slots = neon || drafting ? portSlots(new Map<string, Rect>(doc.nodes.map((n) => { const o = overlay[n.id]; return [n.id, { x: o?.x ?? n.x, y: o?.y ?? n.y, w: o?.width ?? n.width, h: o?.height ?? n.height }]; })), visible) : null;
     const lanes = new Map<string, string[]>();
     for (const e of doc.edges) {
       const key = [e.source, e.target].sort().join('|');
@@ -144,10 +162,10 @@ export function Canvas() {
       const group = lanes.get([e.source, e.target].sort().join('|'))!;
       const i = group.indexOf(e.id);
       const offset = group.length > 1 ? (i - (group.length - 1) / 2) * PARALLEL_EDGE_GAP : 0;
-      out.push({ id: e.id, source: e.source, target: e.target, type: 'smart', data: { edge: e, offset, wire: wires?.get(e.id), slot: slots?.get(e.id) }, selected: sel.has(e.id), zIndex: e.zIndex ?? 0 });
+      out.push({ id: e.id, source: e.source, target: e.target, type: 'smart', data: { edge: e, offset, wire: wires?.get(e.id), slot: slots?.get(e.id), obstacles, registerLabel, labelGeometry: labelGeometry[e.id], labelPosition: labelPositions[e.id] }, selected: sel.has(e.id), zIndex: e.zIndex ?? 0 });
     }
     return out;
-  }, [doc, selection.edges, neon, neon ? overlay : null]);
+  }, [doc, selection.edges, neon, drafting, overlay, obstacles, registerLabel, labelGeometry, labelPositions]);
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     const s = get();
@@ -257,6 +275,23 @@ export function Canvas() {
     reportSession({ viewport, viewportSize: el ? { width: el.clientWidth, height: el.clientHeight } : undefined } as never);
   }, []);
 
+  const canvasWidth = useStore((s) => s.width), canvasHeight = useStore((s) => s.height);
+  const initialized = useNodesInitialized();
+  const fittedSize = useRef('');
+  useEffect(() => {
+    if (!drafting || !canvasWidth || !canvasHeight) return;
+    const key = `${doc?.id}:${canvasWidth}:${canvasHeight}`;
+    if (fittedSize.current === key) return;
+    // An empty canvas is already fitted. Adding its first node must not move
+    // the viewport away from the point where the user just placed it.
+    if (!doc?.nodes.length) { fittedSize.current = key; return; }
+    if (!initialized) return;
+    fittedSize.current = key;
+    let next = 0;
+    const frame = requestAnimationFrame(() => { next = requestAnimationFrame(() => actions.fitView()); });
+    return () => { cancelAnimationFrame(frame); cancelAnimationFrame(next); };
+  }, [drafting, initialized, canvasWidth, canvasHeight, doc?.id, doc?.nodes.length]);
+
   const docKey = doc?.id;
   useEffect(() => {
     if (!docKey) return;
@@ -340,7 +375,8 @@ export function Canvas() {
       className={(session.mode === 'pan' ? 'mode-pan' : 'mode-select') + (selection.nodes.length > 1 ? ' multi-select' : '')}
     >
       <MarkerDefs />
-      {bgVariant !== 'none' ? <Background variant={variant} gap={theme.gap} size={variant === BackgroundVariant.Dots ? 1.3 : 1} color="var(--grid)" /> : null}
+      {drafting && bgVariant === 'lines' ? <Background id="draft-major" variant={BackgroundVariant.Lines} gap={theme.gap * 5} size={1} color="var(--grid-major)" /> : null}
+      {bgVariant !== 'none' ? <Background id="canvas-grid" variant={variant} gap={theme.gap} size={variant === BackgroundVariant.Dots ? 1.3 : 1} color="var(--grid)" /> : null}
       {session.panels.minimap && !session.zenMode ? <MiniMap pannable zoomable position="bottom-right" style={{ width: 180, height: 120, marginBottom: 'var(--minimap-lift, 28px)' }} nodeStrokeWidth={0} nodeColor={(n) => (n.type === 'frame' ? 'var(--frame-border)' : 'var(--text-3)')} nodeBorderRadius={3} /> : null}
     </ReactFlow>
     </>

@@ -1,3 +1,4 @@
+import { Input } from './components/Input';
 import { useEffect, useMemo, useRef, type MouseEvent } from 'react';
 import MarkdownIt from 'markdown-it';
 import { useApp } from './store';
@@ -35,7 +36,7 @@ md.core.ruler.push('wfc_task_lists', (state) => {
     first.content = first.content.slice(m[0].length);
     const box = new state.Token('html_inline', '', 0);
     const line = item.map?.[0] ?? -1;
-    box.content = '<input type="checkbox" class="md-task nodrag" data-line="' + line + '"' + (m[1] === ' ' ? '' : ' checked') + (state.env?.readOnly ? ' disabled' : '') + ' aria-label="Task">';
+    box.content = '<Input type="checkbox" class="wfc-checkbox md-task nodrag" data-line="' + line + '"' + (m[1] === ' ' ? '' : ' checked') + (state.env?.readOnly ? ' disabled' : '') + ' aria-label="Task">';
     inline.children!.unshift(box);
     item.attrJoin('class', 'task-list-item');
   }

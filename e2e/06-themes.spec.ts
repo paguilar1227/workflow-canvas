@@ -3,7 +3,7 @@ import { neonEdges } from './support/neon';
 import { DEFAULT_SESSION } from '../src/shared/types';
 
 test('swap the theme of a diagram', async ({ page, app, ev }) => {
-  ev.proves('A new session opens in Neon Flow, the default theme, which the Theme menu lists first with Lens Dark second. A user opens the Theme menu and switches the same diagram through all 10 themes (including the hand-drawn Excalidraw Sketch in light and dark, and Neon Flow), with a full-page screenshot per theme; each switch changes the canvas palette (--bg) to that theme’s colour, both sketch themes draw rough outlines in a hand-written font that does not leak into the next theme, only Neon Flow draws 3px neon wires with the configured arrowheads, dots at unheaded connector ends and neon mind-map branches (leaving it keeps the arrowheads and removes the dots), and the chosen theme survives a page reload.');
+  ev.proves('A new session opens in Mono Drafting, with its light and dark variants listed first. A user opens the Theme menu and switches the same diagram through all 12 themes (including the hand-drawn Excalidraw Sketch in light and dark, and Neon Flow), with a full-page screenshot per theme; each switch changes the canvas palette (--bg) to that theme’s colour, both sketch themes draw rough outlines in a hand-written font that does not leak into the next theme, only Neon Flow draws 3px neon wires with the configured arrowheads, dots at unheaded connector ends and neon mind-map branches (leaving it keeps the arrowheads and removes the dots), and the chosen theme survives a page reload.');
   const docId = await app.newDoc('Theme gallery', 'architecture');
   await app.tool('add_nodes', { documentId: docId, nodes: [
     { id: 'tg-root', title: 'Launch v2', shape: 'pill', color: 'blue', x: 40, y: 470 },
@@ -40,25 +40,25 @@ test('swap the theme of a diagram', async ({ page, app, ev }) => {
     for (const b of branches) expect(b.len > 0 && b.stroke !== 'none', where + ': a neon branch is drawn: ' + JSON.stringify(b)).toBe(true);
   };
 
-  await test.step('a new session opens in Neon Flow, the default theme', async () => {
-    expect(DEFAULT_SESSION.theme, 'the product default theme').toBe('neon-flow');
-    expect((await app.state()).session.theme).toBe('neon-flow');
-    await expect(page.getByTestId('menu-theme')).toContainText('Neon Flow');
-    await neonLook(true, 'first load');
-    await ev.snap('first-load-neon-flow');
+  await test.step('a new session opens in Mono Drafting, the default theme', async () => {
+    expect(DEFAULT_SESSION.theme).toBe('mono-drafting');
+    expect((await app.state()).session.theme).toBe('mono-drafting');
+    await expect(page.locator('html')).toHaveAttribute('data-drafting', '');
+    await neonLook(false, 'first load');
+    await ev.snap('first-load-mono-drafting');
   });
 
   await page.getByTestId('menu-theme').click();
   const options = page.locator('.theme-option');
-  await expect(options, 'the Theme menu offers 10 themes').toHaveCount(10);
+  await expect(options, 'the Theme menu offers 12 themes').toHaveCount(12);
   const themes = await options.evaluateAll((els) => els.map((el) => ({
     id: el.getAttribute('data-testid')!.replace(/^theme-/, ''),
     name: el.querySelector('.theme-name')!.textContent!.trim(),
     swatch: getComputedStyle(el.querySelector('.theme-swatch')!).backgroundColor,
   })));
   expect(themes.map((t) => t.id)).toEqual(expect.arrayContaining(['excalidraw-sketch', 'excalidraw-sketch-dark', 'neon-flow']));
-  expect(themes.slice(0, 2).map((t) => t.id), 'Neon Flow is listed first and Lens Dark second').toEqual(['neon-flow', 'lens-dark']);
-  await expect(page.getByTestId('theme-neon-flow'), 'the default theme is marked active').toHaveClass(/active/);
+  expect(themes.slice(0, 2).map((t) => t.id), 'drafting themes are listed first').toEqual(['mono-drafting', 'mono-drafting-dark']);
+  await expect(page.getByTestId('theme-mono-drafting'), 'the default theme is marked active').toHaveClass(/active/);
   const sketchThemes = new Set(['excalidraw-sketch', 'excalidraw-sketch-dark']);
   await ev.snap('theme-menu-open');
   await page.keyboard.press('Escape');
@@ -148,7 +148,7 @@ test('swap the theme of a diagram', async ({ page, app, ev }) => {
     await ev.snap('paper-blueprint-after-reload');
   });
 
-  await test.step('switch back to Neon Flow, the default theme', async () => {
+  await test.step('switch back to Neon Flow', async () => {
     await page.getByTestId('menu-theme').click();
     await page.getByTestId('theme-neon-flow').click();
     await page.keyboard.press('Escape');

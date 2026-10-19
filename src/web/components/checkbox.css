@@ -1,0 +1,90 @@
+/* Keep native input/label semantics while overriding shared text-input geometry,
+   including .field.inline and the narrow-screen minimum height, in any load order. */
+:root body input.wfc-checkbox[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-grid;
+  box-sizing: border-box;
+  place-content: center;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  min-height: 16px;
+  margin: 0;
+  padding: 0;
+  vertical-align: -3px;
+  border: 1px solid var(--text-2);
+  border-radius: 2px;
+  background: var(--panel);
+  color: var(--accent-text);
+  box-shadow: none;
+  cursor: pointer;
+}
+
+:root body input.wfc-checkbox[type='checkbox']::before {
+  content: '';
+  box-sizing: border-box;
+  width: 5px;
+  height: 9px;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: translateY(-1px) rotate(45deg);
+  opacity: 0;
+}
+
+:root body input.wfc-checkbox[type='checkbox']:is(:checked, :indeterminate) {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+:root body input.wfc-checkbox[type='checkbox']:is(:checked, :indeterminate)::before {
+  opacity: 1;
+}
+
+:root body input.wfc-checkbox[type='checkbox']:indeterminate::before {
+  width: 8px;
+  height: 2px;
+  border: 0;
+  background: currentColor;
+  transform: none;
+}
+
+:root body input.wfc-checkbox[type='checkbox']:enabled:hover {
+  border-color: var(--accent);
+}
+
+:root body input.wfc-checkbox[type='checkbox']:focus-visible {
+  outline: 2px solid var(--selection);
+  outline-offset: 3px;
+}
+
+:root body input.wfc-checkbox[type='checkbox']:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+@media (forced-colors: active) {
+  :root body input.wfc-checkbox[type='checkbox'] {
+    forced-color-adjust: none;
+    border-color: ButtonText;
+    background: Canvas;
+    color: HighlightText;
+  }
+
+  :root body input.wfc-checkbox[type='checkbox']:is(:checked, :indeterminate) {
+    border-color: Highlight;
+    background: Highlight;
+  }
+
+  :root body input.wfc-checkbox[type='checkbox']:disabled {
+    border-color: GrayText;
+    color: GrayText;
+    background: Canvas;
+    opacity: 1;
+  }
+
+  :root body input.wfc-checkbox[type='checkbox']:focus-visible {
+    outline-color: Highlight;
+  }
+}

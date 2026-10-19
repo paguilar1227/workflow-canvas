@@ -1,0 +1,101 @@
+/* Keep existing field geometry and specialized consumer classes. These shared
+   states win over global input:focus and .field rules in either import order. */
+:root body :is(input.wfc-input, textarea.wfc-textarea):focus {
+  border-color: var(--selection);
+}
+
+:root body :is(input.wfc-input, textarea.wfc-textarea):focus-visible {
+  outline: 2px solid var(--selection);
+  outline-offset: 2px;
+}
+
+:root body :is(input.wfc-input, textarea.wfc-textarea):disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+:root body :is(input.wfc-input, textarea.wfc-textarea)[readonly]:not(:disabled) {
+  background: var(--panel);
+  cursor: default;
+}
+
+/* The native radio owns group selection and label activation. Only its paint
+   changes, using the same 16px geometry and palette as Checkbox. */
+:root body input.wfc-radio[type='radio'] {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-grid;
+  box-sizing: border-box;
+  place-content: center;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  min-height: 16px;
+  margin: 0;
+  padding: 0;
+  vertical-align: -3px;
+  border: 1px solid var(--text-2);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--accent-text);
+  box-shadow: none;
+  cursor: pointer;
+}
+
+:root body input.wfc-radio[type='radio']::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0;
+}
+
+:root body input.wfc-radio[type='radio']:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+:root body input.wfc-radio[type='radio']:checked::before {
+  opacity: 1;
+}
+
+:root body input.wfc-radio[type='radio']:enabled:hover {
+  border-color: var(--accent);
+}
+
+:root body input.wfc-radio[type='radio']:focus-visible {
+  outline: 2px solid var(--selection);
+  outline-offset: 3px;
+}
+
+:root body input.wfc-radio[type='radio']:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+@media (forced-colors: active) {
+  :root body input.wfc-radio[type='radio'] {
+    forced-color-adjust: none;
+    border-color: ButtonText;
+    background: Canvas;
+    color: HighlightText;
+  }
+
+  :root body input.wfc-radio[type='radio']:checked {
+    border-color: Highlight;
+    background: Highlight;
+  }
+
+  :root body input.wfc-radio[type='radio']:disabled {
+    border-color: GrayText;
+    color: GrayText;
+    background: Canvas;
+    opacity: 1;
+  }
+
+  :root body input.wfc-radio[type='radio']:focus-visible {
+    outline-color: Highlight;
+  }
+}

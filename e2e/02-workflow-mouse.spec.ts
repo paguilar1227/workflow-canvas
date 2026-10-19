@@ -23,7 +23,7 @@ test('sketch a workflow with the mouse', async ({ page, app, ev }) => {
   ev.proves('A mouse user adds topics from the toolbar (arm the Topic button, click the canvas to place) and by double-clicking empty canvas, drags a topic to a new spot, draws connectors by dragging from a node handle to another node, labels connectors by double-clicking the line and via the inspector, and restyles a connector (bezier routing, dashed, arrows at both ends, animated flow) with visible results.');
   const docId = await app.newDoc('Order workflow');
   await app.pinTheme('lens-dark');
-  ev.note('Pinned to Lens Dark: this journey checks connector looks that Neon Flow (the default theme) draws differently on purpose: the live connector line, smooth routing redrawn as a curve, and arrowheads.');
+  ev.note('Pinned to Lens Dark: this journey checks connector looks that Neon Flow draws differently on purpose: the live connector line, smooth routing redrawn as a curve, and arrowheads.');
   await app.open(docId);
   const pane = await app.paneBox();
 
@@ -91,7 +91,7 @@ test('sketch a workflow with the mouse', async ({ page, app, ev }) => {
     await ev.snap('connector-bezier-dashed-both-arrows');
     await page.getByTestId('edge-animated').click();
     await expect(path).toHaveClass(/animated/);
-    await expect(page.getByTestId('edge-animated')).toHaveClass(/on/);
+    await expect(page.getByTestId('edge-animated')).toBeChecked();
     const e = (await app.doc()).edges.find((x) => x.id === second)!;
     expect(e).toMatchObject({ label: 'in stock', routing: 'bezier', style: 'dashed', arrow: 'both', animated: true });
     await page.keyboard.press('Escape');

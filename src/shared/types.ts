@@ -57,6 +57,8 @@ export interface CanvasEdge {
   target: string;
   label?: string;
   labelOffset?: { x: number; y: number };
+  /** Explicit connector waypoint, in canvas coordinates. */
+  routePoint?: { x: number; y: number };
   style: EdgeStyle;
   arrow: ArrowMode;
   routing: EdgeRouting;
@@ -121,7 +123,7 @@ export interface SessionState {
 
 export const DEFAULT_SESSION: SessionState = {
   activeDocumentId: null,
-  theme: 'neon-flow',
+  theme: 'mono-drafting',
   selection: { nodes: [], edges: [] },
   viewport: { x: 0, y: 0, zoom: 1 },
   viewportSize: { width: 0, height: 0 },

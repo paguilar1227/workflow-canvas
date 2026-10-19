@@ -8,7 +8,7 @@ const PROMPT = 'nf-prompt', NOISE = 'nf-noise', SAMPLER = 'nf-sampler', PROC = '
 const NOTE = 'nf-note', CAPTION = 'nf-caption';
 
 test('connect a pipeline in the Neon Flow theme', async ({ page, app, ev, phone }) => {
-  ev.proves('Phone version: a person picks Neon Flow from the More sheet (10 themes) and the pipeline renders cleanly at phone size: 3px neon bezier wires with the configured arrowheads, a source dot in the wire colour drawn above the cards, no sideways overflow and an ergonomic phone chrome. Once a card is selected its white ports keep their enlarged 44px touch areas. A one-finger drag from a port draws a white wire to the finger, then a spark and ring near Processing\'s port in the colour (--zc) the new wire ends up with; lifting the finger connects the cards, the three wires into Processing all differ in colour, and the burst on Processing is gone after about 1.6 s. A sticky note\'s and a text label\'s four ports are drawn whole (not clipped by the note, not covered by the text) and keep touch areas of at least 44 card units on every side, in Lens Dark and in Neon Flow.');
+  ev.proves('Phone version: a person picks Neon Flow from the More sheet (12 themes) and the pipeline renders cleanly at phone size: 3px neon bezier wires with the configured arrowheads, a source dot in the wire colour drawn above the cards, no sideways overflow and an ergonomic phone chrome. Once a card is selected its white ports keep their enlarged 44px touch areas. A one-finger drag from a port draws a white wire to the finger, then a spark and ring near Processing\'s port in the colour (--zc) the new wire ends up with; lifting the finger connects the cards, the three wires into Processing all differ in colour, and the burst on Processing is gone after about 1.6 s. A sticky note\'s and a text label\'s four ports are drawn whole (not clipped by the note, not covered by the text) and keep touch areas of at least 44 card units on every side, in Lens Dark and in Neon Flow.');
   const docId = await app.newDoc('Neon pipeline');
   await app.tool('add_nodes', { documentId: docId, nodes: [
     { id: PROMPT, title: 'Prompt', subtitle: 'text', x: 0, y: 0 },
@@ -87,8 +87,8 @@ test('connect a pipeline in the Neon Flow theme', async ({ page, app, ev, phone 
 
   await test.step('pick Neon Flow from the More sheet', async () => {
     await phone.tap(page.getByTestId('menu-more'));
-    await expect(page.locator('.theme-option'), 'the More sheet offers 10 themes').toHaveCount(10);
-    await expect(page.locator('.theme-option').first(), 'Neon Flow is listed first').toHaveAttribute('data-testid', 'theme-neon-flow');
+    await expect(page.locator('.theme-option'), 'the More sheet offers 12 themes').toHaveCount(12);
+    await expect(page.locator('.theme-option').nth(2), 'Neon Flow follows the drafting themes').toHaveAttribute('data-testid', 'theme-neon-flow');
     const item = page.getByTestId('theme-neon-flow');
     await item.scrollIntoViewIfNeeded();
     await expect(item).toContainText('Neon Flow');

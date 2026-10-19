@@ -10,6 +10,8 @@ export interface ThemeDef {
   sketch?: boolean;
   /** Node-graph rendering: neon bezier wires with port dots, a spark while snapping to a port and a light sweep on connect. */
   neon?: boolean;
+  /** Precise colored connectors and engineering-paper presentation. */
+  connectionStyle?: 'draft';
   tokens: Record<string, string>;
 }
 
@@ -21,12 +23,57 @@ const HAND = "'Patrick Hand', 'Comic Sans MS', 'Segoe Print', cursive";
 const JBMONO = "'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace";
 const GEISTMONO = "'Geist Mono Variable', 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace";
 
+const MONO_DRAFTING: ThemeDef = {
+    id: 'mono-drafting',
+    name: 'Mono Drafting',
+    mode: 'light',
+    description: 'Default. Crisp monochrome controls around engineering paper, with clear, colorful ink connections.',
+    source: { label: 'Refero style: Mono', url: 'https://mono.frm.fm/en', referoStyleId: '4b3c372c-aff6-4608-bafb-1dde853c4805' },
+    background: 'lines', gap: 20, connectionStyle: 'draft',
+    tokens: {
+      '--font-ui': INTER, '--font-display': INTER, '--font-mono': GEISTMONO,
+      '--bg': '#ffffff', '--canvas-bg': '#f6f7f0', '--grid': 'rgba(107,128,103,.11)', '--grid-major': 'rgba(107,128,103,.20)',
+      '--panel': '#ffffff', '--panel-2': '#f3f3f0', '--panel-border': '#c6c7c0',
+      '--text': '#252622', '--text-2': '#64675d', '--text-3': '#6e7167',
+      '--accent': '#292b25', '--accent-text': '#ffffff', '--accent-soft': '#eceee6',
+      '--node-bg': '#fffffc', '--node-border': '#8a9080', '--node-icon-bg': '#f1f3e9', '--node-title': '#252a20', '--node-sub': '#686e60',
+      '--node-radius': '2px', '--node-shadow': 'none',
+      '--badge-bg': '#fffffc', '--badge-border': '#a7ad9d', '--badge-text': '#555e4a',
+      '--frame-bg': 'rgba(255,255,252,.28)', '--frame-border': '#a6af9b', '--frame-label': '#5e6c50',
+      '--edge': '#656e58', '--edge-label-bg': '#f6f7f0', '--edge-label-border': '#c6ccbb', '--edge-label-text': '#49523e',
+      '--sticky-bg': '#faf3cd', '--sticky-text': '#494328',
+      '--selection': '#35677d', '--ui-radius': '2px',
+      '--c-blue': '#146cb8', '--c-green': '#298044', '--c-amber': '#b17800', '--c-red': '#d14d3d', '--c-purple': '#8650b9', '--c-pink': '#bc3c82', '--c-teal': '#087f88', '--c-gray': '#616a75',
+    },
+};
+
 export const THEMES: ThemeDef[] = [
+  MONO_DRAFTING,
+  {
+    ...MONO_DRAFTING,
+    id: 'mono-drafting-dark',
+    name: 'Mono Drafting — Dark',
+    mode: 'dark',
+    description: 'The same precise drafting layout on charcoal paper, with light annotations and colorful ink connections.',
+    tokens: {
+      ...MONO_DRAFTING.tokens,
+      '--bg': '#151715', '--canvas-bg': '#1b1e1a', '--grid': 'rgba(154,178,148,.09)', '--grid-major': 'rgba(154,178,148,.18)',
+      '--panel': '#191c18', '--panel-2': '#232721', '--panel-border': '#414a3c',
+      '--text': '#eceee7', '--text-2': '#acb6a5', '--text-3': '#9aa492',
+      '--accent': '#eceee7', '--accent-text': '#191c18', '--accent-soft': '#30362c',
+      '--node-bg': '#252b21', '--node-border': '#7a8970', '--node-icon-bg': '#303829', '--node-title': '#f1f4e9', '--node-sub': '#bcc5b3',
+      '--badge-bg': '#252b21', '--badge-border': '#738466', '--badge-text': '#d9e0ce',
+      '--frame-bg': 'rgba(149,167,130,.04)', '--frame-border': '#526048', '--frame-label': '#b9c5ae',
+      '--edge': '#b9c8aa', '--edge-label-bg': '#1b1e1a', '--edge-label-border': '#738466', '--edge-label-text': '#d9e0ce',
+      '--sticky-bg': '#393320', '--sticky-text': '#f4e8b8', '--selection': '#70b7f5',
+      '--c-blue': '#70b7f5', '--c-green': '#85c98b', '--c-amber': '#e9b75a', '--c-red': '#ef8b7b', '--c-purple': '#b79add', '--c-pink': '#e797be', '--c-teal': '#72cbc6', '--c-gray': '#aab6a2',
+    },
+  },
   {
     id: 'neon-flow',
     name: 'Neon Flow',
     mode: 'dark',
-    description: 'Default. Node-graph look from Omer Assa’s connector demo: charcoal cards with port dots, thick neon wires with a soft glow, an electric spark when a wire snaps to a port, and a light sweep around the card it connects to.',
+    description: 'Node-graph look from Omer Assa’s connector demo: charcoal cards with port dots, thick neon wires with a soft glow, an electric spark when a wire snaps to a port, and a light sweep around the card it connects to.',
     source: { label: 'Omer Assa (@omer_assa) connector demo on X', url: 'https://x.com/omer_assa/status/2106758938926391416' },
     background: 'dots', gap: 22, neon: true,
     tokens: {

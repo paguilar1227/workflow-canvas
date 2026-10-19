@@ -6,7 +6,7 @@ import {
 const PROMPT = 'nf-prompt', NOISE = 'nf-noise', SAMPLER = 'nf-sampler', PROC = 'nf-proc', PREVIEW = 'nf-preview';
 
 test('connect a pipeline in the Neon Flow theme', async ({ page, app, ev, browser, request }, info) => {
-  ev.proves('A mouse user builds a small node-graph pipeline in Neon Flow, the first theme in the Theme menu: connectors are 3px neon wires with a glow, a palette colour when they have none (wires converging on one card all differ, and an automatic colour steps aside for an explicitly coloured wire into that card), bezier curves with the configured arrowheads and a coloured source dot drawn above the cards; cards show a grip and white ports. Wires that share a side of a card each get their own port, evenly spaced at 1/(n+1) … n/(n+1) and ordered by where the other end sits, so three wires into Processing meet it at 1/4, 1/2 and 3/4 and never cross, and a single wire meets the middle. Dragging from a port draws a white wire that sparks with a ring once it is near another card\'s port, the spark colour (--zc) is the colour the new wire ends up with, the connect ripple appears at the new wire\'s own port and the burst is gone after about 1.6 s; a connector added by the AI also bursts at its port, and its ripple stays centred on its own arrow tip when another wire into that side is hidden inside a collapsed branch (bug K2); dragging a source card re-orders the target\'s ports live, and dragging the target card carries its evenly spaced ports along live; clicking a wire shows the selection halo; with reduced motion the ring is still and no burst is shown (side-by-side.mp4: reduced motion left, normal right); switching to Lens Dark keeps arrowheads and restores plain lines meeting the middle of the side, and no port dots.');
+  ev.proves('A mouse user builds a small node-graph pipeline in Neon Flow, listed after the two drafting themes: connectors are 3px neon wires with a glow, a palette colour when they have none (wires converging on one card all differ, and an automatic colour steps aside for an explicitly coloured wire into that card), bezier curves with the configured arrowheads and a coloured source dot drawn above the cards; cards show a grip and white ports. Wires that share a side of a card each get their own port, evenly spaced at 1/(n+1) … n/(n+1) and ordered by where the other end sits, so three wires into Processing meet it at 1/4, 1/2 and 3/4 and never cross, and a single wire meets the middle. Dragging from a port draws a white wire that sparks with a ring once it is near another card\'s port, the spark colour (--zc) is the colour the new wire ends up with, the connect ripple appears at the new wire\'s own port and the burst is gone after about 1.6 s; a connector added by the AI also bursts at its port, and its ripple stays centred on its own arrow tip when another wire into that side is hidden inside a collapsed branch (bug K2); dragging a source card re-orders the target\'s ports live, and dragging the target card carries its evenly spaced ports along live; clicking a wire shows the selection halo; with reduced motion the ring is still and no burst is shown (side-by-side.mp4: reduced motion left, normal right); switching to Lens Dark keeps arrowheads and restores plain lines meeting the middle of the side, and no port dots.');
   const docId = await app.newDoc('Neon pipeline');
   await app.tool('add_nodes', { documentId: docId, nodes: [
     { id: PROMPT, title: 'Prompt', subtitle: 'text', x: 0, y: 0 },
@@ -47,10 +47,10 @@ test('connect a pipeline in the Neon Flow theme', async ({ page, app, ev, browse
     return pt;
   };
 
-  await test.step('pick Neon Flow, the first theme in the Theme menu', async () => {
+  await test.step('pick Neon Flow, listed after the two drafting themes', async () => {
     await page.getByTestId('menu-theme').click();
-    await expect(page.locator('.theme-option'), 'the Theme menu offers 10 themes').toHaveCount(10);
-    await expect(page.locator('.theme-option').first(), 'Neon Flow is listed first').toHaveAttribute('data-testid', 'theme-neon-flow');
+    await expect(page.locator('.theme-option'), 'the Theme menu offers 12 themes').toHaveCount(12);
+    await expect(page.locator('.theme-option').nth(2), 'Neon Flow follows the drafting themes').toHaveAttribute('data-testid', 'theme-neon-flow');
     await expect(page.getByTestId('theme-neon-flow')).toContainText('Neon Flow');
     await ev.snap('theme-menu-neon-flow');
     await page.getByTestId('theme-neon-flow').click();

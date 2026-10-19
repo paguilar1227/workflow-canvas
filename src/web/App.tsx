@@ -4,6 +4,7 @@ import { useApp, set, get } from './store';
 import { Canvas } from './canvas/Canvas';
 import { TopBar } from './panels/TopBar';
 import { LeftPanel } from './panels/LeftPanel';
+import { usePanelWidth } from './panels/PanelResize';
 import { Inspector } from './panels/Inspector';
 import { Toolbar, ZoomBar, SearchBar, ActivityFeed, Toast, ContextMenu, HelpModal, AiModal, ImportModal, ModePill, SelectionBar } from './panels/Chrome';
 import { useKeyboard } from './keyboard';
@@ -23,6 +24,7 @@ function useTheme() {
       if (v === undefined) root.style.removeProperty(k); else root.style.setProperty(k, v);
     }
     root.dataset.theme = t.id;
+    if (t.connectionStyle === 'draft') root.dataset.drafting = ''; else delete root.dataset.drafting;
     if (t.neon) root.dataset.neon = ''; else delete root.dataset.neon;
     root.dataset.mode = t.mode;
     root.style.colorScheme = t.mode;
@@ -123,6 +125,8 @@ export function App() {
   const viewMode = useApp((s) => s.session.viewMode);
   const doc = useApp((s) => s.doc);
   const minimap = useApp((s) => s.session.panels.minimap);
+  const outlineWidth = usePanelWidth('left', 268);
+  const inspectorWidth = usePanelWidth('right', 292);
   const canvasRef = useRef<HTMLDivElement>(null);
   useDockLayout(canvasRef, [viewMode, zen, minimap, !!doc, compact]);
   return (
@@ -130,7 +134,7 @@ export function App() {
       <div className={'app' + (zen ? ' zen' : '') + (viewMode ? ' view-mode' : '') + (compact ? ' compact' : '')} onClick={() => useApp.getState().menu && set({ menu: null })}>
         <TopBar />
         <div className="main">
-          <SlideColumn open={compact ? drawer === 'outline' : panels.outline && !zen} side="left" width={drawerWidth(compact, drawerFull, 268)}><LeftPanel /></SlideColumn>
+          <SlideColumn open={compact ? drawer === 'outline' : panels.outline && !zen} side="left" width={drawerWidth(compact, drawerFull, outlineWidth.width)}><LeftPanel />{!compact ? outlineWidth.resize : null}</SlideColumn>
           <div className="canvas-wrap" data-testid="canvas" ref={canvasRef}>
             {doc ? <Canvas /> : <div style={{ display: 'grid', placeItems: 'center', height: '100%', color: 'var(--text-3)' }}>Loading canvas…</div>}
             {viewMode ? null : <Toolbar />}
@@ -141,7 +145,7 @@ export function App() {
             <SearchBar />
             <Toast />
           </div>
-          <SlideColumn open={compact ? drawer === 'inspector' && !viewMode : panels.inspector && !zen && !viewMode} side="right" width={drawerWidth(compact, drawerFull, 292)}><Inspector /></SlideColumn>
+          <SlideColumn open={compact ? drawer === 'inspector' && !viewMode : panels.inspector && !zen && !viewMode} side="right" width={drawerWidth(compact, drawerFull, inspectorWidth.width)}><Inspector />{!compact ? inspectorWidth.resize : null}</SlideColumn>
           {compact ? <div className={'drawer-backdrop' + (drawer ? ' shown' : '')} data-testid="drawer-backdrop" aria-hidden={!drawer} onClick={() => set({ drawer: null, drawerFull: false })} /> : null}
         </div>
         <ContextMenu />

@@ -247,7 +247,7 @@ test('change a topic\'s logic role in the inspector', async ({ page, app, ev }) 
 });
 
 test('drag a connector from every port of a decision and a wait node', async ({ page, app, ev }) => {
-  ev.proves('Regression: the role marker never covers a port. The D shortcut arms a decision ("Click the canvas to place a decision"), and the Logic menu spawns a Wait circle beside it. On both, every press on each of the four ports\' dots reaches the port (the marker is not on top of any of them), in Neon Flow (the default theme), Lens Dark and Excalidraw Sketch, and each marker sits on its shape\'s upper-left outline (the sketch themes once drew it at the corner of the box). Dragging from each of the eight ports, including the decision\'s top port, draws a connector from that side to the drop target and never moves the node; the decision\'s first two connectors are labelled Yes and No.');
+  ev.proves('Regression: the role marker never covers a port. The D shortcut arms a decision ("Click the canvas to place a decision"), and the Logic menu spawns a Wait circle beside it. On both, every press on each of the four ports\' dots reaches the port (the marker is not on top of any of them), in Mono Drafting (the default theme), Lens Dark and Excalidraw Sketch, and each marker sits on its shape\'s upper-left outline (the sketch themes once drew it at the corner of the box). Dragging from each of the eight ports, including the decision\'s top port, draws a connector from that side to the drop target and never moves the node; the decision\'s first two connectors are labelled Yes and No.');
   const docId = await app.newDoc('Port check');
   await app.open(docId);
   const pane = await app.paneBox();
@@ -283,7 +283,7 @@ test('drag a connector from every port of a decision and a wait node', async ({ 
   await page.keyboard.press('Escape');
   await app.fit();
 
-  for (const [theme, label] of [[DEFAULT_SESSION.theme, 'Neon Flow'], ['lens-dark', 'Lens Dark'], ['excalidraw-sketch', 'Excalidraw Sketch']] as const) {
+  for (const [theme, label] of [[DEFAULT_SESSION.theme, 'Mono Drafting'], ['lens-dark', 'Lens Dark'], ['excalidraw-sketch', 'Excalidraw Sketch']] as const) {
     await test.step('the role marker covers none of the eight ports in ' + label, async () => {
       await app.pinTheme(theme);
       await expect.poll(async () => (await app.state()).session.theme).toBe(theme);

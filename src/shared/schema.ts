@@ -35,6 +35,7 @@ export const nodePatchSchema = z.object({ id: z.string().min(1), ...nodeFieldSha
 
 export const edgeFieldShape = {
   label: z.string().nullable().optional().describe('Text shown in a pill on the connector (inline Markdown and :shortcode: emoji).'),
+  routePoint: z.object({ x: z.number().finite(), y: z.number().finite() }).nullable().optional().describe('Explicit connector bend in canvas coordinates. null restores automatic routing.'),
   labelOffset: z.object({ x: z.number(), y: z.number() }).nullable().optional().describe('Move the label from its automatic position in canvas units; positive x is right and positive y is down. The offset follows the connector when nodes move. null resets it.'),
   style: z.enum(EDGE_STYLES as [string, ...string[]]).optional(),
   arrow: z.enum(ARROW_MODES as [string, ...string[]]).optional().describe("Arrowheads: 'end' (default), 'start', 'both', 'none'."),

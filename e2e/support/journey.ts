@@ -14,7 +14,7 @@ export interface WNode {
   status?: string | null; priority?: number; points?: [number, number][];
   zIndex?: number;
 }
-export interface WEdge { id: string; source: string; target: string; sourceSide?: string | null; targetSide?: string | null; label?: string; labelOffset?: { x: number; y: number }; style: string; arrow: string; routing: string; animated?: boolean; color?: string | null; zIndex?: number }
+export interface WEdge { id: string; source: string; target: string; sourceSide?: string | null; targetSide?: string | null; label?: string; labelOffset?: { x: number; y: number }; routePoint?: { x: number; y: number }; style: string; arrow: string; routing: string; animated?: boolean; color?: string | null; zIndex?: number }
 export interface WDoc { id: string; title: string; nodes: WNode[]; edges: WEdge[]; settings: { autoArrange: boolean; treeLayout: string } }
 export interface WState {
   doc: WDoc | null; docId: string | null; connected: boolean; pending: number;

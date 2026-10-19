@@ -1,3 +1,5 @@
+import { Button } from '../components/Button';
+import { Input } from '../components/Input';
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { Smile, X } from 'lucide-react';
@@ -82,7 +84,7 @@ function Grid({ items, onPick }: { items: EmojiEntry[]; onPick: (e: EmojiEntry) 
   return (
     <div className="emoji-grid" style={{ gridTemplateColumns: 'repeat(' + COLUMNS + ', 1fr)' }}>
       {items.map((e) => (
-        <button key={e.emoji} className="emoji-cell" title={e.label + (e.codes[0] ? '  :' + e.codes[0] + ':' : '')} aria-label={e.label} data-emoji={e.emoji} onClick={() => onPick(e)}>{e.emoji}</button>
+        <Button key={e.emoji} className="emoji-cell" title={e.label + (e.codes[0] ? '  :' + e.codes[0] + ':' : '')} aria-label={e.label} data-emoji={e.emoji} onClick={() => onPick(e)}>{e.emoji}</Button>
       ))}
     </div>
   );
@@ -104,15 +106,15 @@ function Picker({ data, sheet, style, onPick, onClose }: { data: EmojiData | nul
       <div className={'emoji-picker' + (sheet ? ' sheet' : '')} style={style} role="dialog" aria-label="Emoji picker" data-testid="emoji-picker"
         onMouseDown={(e) => { if (!(e.target instanceof HTMLInputElement)) e.preventDefault(); }}>
         <div className="emoji-picker-head">
-          <input data-no-emoji autoFocus={!sheet} placeholder="Search emoji" aria-label="Search emoji" data-testid="emoji-search" value={q}
+          <Input data-no-emoji autoFocus={!sheet} placeholder="Search emoji" aria-label="Search emoji" data-testid="emoji-search" value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (results?.[0]) onPick(results[0]); } }} />
-          <button className="emoji-close" aria-label="Close emoji picker" title="Close" onClick={onClose}><X size={16} /></button>
+          <Button className="emoji-close" aria-label="Close emoji picker" title="Close" onClick={onClose}><X size={16} /></Button>
         </div>
         {data && !results ? (
           <div className="emoji-tabs" role="toolbar" aria-label="Emoji categories">
             {groups.map((g) => (
-              <button key={g.id} title={g.label} aria-label={g.label} onClick={() => gridRef.current?.querySelector('[data-group="' + g.id + '"]')?.scrollIntoView({ block: 'start' })}>{g.icon}</button>
+              <Button key={g.id} title={g.label} aria-label={g.label} onClick={() => gridRef.current?.querySelector('[data-group="' + g.id + '"]')?.scrollIntoView({ block: 'start' })}>{g.icon}</Button>
             ))}
           </div>
         ) : null}
@@ -270,16 +272,16 @@ export function EmojiAssist() {
   return createPortal(
     <div className="emoji-ui">
       {!picker && field ? (
-        <button className="emoji-dock" style={dockStyle(rect, coarse ? TOUCH_TARGET : MOUSE_TARGET)} aria-label="Insert emoji" title="Insert emoji (or type :name)" data-testid="emoji-button"
-          onMouseDown={keep} onClick={openPicker}><Smile size={coarse ? 20 : 14} /></button>
+        <Button className="emoji-dock" style={dockStyle(rect, coarse ? TOUCH_TARGET : MOUSE_TARGET)} aria-label="Insert emoji" title="Insert emoji (or type :name)" data-testid="emoji-button"
+          onMouseDown={keep} onClick={openPicker}><Smile size={coarse ? 20 : 14} /></Button>
       ) : null}
       {!picker && token && items.length ? (
         <div className="emoji-suggest" role="listbox" aria-label="Emoji suggestions" data-testid="emoji-suggest" ref={listRef} style={floatStyle(rect, 260, 240)} onMouseDown={keep}>
           {items.map((e, i) => (
-            <button key={e.emoji} role="option" aria-selected={i === active} className={'emoji-option' + (i === active ? ' active' : '')} data-emoji={e.emoji}
+            <Button key={e.emoji} role="option" aria-selected={i === active} className={'emoji-option' + (i === active ? ' active' : '')} data-emoji={e.emoji}
               onMouseEnter={() => setActive(i)} onClick={() => pickSuggestion(e)}>
               <span className="glyph">{e.emoji}</span><span className="emoji-code">{e.codes[0] ? ':' + e.codes[0] + ':' : e.label}</span>
-            </button>
+            </Button>
           ))}
         </div>
       ) : null}

@@ -8,6 +8,8 @@ import '@fontsource-variable/fraunces';
 import '@fontsource/patrick-hand';
 import '@xyflow/react/dist/base.css';
 import './styles.css';
+import './drafting.css';
+import './components/checkbox.css';
 import { App } from './App';
 import { connect } from './sync';
 import { get } from './store';

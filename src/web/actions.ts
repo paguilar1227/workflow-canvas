@@ -1,7 +1,7 @@
 import { nanoid } from 'nanoid';
 import { get, set, toast } from './store';
 import { dispatch, callTool, undo as wsUndo, redo as wsRedo, updateSession, renderCanvasImage, openDocument } from './sync';
-import { flow, viewportCenter } from './flowApi';
+import { flow, viewportCenter, fitDrawing } from './flowApi';
 import type { CanvasNode, ColorName, LayerDirection, NodeKind, NodeRole, NodeShape, NodeStatus, Side } from '../shared/types';
 import { ROLE_INFO, describeLogic, roleOf } from '../shared/logic';
 import type { CommandInput, EdgePatch, LayoutDirection, LayoutMode, NodePatch } from '../shared/commands';
@@ -237,7 +237,7 @@ export function frameSelection() {
 export function layout(mode: LayoutMode, direction?: LayoutDirection) {
   const ids = sel().nodes;
   dispatch({ type: 'layout', mode, direction, nodeIds: ids.length > 1 ? ids : undefined, rootId: mode === 'tree' && ids.length === 1 ? ids[0] : undefined });
-  setTimeout(() => flow()?.fitView({ padding: 0.15, duration: 350, maxZoom: 1.2 }), 40);
+  setTimeout(() => fitDrawing(350), 40);
 }
 export function align(a: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') { dispatch({ type: 'align', ids: sel().nodes, align: a }); }
 export function distribute(axis: 'horizontal' | 'vertical') { dispatch({ type: 'distribute', ids: sel().nodes, axis }); }
@@ -253,7 +253,7 @@ export const redo = () => { if (get().session.viewMode) { toast('View mode is re
 export const zoomIn = () => flow()?.zoomIn({ duration: 200 });
 export const zoomOut = () => flow()?.zoomOut({ duration: 200 });
 export const zoomTo = (z: number) => flow()?.zoomTo(z, { duration: 200 });
-export const fitView = () => flow()?.fitView({ padding: 0.15, duration: 300, maxZoom: 1.5 });
+export const fitView = () => fitDrawing();
 export function focusNodes(ids: string[]) { if (ids.length) flow()?.fitView({ nodes: ids.map((id) => ({ id })), padding: 0.5, duration: 300, maxZoom: 1.25 }); }
 
 export function navigate(dir: 'left' | 'right' | 'up' | 'down') {

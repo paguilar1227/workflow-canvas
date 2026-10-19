@@ -1,9 +1,11 @@
+import { Button } from '../components/Button';
+import { Textarea } from '../components/Textarea';
 import { memo, useEffect, useRef, useState, type ReactElement } from 'react';
 import { Handle, NodeResizer, Position, type NodeProps } from '@xyflow/react';
 import { Link2, StickyNote } from 'lucide-react';
 import type { CanvasNode } from '../../shared/types';
 import * as actions from '../actions';
-import { set } from '../store';
+import { set, useApp } from '../store';
 import { RoughShape, seedOf, strokePath, useSketch } from './sketch';
 import { InlineMarkdown, Markdown, toggleTask } from '../markdown';
 import { emojiUiOwns } from '../panels/EmojiAssist';
@@ -43,7 +45,7 @@ export function InlineEdit({ value, multiline, onDone, onTab, className = 'wfc-e
   useEffect(() => { const el = ref.current; if (el && !multiline) { el.style.height = '0px'; el.style.height = el.scrollHeight + 'px'; } }, [text, multiline]);
   const finish = (v: string | null) => { if (done.current) return; done.current = true; onDone(v); };
   return (
-    <textarea
+    <Textarea
       ref={ref}
       className={className + ' nodrag nowheel nopan'}
       value={text}
@@ -115,6 +117,8 @@ export const TopicNode = memo(function TopicNode({ data, selected, width, height
   const d = data as NodeData;
   const n = d.node;
   const shape = n.shape ?? 'card';
+  const coarse = useApp((s) => s.coarse);
+  const readOnly = useApp((s) => !!s.session.viewMode);
   const sketch = useSketch();
   const svg = SVG_SHAPES.has(shape) && !sketch;
   const cls = ['wfc-node', 'shape-' + shape, isRole(n.role) ? 'role-' + n.role : '', n.color && n.color !== 'default' ? 'has-color' : '', d.isRoot ? 'is-root' : '', svg ? 'svg-shape' : '',
@@ -138,17 +142,17 @@ export const TopicNode = memo(function TopicNode({ data, selected, width, height
           ) : (
             <div className={'wfc-title' + (n.title ? '' : ' placeholder')}>{shape !== 'card' && n.icon ? <span className="wfc-inline-icon">{n.icon}</span> : null}{n.title ? <InlineMarkdown source={n.title} /> : 'Untitled'}</div>
           )}
-          {n.subtitle ? <div className="wfc-sub">{n.subtitle}</div> : null}
+          {n.subtitle ? coarse || readOnly ? <div className="wfc-sub" title={n.subtitle}>{n.subtitle}</div> : <Button className="wfc-sub nodrag" aria-label="View node details" title={n.subtitle} onClick={(event) => { event.stopPropagation(); set({ selection: { nodes: [n.id], edges: [] }, nodeMenu: n.id }); }}>{n.subtitle}</Button> : null}
         </div>
         {n.tags?.length ? <div className="wfc-tags">{n.tags.slice(0, 3).map((t) => <span key={t} className="wfc-tag">#{t}</span>)}</div> : null}
         <Indicators n={n} />
         {d.childCount > 0 && d.childSide ? (
-          <button
+          <Button
             className={'wfc-collapse nodrag ' + d.childSide + (n.collapsed ? ' collapsed' : '')}
             title={n.collapsed ? 'Expand branch' : 'Collapse branch'}
             aria-label={n.collapsed ? 'Expand branch' : 'Collapse branch'}
             onClick={(e) => { e.stopPropagation(); actions.toggleCollapse([n.id]); }}
-          >{n.collapsed ? '+' + d.childCount : '−'}</button>
+          >{n.collapsed ? '+' + d.childCount : '−'}</Button>
         ) : null}
       </div>
     </>

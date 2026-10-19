@@ -40,13 +40,14 @@ test('export to Excalidraw and import it back', async ({ page, app, ev, phone })
     }
   };
 
+  await labelsReadable(['checkout', 'retry', 'yes']);
   await test.step('both connectors between Cart and Card valid? can be read', async () => {
     const at = await app.center(page.locator('[data-testid^="edge-label-"]', { hasText: 'retry' }));
     const z0 = await app.zoomPct();
     await phone.pinch(at, 60, 300);
     expect(await app.zoomPct(), 'the pinch zooms in').toBeGreaterThan(z0);
     await ev.snap('cart-and-card-check-connectors');
-    await labelsReadable(['checkout', 'retry', 'yes']);
+    await labelsReadable(['checkout', 'retry']);
     await phone.fit();
   });
 

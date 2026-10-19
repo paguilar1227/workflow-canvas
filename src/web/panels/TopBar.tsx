@@ -1,3 +1,5 @@
+import { Button } from '../components/Button';
+import { Input } from '../components/Input';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Undo2, Redo2, LayoutGrid, Palette, Download, Upload, PanelLeft, PanelRight, Map as MapIcon, HelpCircle, Bot, Search, ChevronDown, Check, Eye, Save, FolderOpen, MoreHorizontal } from 'lucide-react';
 import * as files from '../files';
@@ -9,9 +11,9 @@ export function Menu({ id, label, icon, children, align = 'right', testId, chevr
   const open = useApp((s) => s.openMenu === id);
   return (
     <div className="menu-anchor">
-      <button className={'btn' + (label || chevron ? '' : ' icon') + (open ? ' active' : '')} data-testid={testId} title={label ?? ariaLabel} aria-label={ariaLabel} aria-haspopup="menu" aria-expanded={open} onClick={(e) => { e.stopPropagation(); set({ openMenu: open ? null : id }); }}>
+      <Button className={'btn' + (label || chevron ? '' : ' icon') + (open ? ' active' : '')} data-testid={testId} title={label ?? ariaLabel} aria-label={ariaLabel} aria-haspopup="menu" aria-expanded={open} onClick={(e) => { e.stopPropagation(); set({ openMenu: open ? null : id }); }}>
         {icon}{label ? <span className="menu-label-text">{label}</span> : null}{chevron ? <ChevronDown size={13} /> : null}
-      </button>
+      </Button>
       {open ? <div className={'menu ' + align} role="menu" onClick={(e) => e.stopPropagation()}>{children}</div> : null}
     </div>
   );
@@ -19,9 +21,9 @@ export function Menu({ id, label, icon, children, align = 'right', testId, chevr
 
 export function MenuItem({ children, onClick, kbd, active, testId }: { children: ReactNode; onClick: () => void; kbd?: string; active?: boolean; testId?: string }) {
   return (
-    <button className={'menu-item' + (active ? ' active' : '')} role="menuitem" data-testid={testId} onClick={() => { set({ openMenu: null }); onClick(); }}>
+    <Button className={'menu-item' + (active ? ' active' : '')} role="menuitem" data-testid={testId} onClick={() => { set({ openMenu: null }); onClick(); }}>
       {children}{kbd ? <span className="kbd">{kbd}</span> : null}
-    </button>
+    </Button>
   );
 }
 
@@ -67,7 +69,7 @@ export function TopBar() {
   }, [fit, vw, theme, aiLive, compact]);
 
   const titleInput = (
-    <input
+    <Input
       className="doc-title" aria-label="Document title" data-testid="doc-title" value={title}
       onChange={(e) => setTitle(e.target.value)}
       onBlur={() => { if (doc && title.trim() && title !== doc.title) actions.renameDocument(title.trim()); }}
@@ -79,10 +81,10 @@ export function TopBar() {
     const outlineOn = compact ? drawer === 'outline' : panels.outline;
     return (
       <header className={'topbar' + (compact ? '' : ' fit-2')} ref={headerRef} onClick={() => set({ openMenu: null })}>
-        <button className={'btn icon' + (outlineOn ? ' active' : '')} aria-label="Toggle outline panel" aria-pressed={outlineOn} data-testid="toggle-outline" title="Documents & outline" onClick={(e) => { e.stopPropagation(); actions.togglePanel('outline'); }}><PanelLeft size={18} /></button>
+        <Button className={'btn icon' + (outlineOn ? ' active' : '')} aria-label="Toggle outline panel" aria-pressed={outlineOn} data-testid="toggle-outline" title="Documents & outline" onClick={(e) => { e.stopPropagation(); actions.togglePanel('outline'); }}><PanelLeft size={18} /></Button>
         {titleInput}
-        <button className="btn icon" title="Undo" aria-label="Undo" data-testid="undo" disabled={!canUndo || session.viewMode} onClick={actions.undo}><Undo2 size={18} /></button>
-        <button className="btn icon" title="Redo" aria-label="Redo" data-testid="redo" disabled={!canRedo || session.viewMode} onClick={actions.redo}><Redo2 size={18} /></button>
+        <Button className="btn icon" title="Undo" aria-label="Undo" data-testid="undo" disabled={!canUndo || session.viewMode} onClick={actions.undo}><Undo2 size={18} /></Button>
+        <Button className="btn icon" title="Redo" aria-label="Redo" data-testid="redo" disabled={!canRedo || session.viewMode} onClick={actions.redo}><Redo2 size={18} /></Button>
         <SaveButton />
         <Menu id="more" icon={<MoreHorizontal size={18} />} chevron={false} ariaLabel="More" testId="menu-more">
           {session.viewMode ? null : <MenuItem testId="toggle-inspector" onClick={() => actions.togglePanel('inspector')}><PanelRight size={14} />Inspector</MenuItem>}
@@ -109,15 +111,15 @@ export function TopBar() {
     <header className={'topbar' + (fit ? ' fit-' + fit : '')} ref={headerRef} onClick={() => set({ openMenu: null })}>
       <div className="brand"><span className="brand-mark">◇</span><span className="brand-text">Workflow Canvas</span></div>
       {titleInput}
-      <button className={'chip' + (aiLive ? ' live' : '')} data-testid="ai-chip" title="Connect an AI agent" onClick={(e) => { e.stopPropagation(); set({ aiOpen: true }); }}>
+      <Button className={'chip' + (aiLive ? ' live' : '')} data-testid="ai-chip" title="Connect an AI agent" onClick={(e) => { e.stopPropagation(); set({ aiOpen: true }); }}>
         <span className="dot" /><Bot size={13} /><span className="chip-label">{aiLive ? 'AI editing' : 'AI ready · MCP'}</span>
-      </button>
+      </Button>
       <div className="spacer" />
       <SaveButton />
-      <button className="btn icon" title="Undo (⌘Z)" aria-label="Undo" data-testid="undo" disabled={!canUndo || session.viewMode} onClick={actions.undo}><Undo2 size={16} /></button>
-      <button className="btn icon" title="Redo (⇧⌘Z)" aria-label="Redo" data-testid="redo" disabled={!canRedo || session.viewMode} onClick={actions.redo}><Redo2 size={16} /></button>
+      <Button className="btn icon" title="Undo (⌘Z)" aria-label="Undo" data-testid="undo" disabled={!canUndo || session.viewMode} onClick={actions.undo}><Undo2 size={16} /></Button>
+      <Button className="btn icon" title="Redo (⇧⌘Z)" aria-label="Redo" data-testid="redo" disabled={!canRedo || session.viewMode} onClick={actions.redo}><Redo2 size={16} /></Button>
       <div className="sep" />
-      <button className="btn icon" title="Search (⌘F)" aria-label="Search" data-testid="open-search" onClick={() => actions.openSearch()}><Search size={16} /></button>
+      <Button className="btn icon" title="Search (⌘F)" aria-label="Search" data-testid="open-search" onClick={() => actions.openSearch()}><Search size={16} /></Button>
       <Menu id="layout" label="Layout" icon={<LayoutGrid size={15} />} testId="menu-layout">
         <LayoutItems />
       </Menu>
@@ -130,12 +132,12 @@ export function TopBar() {
       <Menu id="view" label="View" icon={<Eye size={15} />} testId="menu-view">
         <ViewItems />
       </Menu>
-      <button className="btn" data-testid="open-import" aria-label="Import" title="Import" onClick={() => set({ importOpen: true })}><Upload size={15} /><span className="menu-label-text">Import</span></button>
+      <Button className="btn" data-testid="open-import" aria-label="Import" title="Import" onClick={() => set({ importOpen: true })}><Upload size={15} /><span className="menu-label-text">Import</span></Button>
       <div className="sep" />
-      <button className={'btn icon' + (panels.outline ? ' active' : '')} aria-label="Toggle outline panel" data-testid="toggle-outline" title="Outline & documents" onClick={() => actions.togglePanel('outline')}><PanelLeft size={16} /></button>
-      <button className={'btn icon' + (panels.minimap ? ' active' : '')} aria-label="Toggle minimap" data-testid="toggle-minimap" title="Minimap" onClick={() => actions.togglePanel('minimap')}><MapIcon size={16} /></button>
-      <button className={'btn icon' + (panels.inspector ? ' active' : '')} aria-label="Toggle inspector panel" data-testid="toggle-inspector" title="Inspector" onClick={() => actions.togglePanel('inspector')}><PanelRight size={16} /></button>
-      <button className="btn icon" aria-label="Help and shortcuts" data-testid="open-help" title="Shortcuts (?)" onClick={() => set({ helpOpen: true })}><HelpCircle size={16} /></button>
+      <Button className={'btn icon' + (panels.outline ? ' active' : '')} aria-label="Toggle outline panel" data-testid="toggle-outline" title="Outline & documents" onClick={() => actions.togglePanel('outline')}><PanelLeft size={16} /></Button>
+      <Button className={'btn icon' + (panels.minimap ? ' active' : '')} aria-label="Toggle minimap" data-testid="toggle-minimap" title="Minimap" onClick={() => actions.togglePanel('minimap')}><MapIcon size={16} /></Button>
+      <Button className={'btn icon' + (panels.inspector ? ' active' : '')} aria-label="Toggle inspector panel" data-testid="toggle-inspector" title="Inspector" onClick={() => actions.togglePanel('inspector')}><PanelRight size={16} /></Button>
+      <Button className="btn icon" aria-label="Help and shortcuts" data-testid="open-help" title="Shortcuts (?)" onClick={() => set({ helpOpen: true })}><HelpCircle size={16} /></Button>
     </header>
   );
 }
@@ -170,10 +172,10 @@ function ThemeItems() {
       <div className="menu-label">Theme · Refero styles + Excalidraw</div>
       <div className="theme-grid">
         {THEMES.map((t) => (
-          <button key={t.id} className={'theme-option' + (t.id === theme ? ' active' : '')} data-testid={'theme-' + t.id} onClick={() => { actions.setTheme(t.id); }}>
+          <Button key={t.id} className={'theme-option' + (t.id === theme ? ' active' : '')} data-testid={'theme-' + t.id} onClick={() => { actions.setTheme(t.id); }}>
             <ThemeSwatch id={t.id} />
             <span><div className="theme-name">{t.name}</div><div className="theme-src">{t.source.label}</div></span>
-          </button>
+          </Button>
         ))}
       </div>
     </>
@@ -230,8 +232,8 @@ function SaveButton() {
     : file.state === 'error' ? 'Saving to ' + (file.name ?? 'the file') + ' failed: ' + (file.error ?? 'unknown error') + '. Click to retry.'
     : 'Autosaving to ' + file.name + (file.savedAt ? ' · last saved ' + new Date(file.savedAt).toLocaleTimeString() : '');
   return (
-    <button className={'btn save-btn ' + file.state} data-testid="save-file" data-state={file.state} title={tip} aria-label={SAVE_LABEL[file.state]} onClick={(e) => { e.stopPropagation(); void files.save(); }}>
+    <Button className={'btn save-btn ' + file.state} data-testid="save-file" data-state={file.state} title={tip} aria-label={SAVE_LABEL[file.state]} onClick={(e) => { e.stopPropagation(); void files.save(); }}>
       {file.state === 'saved' ? <Check size={15} /> : <Save size={15} />}<span className="menu-label-text">{SAVE_LABEL[file.state]}</span>
-    </button>
+    </Button>
   );
 }

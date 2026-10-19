@@ -290,7 +290,7 @@ test('change a topic\'s logic role in the inspector', async ({ page, app, ev, ph
 });
 
 test('drag a connector from every port of a decision and a wait node', async ({ page, app, ev, phone }) => {
-  ev.proves('Regression, phone version: the role marker never covers a port. A decision placed from the Logic sheet and a Wait circle spawned beside it (Logic sheet with the decision selected) each show four ports once selected; on both, every touch on each port\'s dot reaches the port (the marker is not on top of any of them), nothing clips a port and each port\'s touch area is at least 44 card units each way, in Neon Flow (the default theme), Lens Dark and Excalidraw Sketch, and each marker sits on its shape\'s upper-left outline (the sketch themes once drew it at the corner of the box). Sliding a finger from each of the eight ports, including the decision\'s top port, draws a connector from that side to the drop target and never moves the node; the decision\'s first two connectors are labelled Yes and No.');
+  ev.proves('Regression, phone version: the role marker never covers a port. A decision placed from the Logic sheet and a Wait circle spawned beside it (Logic sheet with the decision selected) each show four ports once selected; on both, every touch on each port\'s dot reaches the port (the marker is not on top of any of them), nothing clips a port and each port\'s touch area is at least 44 card units each way, in Mono Drafting (the default theme), Lens Dark and Excalidraw Sketch, and each marker sits on its shape\'s upper-left outline (the sketch themes once drew it at the corner of the box). Sliding a finger from each of the eight ports, including the decision\'s top port, draws a connector from that side to the drop target and never moves the node; the decision\'s first two connectors are labelled Yes and No.');
   const docId = await app.newDoc('Port check');
   await app.open(docId);
   const pane = await app.paneBox();
@@ -326,7 +326,7 @@ test('drag a connector from every port of a decision and a wait node', async ({ 
   await phone.tap(await app.emptyPoint({ x: 0.5, y: 0.9 }));
   await phone.fit();
 
-  for (const [theme, label] of [[DEFAULT_SESSION.theme, 'Neon Flow'], ['lens-dark', 'Lens Dark'], ['excalidraw-sketch', 'Excalidraw Sketch']] as const) {
+  for (const [theme, label] of [[DEFAULT_SESSION.theme, 'Mono Drafting'], ['lens-dark', 'Lens Dark'], ['excalidraw-sketch', 'Excalidraw Sketch']] as const) {
     await test.step('the role marker covers none of the eight ports in ' + label + '; each is easy to touch', async () => {
       await app.pinTheme(theme);
       await expect.poll(async () => (await app.state()).session.theme).toBe(theme);

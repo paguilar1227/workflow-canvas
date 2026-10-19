@@ -1,0 +1,51 @@
+/* Mono Drafting, adapted from Software Kitchen's shared canvas presentation. */
+:root[data-drafting] .react-flow { background: var(--canvas-bg); }
+:root[data-drafting] .brand-mark { display: none; }
+:root[data-drafting] .brand { font-size: 13px; letter-spacing: -.4px; }
+:root[data-drafting] .wfc-title { font-weight: 550; }
+:root[data-drafting] .wfc-icon { border-radius: 0; background: transparent; border-right: 1px solid var(--panel-border); }
+:root[data-drafting] .wfc-edge-path { stroke-width: 2.5; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+:root[data-drafting] .wfc-edge-path.selected { stroke-width: 3.5; }
+:root[data-drafting] .wfc-edge-label { display: flex; align-items: center; gap: 5px; border-radius: 0; border-color: var(--text); background: var(--text); color: var(--bg); font: 600 11px/1.25 var(--font-mono); padding: 4px 8px; box-shadow: 0 0 0 2px var(--canvas-bg); }
+:root[data-drafting] .wfc-edge-label::before { content: ''; width: 7px; height: 7px; flex: 0 0 7px; background: var(--ec, var(--edge)); box-shadow: 0 0 0 1px rgba(255,255,255,.35); }
+:root[data-drafting] .wfc-edge-label.selected { outline: 2px solid var(--selection); outline-offset: 2px; }
+:root[data-drafting] .wfc-handle { opacity: 1; width: 7px; height: 7px; background: var(--node-bg); border-color: var(--node-border); }
+.wfc-label-leader { stroke: var(--ec, var(--edge)); stroke-width: 1.25; fill: none; vector-effect: non-scaling-stroke; pointer-events: none; }
+.wfc-route-handle { position: absolute; transform: translate(-50%, -50%); width: 14px; height: 14px; padding: 0; border: 2px solid var(--ec, var(--text)); border-radius: 0; background: var(--panel); pointer-events: all; touch-action: none; cursor: move; }
+:focus-visible { outline: 2px solid var(--selection); outline-offset: 2px; }
+.theme-src { color: var(--text-2); }
+.theme-option.active .theme-src, .panel-title, .column-title { color: var(--text-2); }
+.column-slot { position: relative; }
+.column-slot > .panel { width: var(--slot-w); }
+.panel-resize { position: absolute; top: 0; bottom: 0; width: 6px; z-index: 12; cursor: col-resize; touch-action: none; }
+.panel-resize.left { right: 0; }
+.panel-resize.right { left: 0; }
+.panel-resize:hover, .panel-resize:focus-visible { background: var(--selection); }
+.app.compact .panel-resize { display: none; }
+.wfc-sub { text-align: left; border: 0; padding: 0; background: none; width: 100%; cursor: help; }
+
+/* The whole text row activates a native checkbox, including on touch screens. */
+label.toggle-row { cursor: pointer; gap: 8px; }
+@media (pointer: coarse) { label.toggle-row { min-height: 44px; } }
+@media (pointer: coarse) {
+  :root[data-drafting] .wfc-handle.react-flow__handle { width: 16px; height: 16px; }
+  /* Preserve a 44px native hit target while painting the reference's 16px box. */
+  :root body .toggle-row input.wfc-checkbox[type='checkbox'],
+  :root body .toggle-row input.wfc-checkbox[type='checkbox']:is(:checked, :indeterminate) {
+    width: 44px; height: 44px; min-width: 44px; min-height: 44px;
+    border: 0; background: transparent;
+  }
+  :root body .toggle-row input.wfc-checkbox[type='checkbox']::before { grid-area: 1 / 1; z-index: 1; }
+  :root body .toggle-row input.wfc-checkbox[type='checkbox']::after {
+    content: ''; grid-area: 1 / 1; width: 16px; height: 16px;
+    border: 1px solid var(--text-2); border-radius: 2px; background: var(--panel);
+  }
+  :root body .toggle-row input.wfc-checkbox[type='checkbox']:checked::after {
+    border-color: var(--accent); background: var(--accent);
+  }
+
+}
+@media (pointer: coarse) and (forced-colors: active) {
+  :root body .toggle-row input.wfc-checkbox[type='checkbox']::after { border-color: ButtonText; background: Canvas; }
+  :root body .toggle-row input.wfc-checkbox[type='checkbox']:checked::after { border-color: Highlight; background: Highlight; }
+}

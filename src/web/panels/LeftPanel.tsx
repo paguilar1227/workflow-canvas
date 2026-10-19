@@ -1,3 +1,5 @@
+import { Button } from '../components/Button';
+import { Input } from '../components/Input';
 import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { Plus, Copy, Trash2, ChevronRight, ChevronDown, FileText } from 'lucide-react';
 import { useApp, set } from '../store';
@@ -24,13 +26,13 @@ function OutlineNode({ n, depth, kids }: { n: CanvasNode; depth: number; kids: M
         onDoubleClick={() => setEditing(true)}
       >
         {children.length ? (
-          <button className="twisty" aria-label={n.collapsed ? 'Expand' : 'Collapse'} onClick={(e) => { e.stopPropagation(); actions.toggleCollapse([n.id]); }}>
+          <Button className="twisty" aria-label={n.collapsed ? 'Expand' : 'Collapse'} onClick={(e) => { e.stopPropagation(); actions.toggleCollapse([n.id]); }}>
             {n.collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-          </button>
+          </Button>
         ) : <span className="twisty" />}
         {n.color && n.color !== 'default' ? <span className="swatch" style={{ background: 'var(--c-' + n.color + ')' }} /> : null}
         {editing ? (
-          <input autoFocus defaultValue={n.title} style={{ flex: 1, background: 'var(--panel-2)', border: '1px solid var(--selection)', borderRadius: 4, padding: '1px 4px' }}
+          <Input autoFocus defaultValue={n.title} style={{ flex: 1, background: 'var(--panel-2)', border: '1px solid var(--selection)', borderRadius: 4, padding: '1px 4px' }}
             onBlur={(e) => { if (emojiUiOwns(e.relatedTarget)) return; setEditing(false); if (e.target.value !== n.title) actions.updateNode(n.id, { title: e.target.value }); }}
             onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur(); }} />
         ) : <span className="label">{n.icon ? n.icon + ' ' : ''}{n.title ? <InlineMarkdown source={firstLine(n.title)} /> : (n.kind === 'sticky' ? 'Sticky note' : n.kind === 'drawing' ? '✏️ Freehand drawing' : 'Untitled')}</span>}
@@ -173,8 +175,8 @@ export function LeftPanel() {
               <span className="name" title={d.title}>{d.title}</span>
               <span className="meta">{d.nodeCount}</span>
               <span className="doc-actions">
-                <button title="Duplicate" aria-label={'Duplicate ' + d.title} onClick={(e) => { e.stopPropagation(); actions.duplicateDocument(d.id); }}><Copy size={12} /></button>
-                <button title="Delete" aria-label={'Delete ' + d.title} onClick={(e) => { e.stopPropagation(); actions.deleteDocument(d.id); }}><Trash2 size={12} /></button>
+                <Button title="Duplicate" aria-label={'Duplicate ' + d.title} onClick={(e) => { e.stopPropagation(); actions.duplicateDocument(d.id); }}><Copy size={12} /></Button>
+                <Button title="Delete" aria-label={'Delete ' + d.title} onClick={(e) => { e.stopPropagation(); actions.deleteDocument(d.id); }}><Trash2 size={12} /></Button>
               </span>
             </div>
           ))}

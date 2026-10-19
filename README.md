@@ -11,7 +11,7 @@ Workflow Canvas combines XMind-style mind mapping with free-form diagramming (ca
 - **A plugin for Codex and GitHub Copilot CLI.** It bundles the MCP server and a skill that teaches the agent when and how to use the canvas, and it starts the canvas for you if it is not running.
 - **Mind maps and diagrams in one place.** Tab/Enter mind-mapping, auto-arranged branches, swimlanes, dagre layouts, Markdown and emoji everywhere.
 - **Excalidraw-compatible files.** Save to `.excalidraw` with autosave; files round-trip losslessly and open in Excalidraw.
-- **Ten swappable themes**, including hand-drawn Excalidraw-style sketch themes and the neon node-graph look shown above.
+- **Twelve swappable themes**, with Mono Drafting light/dark as the default engineering-paper look, plus hand-drawn Excalidraw-style sketch themes and the neon node-graph look shown above.
 - **Works on phones and tablets**, with 44px touch targets, drawers and bottom sheets.
 - **Runs in Docker**, locally, with no account and no cloud.
 
@@ -85,6 +85,7 @@ To use the skill without the plugin, copy that folder into your agent's skills d
 | Undo / redo | `undo`, `redo` (shared history) |
 | Select / multi-select | `select` (and read the human's selection via `get_canvas_state`) |
 | Zoom, pan, fit, focus | `control_view` |
+| Drag or keyboard-adjust a connector bend; reset its route | `update_edges` with `routePoint: { x, y }` in canvas coordinates, or `routePoint: null` to reset |
 | Theme picker | `list_themes`, `set_theme` |
 | Save / autosave to a .excalidraw file | `save_to_file` with `path` (a file or a folder; autosaves from then on) |
 | Panels, minimap, snap, background, search, pen/hand/select tool, zen, view-only, start inline editing, open a node's quick-edit popover | `set_ui` |
@@ -193,7 +194,9 @@ Themes are sets of CSS variables that people and AI can swap at runtime (`set_th
 
 | Theme | Mode | Inspired by |
 | --- | --- | --- |
-| Neon Flow (default) | dark | [Omer Assa's node-connector demo](https://x.com/omer_assa/status/2106758938926391416) |
+| Mono Drafting (default) | light | Software Kitchen drafting canvas / [Mono](https://mono.frm.fm/en) |
+| Mono Drafting — Dark | dark | Software Kitchen drafting canvas / [Mono](https://mono.frm.fm/en) |
+| Neon Flow | dark | [Omer Assa's node-connector demo](https://x.com/omer_assa/status/2106758938926391416) |
 | Lens Dark | dark | A dark code-mapping diagram style |
 | Warp Graphite | dark | Warp |
 | Paper Blueprint | light | Paper |
@@ -269,3 +272,5 @@ The AI suites need the Codex or Copilot CLI and spend model credits. The skill e
 ## License and credits
 
 [MIT](LICENSE). Built with [React Flow](https://reactflow.dev), [rough.js](https://roughjs.com), [dagre](https://github.com/dagrejs/dagre), the [Model Context Protocol SDK](https://github.com/modelcontextprotocol/typescript-sdk) and [markdown-it](https://github.com/markdown-it/markdown-it), and inspired by [Excalidraw](https://excalidraw.com) and [XMind](https://xmind.com).
+
+Mono Drafting adapts Software Kitchen’s light/dark palette, engineering grid, colored obstacle-aware connectors, label leaders and native controls. Select a connector to reveal its bend handle; drag it or use arrow keys, and press Delete to reset. The inspector also offers **Reset connector route**. Drag a side panel’s inner edge to resize it, or double-click the edge to reset. Existing documents and other themes remain available.

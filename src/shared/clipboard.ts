@@ -28,7 +28,7 @@ export function cloneNodes(doc: CanvasDocument, ids: string[], offset: { x: numb
   });
   const edges: EdgeInput[] = doc.edges.filter((e) => pick.has(e.source) && pick.has(e.target)).map((e) => {
     const { id: _id, ...rest } = e;
-    return { ...rest, source: idMap[e.source], target: idMap[e.target], sourceSide: e.sourceSide ?? undefined, targetSide: e.targetSide ?? undefined };
+    return { ...rest, ...(e.routePoint ? { routePoint: { x: e.routePoint.x + offset.x, y: e.routePoint.y + offset.y } } : {}), source: idMap[e.source], target: idMap[e.target], sourceSide: e.sourceSide ?? undefined, targetSide: e.targetSide ?? undefined };
   });
   return { nodes, edges, idMap };
 }

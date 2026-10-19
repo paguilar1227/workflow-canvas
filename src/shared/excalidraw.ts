@@ -220,6 +220,7 @@ export function importExcalidraw(content: string | Record<string, unknown>, pref
     const edge: EdgeInput = { id: id(e.id), source: id(s), target: id(t), arrow: start && end ? 'both' : end ? 'end' : start ? 'start' : 'none', style: e.strokeStyle === 'dashed' ? 'dashed' : e.strokeStyle === 'dotted' ? 'dotted' : 'solid' };
     const stored = (e.customData as { workflowCanvas?: { edge?: CanvasEdge } } | undefined)?.workflowCanvas?.edge;
     if (stored?.zIndex != null) edge.zIndex = stored.zIndex;
+    if (stored?.routePoint) edge.routePoint = { ...stored.routePoint };
     if (stored?.labelOffset) edge.labelOffset = { ...stored.labelOffset };
     const label = textFor.get(e.id);
     if (label) edge.label = label;

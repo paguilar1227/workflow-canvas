@@ -175,6 +175,7 @@ export function normalizeCommand(doc: CanvasDocument, input: CommandInput, opts:
           edgeIds.add(id);
           const e: CanvasEdge = { id, source: raw.source, target: raw.target, style: raw.style ?? 'solid', arrow: raw.arrow ?? 'end', routing: raw.routing ?? 'smooth' };
           if (raw.label) e.label = raw.label;
+          if (raw.routePoint) e.routePoint = { ...raw.routePoint };
           if (raw.labelOffset) e.labelOffset = { ...raw.labelOffset };
           if (raw.style === null) e.style = 'solid';
           if (raw.color) e.color = raw.color;
@@ -305,7 +306,7 @@ function clearSpaceAround(doc: CanvasDocument, rootId: string): CanvasDocument {
 }
 
 const NODE_PATCH_KEYS = ['kind', 'title', 'subtitle', 'notes', 'badge', 'icon', 'shape', 'role', 'color', 'x', 'y', 'width', 'height', 'parentId', 'frameId', 'collapsed', 'tags', 'link', 'status', 'priority', 'locked', 'points', 'zIndex'] as const;
-const EDGE_PATCH_KEYS = ['source', 'target', 'label', 'labelOffset', 'style', 'arrow', 'routing', 'color', 'animated', 'sourceSide', 'targetSide', 'zIndex'] as const;
+const EDGE_PATCH_KEYS = ['source', 'target', 'label', 'labelOffset', 'routePoint', 'style', 'arrow', 'routing', 'color', 'animated', 'sourceSide', 'targetSide', 'zIndex'] as const;
 
 function mergeDefined<T extends object>(base: T, patch: Record<string, unknown>, keys: readonly string[]): T {
   let changed = false;

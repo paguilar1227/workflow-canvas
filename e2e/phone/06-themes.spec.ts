@@ -3,7 +3,7 @@ import { neonEdges } from '../support/neon';
 import { DEFAULT_SESSION } from '../../src/shared/types';
 
 test('swap the theme of a diagram', async ({ page, app, ev, phone }) => {
-  ev.proves('Phone version: a new session opens in Neon Flow, the default theme, which the More sheet lists first with Lens Dark second. A person opens the More sheet and switches the same diagram through all 10 themes listed there (including the hand-drawn Excalidraw Sketch in light and dark, and Neon Flow), with a screenshot per theme; each switch changes the canvas palette (--bg) to that theme’s swatch colour, the sketch themes draw rough outlines in a hand-written font that does not leak into the next theme, only Neon Flow draws 3px neon wires with the configured arrowheads, dots at unheaded connector ends and neon mind-map branches (leaving it keeps the arrowheads and removes the dots), the phone chrome stays ergonomic in every theme, and the chosen theme survives a reload.');
+  ev.proves('Phone version: a new session opens in Mono Drafting, with its light and dark variants listed first. A person opens the More sheet and switches the same diagram through all 12 themes listed there (including the hand-drawn Excalidraw Sketch in light and dark, and Neon Flow), with a screenshot per theme; each switch changes the canvas palette (--bg) to that theme’s swatch colour, the sketch themes draw rough outlines in a hand-written font that does not leak into the next theme, only Neon Flow draws 3px neon wires with the configured arrowheads, dots at unheaded connector ends and neon mind-map branches (leaving it keeps the arrowheads and removes the dots), the phone chrome stays ergonomic in every theme, and the chosen theme survives a reload.');
   const docId = await app.newDoc('Theme gallery', 'architecture');
   await app.tool('add_nodes', { documentId: docId, nodes: [
     { id: 'tg-root', title: 'Launch v2', shape: 'pill', color: 'blue', x: 40, y: 470 },
@@ -47,23 +47,23 @@ test('swap the theme of a diagram', async ({ page, app, ev, phone }) => {
     await expect.poll(async () => (await app.state()).session.theme).toBe(id);
   };
 
-  await test.step('a new session opens in Neon Flow, the default theme', async () => {
-    expect(DEFAULT_SESSION.theme, 'the product default theme').toBe('neon-flow');
-    expect((await app.state()).session.theme).toBe('neon-flow');
-    await neonLook(true, 'first load');
-    await ev.snap('first-load-neon-flow');
+  await test.step('a new session opens in Mono Drafting, the default theme', async () => {
+    expect(DEFAULT_SESSION.theme, 'the product default theme').toBe('mono-drafting');
+    expect((await app.state()).session.theme).toBe('mono-drafting');
+    await neonLook(false, 'first load');
+    await ev.snap('first-load-mono-drafting');
   });
 
   await phone.tap(page.getByTestId('menu-more'));
-  await expect(options, 'the More sheet offers 10 themes').toHaveCount(10);
+  await expect(options, 'the More sheet offers 12 themes').toHaveCount(12);
   const themes = await options.evaluateAll((els) => els.map((el) => ({
     id: el.getAttribute('data-testid')!.replace(/^theme-/, ''),
     name: el.querySelector('.theme-name')!.textContent!.trim(),
     swatch: getComputedStyle(el.querySelector('.theme-swatch')!).backgroundColor,
   })));
   expect(themes.map((t) => t.id)).toEqual(expect.arrayContaining(['excalidraw-sketch', 'excalidraw-sketch-dark', 'neon-flow']));
-  expect(themes.slice(0, 2).map((t) => t.id), 'Neon Flow is listed first and Lens Dark second').toEqual(['neon-flow', 'lens-dark']);
-  await expect(page.getByTestId('theme-neon-flow'), 'the default theme is marked active').toHaveClass(/active/);
+  expect(themes.slice(0, 2).map((t) => t.id), 'drafting themes are listed first').toEqual(['mono-drafting', 'mono-drafting-dark']);
+  await expect(page.getByTestId('theme-mono-drafting'), 'the default theme is marked active').toHaveClass(/active/);
   const sketchThemes = new Set(['excalidraw-sketch', 'excalidraw-sketch-dark']);
   await options.first().scrollIntoViewIfNeeded();
   await phone.ergonomics('More sheet');
@@ -132,7 +132,7 @@ test('swap the theme of a diagram', async ({ page, app, ev, phone }) => {
     await phone.checkDrawer('outline', () => phone.tap(page.getByTestId('toggle-outline')));
   });
 
-  await test.step('switch back to Neon Flow, the default theme', async () => {
+  await test.step('switch back to Neon Flow', async () => {
     await pick('neon-flow');
     await expect.poll(bgRgb).toBe(seen['neon-flow']);
     await neonLook(true, 'back in Neon Flow');

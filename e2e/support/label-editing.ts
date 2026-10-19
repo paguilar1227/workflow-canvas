@@ -109,13 +109,13 @@ export async function intermediateLayerJourney(page: Page, app: App, ev: Evidenc
     { id: 'b', title: 'Middle', x: 70, y: 0, width: 260, height: 180, color: 'purple' },
     { id: 'c', title: 'Front', x: 200, y: 0, width: 260, height: 180, color: 'green' },
   ] });
-  await app.tool('add_edges', { documentId, edges: [{ id: 'wire', source: 'source', target: 'target', label: 'Between cards', routing: 'straight' }] });
+  await app.tool('add_edges', { documentId, edges: [{ id: 'wire', source: 'source', target: 'target', label: 'Between cards', labelOffset: { x: 0, y: 0 }, routing: 'straight' }] });
   await app.open(documentId);
   await app.tool('set_ui', { inspector: false, outline: false, minimap: false });
   await app.fit();
   const label = page.getByTestId('edge-label-wire');
   const layersAtLabel = () => page.evaluate(() => {
-    const rect = document.querySelector('[data-edge-id="wire"]')!.getBoundingClientRect();
+    const rect = document.querySelector('.wfc-edge-label[data-edge-id="wire"]')!.getBoundingClientRect();
     const front = document.querySelector('.react-flow__node[data-id="c"]')!.getBoundingClientRect();
     const hit = (x: number) => {
       const element = document.elementFromPoint(x, rect.y + rect.height / 2);

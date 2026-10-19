@@ -1,3 +1,7 @@
+import { Checkbox } from '../components/Checkbox';
+import { Button } from '../components/Button';
+import { Input } from '../components/Input';
+import { Textarea } from '../components/Textarea';
 import { useEffect, useState, type KeyboardEvent } from 'react';
 import { AlignLeft, AlignCenterHorizontal, AlignRight, AlignStartVertical, AlignCenterVertical, AlignEndVertical, Columns3, Rows3, Frame, Link as LinkIcon, Trash2, Copy, ArrowLeftRight, X } from 'lucide-react';
 import { useApp, set } from '../store';
@@ -17,7 +21,7 @@ function Text({ label, value, onCommit, multiline, mono, testId, placeholder, no
     onBlur: commit,
     onKeyDown: (e: KeyboardEvent) => { e.stopPropagation(); if (e.key === 'Enter' && !multiline) (e.target as HTMLElement).blur(); },
   };
-  return <div className="field"><label>{label}</label>{multiline ? <textarea {...common} /> : <input {...common} />}</div>;
+  return <div className="field"><label>{label}</label>{multiline ? <Textarea {...common} /> : <Input {...common} />}</div>;
 }
 
 export function nodeKindLabel(n: CanvasNode) {
@@ -32,7 +36,7 @@ function Colors({ value, onPick }: { value?: string; onPick: (c: ColorName | nul
     <div className="field"><label>Color</label>
       <div className="swatches">
         {COLOR_NAMES.map((c) => (
-          <button key={c} className={'swatch-btn' + ((value ?? 'default') === c ? ' on' : '')} data-testid={'color-' + c} title={c} aria-label={'Color ' + c}
+          <Button key={c} className={'swatch-btn' + ((value ?? 'default') === c ? ' on' : '')} data-testid={'color-' + c} title={c} aria-label={'Color ' + c}
             style={{ background: c === 'default' ? 'var(--node-bg)' : 'var(--c-' + c + ')' }} onClick={() => onPick(c === 'default' ? null : c)} />
         ))}
       </div>
@@ -43,17 +47,17 @@ function Colors({ value, onPick }: { value?: string; onPick: (c: ColorName | nul
 function Seg<T extends string>({ label, options, value, onPick, testPrefix }: { label: string; options: readonly T[]; value?: T; onPick: (v: T) => void; testPrefix?: string }) {
   return (
     <div className="field"><label>{label}</label>
-      <div className="seg">{options.map((o) => <button key={o} data-testid={testPrefix ? testPrefix + o : undefined} className={value === o ? 'on' : ''} onClick={() => onPick(o)}>{o}</button>)}</div>
+      <div className="seg">{options.map((o) => <Button key={o} data-testid={testPrefix ? testPrefix + o : undefined} className={value === o ? 'on' : ''} onClick={() => onPick(o)}>{o}</Button>)}</div>
     </div>
   );
 }
 
 function LayerControls() {
   return <div className="field" role="group" aria-label="Arrange"><span className="field-label">Arrange</span><div className="seg layer-controls">
-    <button data-testid="bring-forward" onClick={() => actions.arrangeSelection('forward')}>Bring forward</button>
-    <button data-testid="send-backward" onClick={() => actions.arrangeSelection('backward')}>Send backward</button>
-    <button data-testid="bring-to-front" onClick={() => actions.arrangeSelection('front')}>Bring to front</button>
-    <button data-testid="send-to-back" onClick={() => actions.arrangeSelection('back')}>Send to back</button>
+    <Button data-testid="bring-forward" onClick={() => actions.arrangeSelection('forward')}>Bring forward</Button>
+    <Button data-testid="send-backward" onClick={() => actions.arrangeSelection('backward')}>Send backward</Button>
+    <Button data-testid="bring-to-front" onClick={() => actions.arrangeSelection('front')}>Bring to front</Button>
+    <Button data-testid="send-to-back" onClick={() => actions.arrangeSelection('back')}>Send to back</Button>
   </div></div>;
 }
 
@@ -62,7 +66,7 @@ export function NodeInspector({ n, scope = '', onClose }: { n: CanvasNode; scope
   const up = (patch: Partial<CanvasNode>) => actions.updateNode(n.id, patch as never);
   return (
     <div data-testid="inspector-node">
-      <div className="panel-title"><span>{nodeKindLabel(n)}</span><span className="panel-title-end"><span className="kbd">{n.id}</span>{onClose ? <button className="btn icon" data-testid="node-popover-close" aria-label="Close" title="Close (Esc)" onClick={onClose}><X size={14} /></button> : null}</span></div>
+      <div className="panel-title"><span>{nodeKindLabel(n)}</span><span className="panel-title-end"><span className="kbd">{n.id}</span>{onClose ? <Button className="btn icon" data-testid="node-popover-close" aria-label="Close" title="Close (Esc)" onClick={onClose}><X size={14} /></Button> : null}</span></div>
       <Text label="Title" value={n.title} onCommit={(v) => up({ title: v })} testId="insp-title" multiline={n.kind === 'sticky' || n.kind === 'text'} placeholder={n.kind === 'sticky' || n.kind === 'text' ? 'Markdown and :emoji: supported' : undefined} />
       {n.kind !== 'sticky' ? <Text label={n.kind === 'frame' ? 'Subtitle' : 'Subtitle (monospace line)'} value={n.subtitle} mono onCommit={(v) => up({ subtitle: v })} testId="insp-subtitle" /> : null}
       {n.kind === 'topic' ? (
@@ -91,13 +95,13 @@ export function NodeInspector({ n, scope = '', onClose }: { n: CanvasNode; scope
         <Text label="Width" value={String(n.width)} onCommit={(v) => Number(v) > 0 && up({ width: Number(v) })} noEmoji />
         <Text label="Height" value={String(n.height)} onCommit={(v) => Number(v) > 0 && up({ height: Number(v) })} noEmoji />
       </div>
-      <div className="toggle-row"><span>Locked</span><button className={'switch' + (n.locked ? ' on' : '')} aria-label="Toggle lock" onClick={() => up({ locked: !n.locked })} /></div>
+      <label className="toggle-row"><span>Locked</span><Checkbox checked={!!n.locked} aria-label="Toggle lock" onChange={() => up({ locked: !n.locked })} /></label>
       <LayerControls />
       {n.link ? <a className="btn outline" href={n.link} target="_blank" rel="noreferrer"><LinkIcon size={14} />Open link</a> : null}
       <div className="seg" style={{ marginTop: 10 }}>
-        {n.kind === 'frame' ? <button onClick={() => actions.fitFrame(n.id)} data-testid="fit-frame"><Frame size={12} /> Fit to contents</button> : null}
-        <button onClick={actions.duplicate}><Copy size={12} /> Duplicate</button>
-        <button onClick={actions.deleteSelection} data-testid="insp-delete"><Trash2 size={12} /> Delete</button>
+        {n.kind === 'frame' ? <Button onClick={() => actions.fitFrame(n.id)} data-testid="fit-frame"><Frame size={12} /> Fit to contents</Button> : null}
+        <Button onClick={actions.duplicate}><Copy size={12} /> Duplicate</Button>
+        <Button onClick={actions.deleteSelection} data-testid="insp-delete"><Trash2 size={12} /> Delete</Button>
       </div>
     </div>
   );
@@ -112,27 +116,27 @@ function MultiInspector({ ids }: { ids: string[] }) {
       <div className="field"><label>Shape</label><Picker id="multi-shape" label="Shape" grid placeholder="Set shape for all…" options={shapeOptions(NODE_SHAPES)} onPick={(s) => actions.setShape(s)} testId="shape-picker" /></div>
       <div className="field"><label>Align</label>
         <div className="seg">
-          <button title="Align left" aria-label="Align left" data-testid="align-left" onClick={() => actions.align('left')}><AlignLeft size={13} /></button>
-          <button title="Align centers" aria-label="Align centers" onClick={() => actions.align('center')}><AlignCenterHorizontal size={13} /></button>
-          <button title="Align right" aria-label="Align right" onClick={() => actions.align('right')}><AlignRight size={13} /></button>
-          <button title="Align top" aria-label="Align top" data-testid="align-top" onClick={() => actions.align('top')}><AlignStartVertical size={13} /></button>
-          <button title="Align middles" aria-label="Align middles" onClick={() => actions.align('middle')}><AlignCenterVertical size={13} /></button>
-          <button title="Align bottom" aria-label="Align bottom" onClick={() => actions.align('bottom')}><AlignEndVertical size={13} /></button>
+          <Button title="Align left" aria-label="Align left" data-testid="align-left" onClick={() => actions.align('left')}><AlignLeft size={13} /></Button>
+          <Button title="Align centers" aria-label="Align centers" onClick={() => actions.align('center')}><AlignCenterHorizontal size={13} /></Button>
+          <Button title="Align right" aria-label="Align right" onClick={() => actions.align('right')}><AlignRight size={13} /></Button>
+          <Button title="Align top" aria-label="Align top" data-testid="align-top" onClick={() => actions.align('top')}><AlignStartVertical size={13} /></Button>
+          <Button title="Align middles" aria-label="Align middles" onClick={() => actions.align('middle')}><AlignCenterVertical size={13} /></Button>
+          <Button title="Align bottom" aria-label="Align bottom" onClick={() => actions.align('bottom')}><AlignEndVertical size={13} /></Button>
         </div>
       </div>
       <div className="field"><label>Distribute & arrange</label>
         <div className="seg">
-          <button onClick={() => actions.distribute('horizontal')} data-testid="distribute-h"><Columns3 size={13} /> Horizontal</button>
-          <button onClick={() => actions.distribute('vertical')}><Rows3 size={13} /> Vertical</button>
-          <button onClick={() => actions.layout('graph', 'LR')}>Flow</button>
-          <button onClick={() => actions.layout('grid')}>Grid</button>
+          <Button onClick={() => actions.distribute('horizontal')} data-testid="distribute-h"><Columns3 size={13} /> Horizontal</Button>
+          <Button onClick={() => actions.distribute('vertical')}><Rows3 size={13} /> Vertical</Button>
+          <Button onClick={() => actions.layout('graph', 'LR')}>Flow</Button>
+          <Button onClick={() => actions.layout('grid')}>Grid</Button>
         </div>
       </div>
       <div className="seg">
-        <button onClick={actions.connectSelected} data-testid="connect-selected">Connect in order</button>
-        <button onClick={actions.frameSelection} data-testid="frame-selection"><Frame size={12} /> Frame selection</button>
-        <button onClick={actions.duplicate}><Copy size={12} /> Duplicate</button>
-        <button onClick={actions.deleteSelection}><Trash2 size={12} /> Delete</button>
+        <Button onClick={actions.connectSelected} data-testid="connect-selected">Connect in order</Button>
+        <Button onClick={actions.frameSelection} data-testid="frame-selection"><Frame size={12} /> Frame selection</Button>
+        <Button onClick={actions.duplicate}><Copy size={12} /> Duplicate</Button>
+        <Button onClick={actions.deleteSelection}><Trash2 size={12} /> Delete</Button>
       </div>
     </div>
   );
@@ -148,16 +152,17 @@ function EdgeInspector({ e }: { e: CanvasEdge }) {
         <Text label="Label X offset" value={String(e.labelOffset?.x ?? 0)} noEmoji onCommit={(v) => { if (v.trim() && Number.isFinite(Number(v))) up({ labelOffset: { x: Number(v), y: e.labelOffset?.y ?? 0 } }); }} />
         <Text label="Label Y offset" value={String(e.labelOffset?.y ?? 0)} noEmoji onCommit={(v) => { if (v.trim() && Number.isFinite(Number(v))) up({ labelOffset: { x: e.labelOffset?.x ?? 0, y: Number(v) } }); }} />
       </div>
-      <button className="btn outline" data-testid="reset-label-position" onClick={() => up({ labelOffset: null as never })}>Reset label position</button>
+      <Button className="btn outline" data-testid="reset-label-position" onClick={() => up({ labelOffset: null as never })}>Reset label position</Button>
+      <Button className="btn outline" data-testid="reset-connector-route" disabled={!e.routePoint} onClick={() => up({ routePoint: null as never })}>Reset connector route</Button>
       <LayerControls />
       <Seg label="Routing" options={EDGE_ROUTINGS} value={e.routing} onPick={(v) => up({ routing: v })} testPrefix="routing-" />
       <Seg label="Line" options={EDGE_STYLES} value={e.style} onPick={(v) => up({ style: v })} testPrefix="edgestyle-" />
       <Seg label="Arrows" options={ARROW_MODES} value={e.arrow} onPick={(v) => up({ arrow: v })} testPrefix="arrow-" />
       <Colors value={e.color} onPick={(c) => up({ color: (c ?? null) as never })} />
-      <div className="toggle-row"><span>Animated flow</span><button className={'switch' + (e.animated ? ' on' : '')} data-testid="edge-animated" aria-label="Toggle animation" onClick={() => up({ animated: !e.animated })} /></div>
+      <label className="toggle-row"><span>Animated flow</span><Checkbox checked={!!e.animated} data-testid="edge-animated" aria-label="Toggle animation" onChange={() => up({ animated: !e.animated })} /></label>
       <div className="seg" style={{ marginTop: 10 }}>
-        <button onClick={() => actions.reverseEdge(e.id)}><ArrowLeftRight size={12} /> Reverse</button>
-        <button onClick={actions.deleteSelection}><Trash2 size={12} /> Delete</button>
+        <Button onClick={() => actions.reverseEdge(e.id)}><ArrowLeftRight size={12} /> Reverse</Button>
+        <Button onClick={actions.deleteSelection}><Trash2 size={12} /> Delete</Button>
       </div>
     </div>
   );
@@ -179,7 +184,7 @@ function DocInspector() {
         <div className="stat"><b>{frames}</b><span>frames</span></div>
         <div className="stat"><b>{doc.nodes.filter((n) => n.parentId).length}</b><span>branch topics</span></div>
       </div>
-      <div className="toggle-row"><span>Auto-arrange mind-map branches</span><button className={'switch' + (doc.settings.autoArrange ? ' on' : '')} aria-label="Toggle auto-arrange" onClick={() => actions.setDocSettings({ autoArrange: !doc.settings.autoArrange })} /></div>
+      <label className="toggle-row"><span>Auto-arrange mind-map branches</span><Checkbox checked={doc.settings.autoArrange} aria-label="Toggle auto-arrange" onChange={() => actions.setDocSettings({ autoArrange: !doc.settings.autoArrange })} /></label>
       <SnapToggle />
       <p className="inspector-empty" style={{ marginTop: 14 }}>
         {touch
@@ -192,7 +197,7 @@ function DocInspector() {
 
 function SnapToggle() {
   const snap = useApp((s) => s.session.snapToGrid);
-  return <div className="toggle-row"><span>Snap to grid</span><button className={'switch' + (snap ? ' on' : '')} aria-label="Toggle snap to grid" data-testid="toggle-snap" onClick={actions.toggleSnap} /></div>;
+  return <label className="toggle-row"><span>Snap to grid</span><Checkbox checked={snap} aria-label="Toggle snap to grid" data-testid="toggle-snap" onChange={actions.toggleSnap} /></label>;
 }
 
 export function Inspector() {

@@ -317,7 +317,7 @@ export function createTools(store: Store, hub: Hub, files: FileSaver): ToolDef[]
       },
     },
     {
-      name: 'update_edges', title: 'Update connectors', description: 'Edit connector label, labelOffset (x/y canvas units from its automatic position; null resets), endpoints, arrows, style, routing, colour, animation or forced sides.',
+      name: 'update_edges', title: 'Update connectors', description: 'Edit connector label, labelOffset (x/y canvas units from its automatic position; null resets), routePoint (explicit bend in canvas coordinates; null resets), endpoints, arrows, style, routing, colour, animation or forced sides.',
       input: { documentId: docIdArg, updates: z.array(edgePatchSchema).min(1) },
       run: async (a, ctx) => { const id = resolveDoc(a.documentId); return resultFor(id, run(id, { type: 'update_edges', updates: a.updates }, ctx)); },
     },

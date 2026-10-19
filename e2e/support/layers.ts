@@ -12,7 +12,8 @@ export async function layerJourney(page: Page, app: App, ev: Evidence, phone?: P
     { id: 'target', title: 'Response', x: 640, y: 100, width: 160, height: 80 },
     { id: 'blocker', title: 'Overlapping node', x: 280, y: 70, width: 240, height: 160 },
   ] });
-  await app.tool('add_edges', { documentId, edges: [{ id: 'wire', source: 'source', target: 'target', label: 'No — return job_id', routing: 'straight', style: 'dashed' }] });
+  // A deliberate overlap tests stacking; untouched drafting labels avoid nodes.
+  await app.tool('add_edges', { documentId, edges: [{ id: 'wire', source: 'source', target: 'target', label: 'No — return job_id', labelOffset: { x: 0, y: 0 }, routing: 'straight', style: 'dashed' }] });
   await app.open(documentId);
   await app.tool('set_ui', { inspector: false, outline: false, minimap: false });
   await app.fit();

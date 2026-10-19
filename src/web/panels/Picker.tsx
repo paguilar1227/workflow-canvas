@@ -1,3 +1,4 @@
+import { Button } from '../components/Button';
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown, CircleHelp, Database, FileText, Flag, Globe, Hourglass, Layers, Play, Split, type LucideIcon } from 'lucide-react';
@@ -74,7 +75,7 @@ export function Picker<T extends string | number>({ id, label, value, options, o
 
   return (
     <>
-      <button ref={btn} className={(buttonClass ?? 'picker-btn') + (open ? ' open' : '')} data-testid={testId} aria-haspopup="listbox" aria-expanded={open} aria-label={trigger ? label : label + ': ' + (current?.label ?? placeholder)} title={trigger ? label : undefined}
+      <Button ref={btn} className={(buttonClass ?? 'picker-btn') + (open ? ' open' : '')} data-testid={testId} aria-haspopup="listbox" aria-expanded={open} aria-label={trigger ? label : label + ': ' + (current?.label ?? placeholder)} title={trigger ? label : undefined}
         onClick={(e) => { e.stopPropagation(); set({ openMenu: open ? null : id }); }}
         onKeyDown={(e) => {
           // Like a native select; also keeps canvas shortcuts (Enter adds a sibling topic) from firing.
@@ -87,7 +88,7 @@ export function Picker<T extends string | number>({ id, label, value, options, o
             <ChevronDown size={14} className="picker-chevron" />
           </>
         )}
-      </button>
+      </Button>
       {shown ? createPortal(
         <>
           <div className={'picker-backdrop' + (sheet ? ' dim' : '')} data-testid="picker-backdrop" onClick={() => close()} />
@@ -95,11 +96,11 @@ export function Picker<T extends string | number>({ id, label, value, options, o
             {sheet ? <div className="picker-title">{label}</div> : null}
             <div className="picker-options" role="listbox" aria-label={label}>
               {options.map((o) => (
-                <button key={String(o.value)} role="option" aria-selected={o.value === value} className={'picker-option' + (o.value === value ? ' on' : '')} data-testid={o.testId} title={o.hint} onClick={() => pick(o.value)}>
+                <Button key={String(o.value)} role="option" aria-selected={o.value === value} className={'picker-option' + (o.value === value ? ' on' : '')} data-testid={o.testId} title={o.hint} onClick={() => pick(o.value)}>
                   {o.icon ? <span className="picker-icon">{o.icon}</span> : null}
                   <span className="picker-label">{o.label}</span>
                   {!grid && o.value === value ? <Check size={14} className="picker-check" /> : null}
-                </button>
+                </Button>
               ))}
             </div>
           </div>

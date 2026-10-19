@@ -1,3 +1,6 @@
+import { Button } from '../components/Button';
+import { Input } from '../components/Input';
+import { Textarea } from '../components/Textarea';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Workflow, MousePointer2, Hand, Square, Frame, StickyNote, Type, Spline, Minus, Plus, Maximize, ChevronUp, ChevronDown, X, Bot, PenLine, Eye, Minimize2, BoxSelect, Maximize2, Pencil, CornerDownRight, ListPlus, SlidersHorizontal, MoreHorizontal, Trash2, Tag } from 'lucide-react';
 import { useStore } from '@xyflow/react';
@@ -17,22 +20,22 @@ export function Toolbar() {
   const areaSelect = useApp((s) => s.areaSelect);
   return (
     <div className="toolbar" role="toolbar" aria-label="Canvas tools" data-testid="toolbar">
-      {coarse && mode !== 'pan' ? null : <button className={'btn icon' + (mode === 'select' && !areaSelect ? ' active' : '')} title="Select (V)" aria-label="Select tool" onClick={() => actions.setMode('select')}><MousePointer2 size={16} /></button>}
+      {coarse && mode !== 'pan' ? null : <Button className={'btn icon' + (mode === 'select' && !areaSelect ? ' active' : '')} title="Select (V)" aria-label="Select tool" onClick={() => actions.setMode('select')}><MousePointer2 size={16} /></Button>}
       {coarse ? (
-        <button className={'btn icon' + (areaSelect ? ' active' : '')} title="Select an area (one finger otherwise pans)" aria-label="Area select tool" aria-pressed={areaSelect} data-testid="tool-area" onClick={actions.toggleAreaSelect}><BoxSelect size={16} /></button>
+        <Button className={'btn icon' + (areaSelect ? ' active' : '')} title="Select an area (one finger otherwise pans)" aria-label="Area select tool" aria-pressed={areaSelect} data-testid="tool-area" onClick={actions.toggleAreaSelect}><BoxSelect size={16} /></Button>
       ) : (
-        <button className={'btn icon' + (mode === 'pan' ? ' active' : '')} title="Hand / pan (H)" aria-label="Hand tool" data-testid="tool-pan" onClick={() => actions.setMode('pan')}><Hand size={16} /></button>
+        <Button className={'btn icon' + (mode === 'pan' ? ' active' : '')} title="Hand / pan (H)" aria-label="Hand tool" data-testid="tool-pan" onClick={() => actions.setMode('pan')}><Hand size={16} /></Button>
       )}
-      <button className={'btn icon' + (mode === 'draw' ? ' active' : '')} title="Pen — freehand draw (P)" aria-label="Pen tool" data-testid="tool-pen" onClick={() => actions.setMode(mode === 'draw' ? 'select' : 'draw')}><PenLine size={16} /></button>
+      <Button className={'btn icon' + (mode === 'draw' ? ' active' : '')} title="Pen — freehand draw (P)" aria-label="Pen tool" data-testid="tool-pen" onClick={() => actions.setMode(mode === 'draw' ? 'select' : 'draw')}><PenLine size={16} /></Button>
       <div className="sep" style={{ alignSelf: 'center' }} />
-      <button className={'btn' + (placing === 'topic' && !placingRole ? ' active' : '')} title="Add topic (N) — click the canvas to place it, or it appears next to the selection" data-testid="add-topic" onClick={() => actions.insert('topic')}><Square size={15} />Topic</button>
-      <button className={'btn' + (placing === 'frame' ? ' active' : '')} title="Add frame / lane (F) — wraps the selection, or click the canvas to place one" data-testid="add-frame" onClick={() => actions.insert('frame')}><Frame size={15} />Frame</button>
-      <button className={'btn' + (placing === 'sticky' ? ' active' : '')} title="Add sticky note (S) — click the canvas to place it" data-testid="add-sticky" onClick={() => actions.insert('sticky')}><StickyNote size={15} />Sticky</button>
-      <button className={'btn' + (placing === 'text' ? ' active' : '')} title="Add text (T) — click the canvas to place it" data-testid="add-text" onClick={() => actions.insert('text')}><Type size={15} />Text</button>
+      <Button className={'btn' + (placing === 'topic' && !placingRole ? ' active' : '')} title="Add topic (N) — click the canvas to place it, or it appears next to the selection" data-testid="add-topic" onClick={() => actions.insert('topic')}><Square size={15} />Topic</Button>
+      <Button className={'btn' + (placing === 'frame' ? ' active' : '')} title="Add frame / lane (F) — wraps the selection, or click the canvas to place one" data-testid="add-frame" onClick={() => actions.insert('frame')}><Frame size={15} />Frame</Button>
+      <Button className={'btn' + (placing === 'sticky' ? ' active' : '')} title="Add sticky note (S) — click the canvas to place it" data-testid="add-sticky" onClick={() => actions.insert('sticky')}><StickyNote size={15} />Sticky</Button>
+      <Button className={'btn' + (placing === 'text' ? ' active' : '')} title="Add text (T) — click the canvas to place it" data-testid="add-text" onClick={() => actions.insert('text')}><Type size={15} />Text</Button>
       <Picker id="logic-menu" label="Add a logic node (start, decision, end…)" grid options={roleOptions(NODE_ROLES)} onPick={(r) => actions.insertRole(r as NodeRole)} testId="add-logic"
         buttonClass={'btn' + (placingRole ? ' active' : '')} trigger={<><Workflow size={15} />Logic</>} />
       {coarse ? null : <div className="sep" style={{ alignSelf: 'center' }} />}
-      {coarse ? null : <button className="btn" title="Connect selected nodes (C)" data-testid="connect" disabled={selCount < 2} onClick={actions.connectSelected}><Spline size={15} />Connect</button>}
+      {coarse ? null : <Button className="btn" title="Connect selected nodes (C)" data-testid="connect" disabled={selCount < 2} onClick={actions.connectSelected}><Spline size={15} />Connect</Button>}
     </div>
   );
 }
@@ -48,11 +51,11 @@ export function ModePill() {
   const placing = useApp((st) => st.placing);
   const touch = useApp((st) => st.compact || st.coarse);
   const area = useApp((st) => st.areaSelect);
-  if (placing && !s.viewMode) return <div className="mode-pill" data-testid="place-pill"><MousePointer2 size={14} /><span className="pill-text">{touch ? 'Tap to place ' + placeLabel(placing) : <>Click the canvas to place {placeLabel(placing)} · Enter = centre</>}</span><button className="btn outline" onClick={actions.cancelPlacing}>{touch ? 'Cancel' : 'Cancel (Esc)'}</button></div>;
-  if (area && !s.viewMode) return <div className="mode-pill" data-testid="area-pill"><BoxSelect size={14} /><span className="pill-text">Drag across nodes to select them</span><button className="btn outline" onClick={actions.toggleAreaSelect}>Cancel</button></div>;
-  if (s.viewMode) return <div className="mode-pill" data-testid="view-pill"><Eye size={14} /><span className="pill-text">View mode — read-only</span><button className="btn outline" onClick={actions.toggleViewMode} data-testid="exit-view">{touch ? 'Edit' : 'Edit (Alt+R)'}</button></div>;
-  if (s.zenMode) return <div className="mode-pill" data-testid="zen-pill"><Minimize2 size={14} /><span className="pill-text">Zen mode</span><button className="btn outline" onClick={actions.toggleZen} data-testid="exit-zen">{touch ? 'Exit' : 'Exit (Alt+Z)'}</button></div>;
-  if (s.mode === 'draw') return <div className="mode-pill" data-testid="pen-pill"><PenLine size={14} /><span className="pill-text">Pen — drag to draw</span><button className="btn outline" onClick={() => actions.setMode('select')}>{touch ? 'Done' : 'Done (Esc)'}</button></div>;
+  if (placing && !s.viewMode) return <div className="mode-pill" data-testid="place-pill"><MousePointer2 size={14} /><span className="pill-text">{touch ? 'Tap to place ' + placeLabel(placing) : <>Click the canvas to place {placeLabel(placing)} · Enter = centre</>}</span><Button className="btn outline" onClick={actions.cancelPlacing}>{touch ? 'Cancel' : 'Cancel (Esc)'}</Button></div>;
+  if (area && !s.viewMode) return <div className="mode-pill" data-testid="area-pill"><BoxSelect size={14} /><span className="pill-text">Drag across nodes to select them</span><Button className="btn outline" onClick={actions.toggleAreaSelect}>Cancel</Button></div>;
+  if (s.viewMode) return <div className="mode-pill" data-testid="view-pill"><Eye size={14} /><span className="pill-text">View mode — read-only</span><Button className="btn outline" onClick={actions.toggleViewMode} data-testid="exit-view">{touch ? 'Edit' : 'Edit (Alt+R)'}</Button></div>;
+  if (s.zenMode) return <div className="mode-pill" data-testid="zen-pill"><Minimize2 size={14} /><span className="pill-text">Zen mode</span><Button className="btn outline" onClick={actions.toggleZen} data-testid="exit-zen">{touch ? 'Exit' : 'Exit (Alt+Z)'}</Button></div>;
+  if (s.mode === 'draw') return <div className="mode-pill" data-testid="pen-pill"><PenLine size={14} /><span className="pill-text">Pen — drag to draw</span><Button className="btn outline" onClick={() => actions.setMode('select')}>{touch ? 'Done' : 'Done (Esc)'}</Button></div>;
   return null;
 }
 
@@ -60,10 +63,10 @@ export function ZoomBar() {
   const zoom = useStore((s) => s.transform[2]);
   return (
     <div className="zoombar" data-testid="zoombar">
-      <button className="btn icon" title="Zoom out (⌘-)" aria-label="Zoom out" data-testid="zoom-out" onClick={actions.zoomOut}><Minus size={15} /></button>
-      <button className="pct" title="Reset to 100%" data-testid="zoom-pct" onClick={() => actions.zoomTo(1)}>{Math.round(zoom * 100)}%</button>
-      <button className="btn icon" title="Zoom in (⌘+)" aria-label="Zoom in" data-testid="zoom-in" onClick={actions.zoomIn}><Plus size={15} /></button>
-      <button className="btn icon" title="Fit to screen (⇧1)" aria-label="Fit view" data-testid="fit-view" onClick={actions.fitView}><Maximize size={14} /></button>
+      <Button className="btn icon" title="Zoom out (⌘-)" aria-label="Zoom out" data-testid="zoom-out" onClick={actions.zoomOut}><Minus size={15} /></Button>
+      <Button className="pct" title="Reset to 100%" data-testid="zoom-pct" onClick={() => actions.zoomTo(1)}>{Math.round(zoom * 100)}%</Button>
+      <Button className="btn icon" title="Zoom in (⌘+)" aria-label="Zoom in" data-testid="zoom-in" onClick={actions.zoomIn}><Plus size={15} /></Button>
+      <Button className="btn icon" title="Fit to screen (⇧1)" aria-label="Fit view" data-testid="fit-view" onClick={actions.fitView}><Maximize size={14} /></Button>
     </div>
   );
 }
@@ -83,7 +86,7 @@ export function SearchBar() {
   if (!open) return null;
   return (
     <div className="searchbar" data-testid="searchbar">
-      <input autoFocus data-no-emoji placeholder="Find topics, notes, tags…" aria-label="Search canvas" data-testid="search-input" value={q}
+      <Input autoFocus data-no-emoji placeholder="Find topics, notes, tags…" aria-label="Search canvas" data-testid="search-input" value={q}
         onChange={(e) => { set({ searchIndex: 0 }); updateSession({ search: e.target.value }); }}
         onKeyDown={(e) => {
           e.stopPropagation();
@@ -91,9 +94,9 @@ export function SearchBar() {
           if (e.key === 'Escape') actions.closeSearch();
         }} />
       <span className="count" data-testid="search-count">{matches.length ? cur + 1 + ' / ' + matches.length : '0 / 0'}</span>
-      <button className="btn icon" aria-label="Previous match" onClick={() => set({ searchIndex: idx - 1 })}><ChevronUp size={14} /></button>
-      <button className="btn icon" aria-label="Next match" onClick={() => set({ searchIndex: idx + 1 })}><ChevronDown size={14} /></button>
-      <button className="btn icon" aria-label="Close search" onClick={actions.closeSearch}><X size={14} /></button>
+      <Button className="btn icon" aria-label="Previous match" onClick={() => set({ searchIndex: idx - 1 })}><ChevronUp size={14} /></Button>
+      <Button className="btn icon" aria-label="Next match" onClick={() => set({ searchIndex: idx + 1 })}><ChevronDown size={14} /></Button>
+      <Button className="btn icon" aria-label="Close search" onClick={actions.closeSearch}><X size={14} /></Button>
     </div>
   );
 }
@@ -129,7 +132,7 @@ export function ContextMenu() {
   if (!menu) return null;
   const close = () => set({ menu: null });
   const item = (label: string, fn: () => void, kbd?: string, testId?: string) => (
-    <button className="menu-item" data-testid={testId} onClick={() => { close(); fn(); }}>{label}{kbd ? <span className="kbd">{kbd}</span> : null}</button>
+    <Button className="menu-item" data-testid={testId} onClick={() => { close(); fn(); }}>{label}{kbd ? <span className="kbd">{kbd}</span> : null}</Button>
   );
   const n = menu.nodeId ? get().doc?.nodes.find((x) => x.id === menu.nodeId) : undefined;
   const hasKids = n ? get().doc?.nodes.some((x) => x.parentId === n.id) : false;
@@ -161,7 +164,7 @@ export function ContextMenu() {
           {n.kind === 'frame' ? item('Fit frame to contents', () => actions.fitFrame(n.id)) : null}
           <div className="menu-label">Color</div>
           <div className="swatches" style={{ padding: '2px 8px 6px' }}>
-            {COLOR_NAMES.map((c) => <button key={c} className="swatch-btn" aria-label={'Color ' + c} style={{ background: c === 'default' ? 'var(--node-bg)' : 'var(--c-' + c + ')' }} onClick={() => { close(); actions.setColor(c === 'default' ? null : c); }} />)}
+            {COLOR_NAMES.map((c) => <Button key={c} className="swatch-btn" aria-label={'Color ' + c} style={{ background: c === 'default' ? 'var(--node-bg)' : 'var(--c-' + c + ')' }} onClick={() => { close(); actions.setColor(c === 'default' ? null : c); }} />)}
           </div>
           <hr />
           {item('Delete', actions.deleteSelection, '⌫', 'ctx-delete')}
@@ -231,7 +234,7 @@ export function HelpModal() {
         <h3>Markdown & emoji</h3>
         <p className="lead">Sticky notes and text take full Markdown, including clickable task lists. Topic and frame titles and connector labels take inline styling. Every text field accepts emoji.</p>
         <div className="shortcut-grid" data-testid="format-help">{FORMAT_ROWS.map(([a, b]) => <div className="shortcut" key={a}><span>{a}</span><span className="kbd">{b}</span></div>)}</div>
-        <div className="modal-actions"><button className="btn primary" onClick={() => set({ helpOpen: false })}>Got it</button></div>
+        <div className="modal-actions"><Button className="btn primary" onClick={() => set({ helpOpen: false })}>Got it</Button></div>
       </div>
     </div>
   );
@@ -259,7 +262,7 @@ export function AiModal() {
         <div className="code">GET {location.origin}/api/tools{'\n'}POST {location.origin}/api/tools/&lt;tool_name&gt;  (JSON body = arguments)</div>
         <h3>Recent AI activity</h3>
         {activity.length ? activity.slice(-6).reverse().map((a) => <div key={a.id} className="shortcut"><span><b>{a.origin}</b> {a.summary}</span><span className="kbd">{new Date(a.at).toLocaleTimeString()}</span></div>) : <p className="lead">No AI activity yet in this tab.</p>}
-        <div className="modal-actions"><button className="btn primary" onClick={() => set({ aiOpen: false })}>Close</button></div>
+        <div className="modal-actions"><Button className="btn primary" onClick={() => set({ aiOpen: false })}>Close</Button></div>
       </div>
     </div>
   );
@@ -291,21 +294,21 @@ export function ImportModal() {
         <h2>Import</h2>
         <p className="lead">Paste a Mermaid flowchart (subgraphs become frames), a Markdown outline (becomes a mind map), an Excalidraw scene (.excalidraw) or Workflow Canvas JSON — or load a file.</p>
         <div className="seg" style={{ marginBottom: 10 }}>
-          {(['mermaid', 'markdown', 'excalidraw', 'json'] as const).map((f) => <button key={f} className={format === f ? 'on' : ''} data-testid={'import-format-' + f} onClick={() => pick(f)}>{f}</button>)}
-          <label className="btn outline small" data-testid="import-load-file">Load file…<input type="file" hidden accept=".mmd,.md,.markdown,.json,.txt,.excalidraw" data-testid="import-file" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; const t = await f.text(); if (/\.excalidraw$/i.test(f.name) || t.includes('"type": "excalidraw"') || t.includes('"type":"excalidraw"')) setFormat('excalidraw'); setText(t); }} /></label>
+          {(['mermaid', 'markdown', 'excalidraw', 'json'] as const).map((f) => <Button key={f} className={format === f ? 'on' : ''} data-testid={'import-format-' + f} onClick={() => pick(f)}>{f}</Button>)}
+          <label className="btn outline small" data-testid="import-load-file">Load file…<Input type="file" hidden accept=".mmd,.md,.markdown,.json,.txt,.excalidraw" data-testid="import-file" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; const t = await f.text(); if (/\.excalidraw$/i.test(f.name) || t.includes('"type": "excalidraw"') || t.includes('"type":"excalidraw"')) setFormat('excalidraw'); setText(t); }} /></label>
         </div>
-        <textarea className="import-text" data-no-emoji data-testid="import-text" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.stopPropagation()} />
+        <Textarea className="import-text" data-no-emoji data-testid="import-text" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.stopPropagation()} />
         {err ? <p style={{ color: 'var(--c-red)' }}>{err}</p> : null}
         <div className="modal-actions">
           <div className="seg" style={{ marginRight: 'auto' }}>
-            <button className={mode === 'append' ? 'on' : ''} onClick={() => setMode('append')}>Append</button>
-            <button className={mode === 'replace' ? 'on' : ''} onClick={() => setMode('replace')}>Replace canvas</button>
+            <Button className={mode === 'append' ? 'on' : ''} onClick={() => setMode('append')}>Append</Button>
+            <Button className={mode === 'replace' ? 'on' : ''} onClick={() => setMode('replace')}>Replace canvas</Button>
           </div>
-          <button className="btn" onClick={() => set({ importOpen: false })}>Cancel</button>
-          <button className="btn primary" data-testid="import-submit" onClick={() => {
+          <Button className="btn" onClick={() => set({ importOpen: false })}>Cancel</Button>
+          <Button className="btn primary" data-testid="import-submit" onClick={() => {
             try { actions.importContent(format, text, mode); set({ importOpen: false }); setErr(''); }
             catch (e2) { setErr((e2 as Error).message); }
-          }}>Import</button>
+          }}>Import</Button>
         </div>
       </div>
     </div>
@@ -321,11 +324,11 @@ export function ColumnHeader({ panel, title }: { panel: 'outline' | 'inspector';
     <div className="column-head">
       <span className="column-title">{title}</span>
       {compact ? (
-        <button className={'btn icon' + (full ? ' active' : '')} data-testid={'expand-' + panel} aria-label={(full ? 'Shrink ' : 'Expand ') + title} aria-pressed={full} title={full ? 'Shrink' : 'Expand to full width'} onClick={actions.toggleDrawerFull}>
+        <Button className={'btn icon' + (full ? ' active' : '')} data-testid={'expand-' + panel} aria-label={(full ? 'Shrink ' : 'Expand ') + title} aria-pressed={full} title={full ? 'Shrink' : 'Expand to full width'} onClick={actions.toggleDrawerFull}>
           {full ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-        </button>
+        </Button>
       ) : null}
-      <button className="btn icon" data-testid={'close-' + panel} aria-label={'Close ' + title} title="Close" onClick={() => actions.closePanel(panel)}><X size={16} /></button>
+      <Button className="btn icon" data-testid={'close-' + panel} aria-label={'Close ' + title} title="Close" onClick={() => actions.closePanel(panel)}><X size={16} /></Button>
     </div>
   );
 }
@@ -340,7 +343,7 @@ export function SelectionBar() {
   const one = sel.nodes.length === 1 ? doc.nodes.find((n) => n.id === sel.nodes[0]) : undefined;
   const edgeOnly = !sel.nodes.length && sel.edges.length === 1 ? sel.edges[0] : undefined;
   const b = (label: string, icon: ReactNode, fn: () => void, testId: string, danger = false) => (
-    <button className={'btn sel-btn' + (danger ? ' danger' : '')} data-testid={testId} aria-label={label} onClick={fn}>{icon}<span>{label}</span></button>
+    <Button className={'btn sel-btn' + (danger ? ' danger' : '')} data-testid={testId} aria-label={label} onClick={fn}>{icon}<span>{label}</span></Button>
   );
   const more = (e: React.MouseEvent) => {
     // The app root closes an open menu on any click; this click opens one, so it must not reach the root.
@@ -358,7 +361,7 @@ export function SelectionBar() {
       {sel.nodes.length > 1 ? b('Frame', <Frame size={16} />, actions.frameSelection, 'sel-frame') : null}
       {sel.nodes.length > 1 ? b('Connect', <Spline size={16} />, actions.connectSelected, 'sel-connect') : null}
       {b('Style', <SlidersHorizontal size={16} />, () => actions.openDrawer('inspector'), 'sel-style')}
-      <button className="btn sel-btn" data-testid="sel-more" aria-label="More actions" onClick={more}><MoreHorizontal size={16} /><span>More</span></button>
+      <Button className="btn sel-btn" data-testid="sel-more" aria-label="More actions" onClick={more}><MoreHorizontal size={16} /><span>More</span></Button>
       {b('Delete', <Trash2 size={16} />, actions.deleteSelection, 'sel-delete', true)}
     </div>
   );

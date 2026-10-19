@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
+import { memo, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent, type RefObject } from 'react';
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath, getStraightPath, Position, useInternalNode, useStore, ViewportPortal, type EdgeProps } from '@xyflow/react';
 import type { CanvasEdge, CanvasNode, NodeShape, Side } from '../../shared/types';
 import { COLOR_NAMES } from '../../shared/types';
@@ -9,6 +9,10 @@ import { roughPath, seedOf, useSketch } from './sketch';
 import * as actions from '../actions';
 import { InlineMarkdown } from '../markdown';
 import { neonBranch, useNeon } from './neon';
+import { getTheme } from '../../shared/themes';
+import { labelLeaderEnd, type LabelGeometry, type Point } from './labels';
+import { routeConnection, routeMiddle, routePath, type Rect as Obstacle } from './routing';
+import { RouteHandle } from './RouteHandle';
 import { edgeLabelLayer } from '../../shared/layers';
 
 export type Rect = { x: number; y: number; w: number; h: number; shape?: NodeShape; zIndex?: number };
@@ -142,7 +146,8 @@ export function autoSides(s: Rect, t: Rect): [Side, Side] {
 const markerUrl = (c: string | undefined, selected: boolean) => 'url(#wfc-arrow-' + (selected ? 'selected' : c && c !== 'default' ? c : 'default') + ')';
 
 export const SmartEdge = memo(function SmartEdge({ id, source, target, data, selected }: EdgeProps) {
-  const e = (data as { edge: CanvasEdge; offset?: number; wire?: string }).edge;
+  const d = data as { edge: CanvasEdge; offset?: number; wire?: string; obstacles: Obstacle[]; registerLabel: (id: string, geometry: LabelGeometry | null) => void; labelGeometry?: LabelGeometry; labelPosition?: Point };
+  const e = d.edge;
   const wire = (data as { wire?: string }).wire;
   const slot = (data as { slot?: PortSlot }).slot;
   const offset = (data as { offset?: number }).offset ?? 0;
@@ -153,6 +158,8 @@ export const SmartEdge = memo(function SmartEdge({ id, source, target, data, sel
   const dragThreshold = useStore((state) => state.nodeDragThreshold);
   const sketch = useSketch();
   const neon = useNeon();
+  const drafting = useApp((st) => getTheme(st.session.theme).connectionStyle === 'draft');
+  const [routePreview, setRoutePreview] = useState<Point | null>(null);
   const born = useApp((st) => !!st.newEdges[id]);
   const labelRef = useRef<HTMLDivElement>(null);
   const labelDrag = useRef<{ pointerId: number; x: number; y: number; zoom: number; offset: { x: number; y: number }; moved: boolean; docId: string | null } | null>(null);
@@ -191,8 +198,8 @@ export const SmartEdge = memo(function SmartEdge({ id, source, target, data, sel
   const [as, at] = autoSides(s, t);
   const ss = (e.sourceSide as Side) || as;
   const ts = (e.targetSide as Side) || at;
-  const a = neon && slot ? alongSide(s, ss, slot.s) : shift(anchor(s, ss), ss, offset);
-  const b = neon && slot ? alongSide(t, ts, slot.t) : shift(anchor(t, ts), ts, offset);
+  const a = (neon || drafting) && slot ? alongSide(s, ss, slot.s) : shift(anchor(s, ss), ss, offset);
+  const b = (neon || drafting) && slot ? alongSide(t, ts, slot.t) : shift(anchor(t, ts), ts, offset);
   const startArrow = e.arrow === 'start' || e.arrow === 'both';
   const endArrow = e.arrow === 'end' || e.arrow === 'both';
   const patterned = neon && (e.style !== 'solid' || !!e.animated);
@@ -203,20 +210,35 @@ export const SmartEdge = memo(function SmartEdge({ id, source, target, data, sel
   const routeStart = startLead ? arrowBase(a, ss, terminalLength) : a;
   const routeEnd = endLead ? arrowBase(b, ts, terminalLength) : b;
   const params = { sourceX: routeStart.x, sourceY: routeStart.y, sourcePosition: POS[ss], targetX: routeEnd.x, targetY: routeEnd.y, targetPosition: POS[ts] };
-  const [body, mx, my] = routing === 'bezier' ? getBezierPath(params)
+  const [originalBody, originalMx, originalMy] = routing === 'bezier' ? getBezierPath(params)
     : routing === 'straight' ? getStraightPath(params)
     : getSmoothStepPath({ ...params, borderRadius: routing === 'step' ? 0 : 10, offset: 18 });
+  const waypoint = routePreview ?? e.routePoint;
+  const routed = (drafting && routing !== 'straight') || !!waypoint;
+  const radius = routing === 'step' ? 0 : 8;
+  const points = routed ? routeConnection({ source: routeStart, target: routeEnd, sourceSide: ss, targetSide: ts, obstacles: d.obstacles, via: waypoint, track: offset / 28 }) : [];
+  const middle = routed ? routeMiddle(points, radius) : { x: originalMx, y: originalMy };
+  const body = routed ? routePath(points, radius, d.obstacles, waypoint) : originalBody;
+  const mx = middle.x, my = middle.y;
   const path = (startLead ? body.replace(/^M[^A-Za-z]+/, 'M' + a.x + ',' + a.y + ' L' + routeStart.x + ',' + routeStart.y + ' ') : body) + (endLead ? ' L' + b.x + ',' + b.y : '');
   const distance = Math.hypot(b.x - a.x, b.y - a.y);
   const straightScale = distance ? Math.min(terminalLength, distance / 2) / distance : 0;
   const sourceStem = routing === 'straight' ? { x: a.x + (b.x - a.x) * straightScale, y: a.y + (b.y - a.y) * straightScale } : routeStart;
   const targetStem = routing === 'straight' ? { x: b.x - (b.x - a.x) * straightScale, y: b.y - (b.y - a.y) * straightScale } : routeEnd;
   const terminalPath = [startArrow ? 'M' + a.x + ',' + a.y + ' L' + sourceStem.x + ',' + sourceStem.y : '', endArrow ? 'M' + targetStem.x + ',' + targetStem.y + ' L' + b.x + ',' + b.y : ''].join(' ');
-  const { x: lx, y: ly } = routing === 'bezier' && (e.label || editing) ? clearLabelPoint(body, [s, t], labelHalf, { x: mx, y: my }) : { x: mx, y: my };
+  const { x: lx, y: ly } = !routed && routing === 'bezier' && (e.label || editing) ? clearLabelPoint(body, [s, t], labelHalf, { x: mx, y: my }) : { x: mx, y: my };
   const cls = ['wfc-edge-path', selected ? 'selected' : '', e.animated ? 'animated' : e.style !== 'solid' ? e.style : '', sketch ? 'sk-base' : '', neon ? 'neon' : '', neon && born ? 'born' : ''].join(' ');
-  const colorName = neon && wire ? wire : e.color;
+  const colorName = (neon || drafting) && wire ? wire : e.color;
   const color = colorName && colorName !== 'default' ? 'var(--c-' + colorName + ')' : undefined;
   const ecStyle = color ? ({ ['--ec' as string]: color } as CSSProperties) : undefined;
+  const position = labelPreview || e.labelOffset ? { x: lx + (labelPreview?.x ?? e.labelOffset?.x ?? 0), y: ly + (labelPreview?.y ?? e.labelOffset?.y ?? 0) } : drafting && d.labelPosition ? d.labelPosition : { x: lx, y: ly };
+  const labelAnchor = !labelPreview && !e.labelOffset && d.labelGeometry ? d.labelGeometry.candidates.reduce((best, point) => Math.hypot(point.x - position.x, point.y - position.y) < Math.hypot(best.x - position.x, best.y - position.y) ? point : best, { x: lx, y: ly }) : { x: lx, y: ly };
+  const leaderEnd = e.label ? labelLeaderEnd(labelAnchor, position, { width: labelHalf.w * 2, height: labelHalf.h * 2 }) : null;
+  const bend = waypoint ?? middle;
+  // Keep both drag targets usable when the label is centered on the bend.
+  // The 14px handle is placed one handle-width past the label's border.
+  const bendDisplay = e.label && Math.abs(bend.x - position.x) < labelHalf.w + 7 && Math.abs(bend.y - position.y) < labelHalf.h + 7
+    ? { x: position.x + labelHalf.w + 14, y: bend.y } : bend;
   return (
     <>
       {neon ? <path d={path} className={'wfc-neon-halo' + (selected ? ' selected' : '')} style={ecStyle} /> : null}
@@ -229,6 +251,8 @@ export const SmartEdge = memo(function SmartEdge({ id, source, target, data, sel
         markerEnd={endArrow ? markerUrl(colorName, !neon && !!selected) : undefined}
         markerStart={startArrow ? markerUrl(colorName, !neon && !!selected) : undefined}
       />
+      {leaderEnd ? <line className="wfc-label-leader" data-testid={'label-leader-' + id} x1={labelAnchor.x} y1={labelAnchor.y} x2={leaderEnd.x} y2={leaderEnd.y} style={ecStyle} aria-hidden="true" /> : null}
+      {selected && !locked && (drafting || e.routePoint) ? <RouteHandle id={id} point={bend} displayPoint={bendDisplay} style={ecStyle} onPreview={setRoutePreview} zIndex={edgeLabelLayer(e)} /> : null}
       {patterned && (startArrow || endArrow) ? <path d={terminalPath} className={'wfc-neon-terminal' + (selected ? ' selected' : '')} style={ecStyle} /> : null}
       {neon ? (
         <ViewportPortal>
@@ -240,12 +264,13 @@ export const SmartEdge = memo(function SmartEdge({ id, source, target, data, sel
           {roughPath(path, seedOf(id)).map((p, i) => <path key={i} d={p.d} />)}
         </g>
       ) : null}
+      {e.label || editing ? <MeasureLabel id={id} path={path} middle={{ x: lx, y: ly }} labelRef={labelRef} register={d.registerLabel} /> : null}
       {e.label || editing ? (
         <EdgeLabelRenderer>
           <div
             ref={labelRef}
             className={'wfc-edge-label nodrag nopan' + (selected ? ' selected' : '') + (labelPreview ? ' dragging' : '')}
-            style={{ left: lx + (labelPreview?.x ?? e.labelOffset?.x ?? 0), top: ly + (labelPreview?.y ?? e.labelOffset?.y ?? 0), zIndex: edgeLabelLayer(e) }}
+            style={{ ...ecStyle, left: position.x, top: position.y, zIndex: edgeLabelLayer(e) }}
             data-testid={'edge-label-' + id}
             data-edge-id={id}
             title={locked ? undefined : 'Drag to move label · double-click to edit'}
@@ -254,7 +279,7 @@ export const SmartEdge = memo(function SmartEdge({ id, source, target, data, sel
               if (locked || editing || event.button !== 0 || (event.target as HTMLElement).closest('a, input, textarea, button')) return;
               event.stopPropagation();
               event.currentTarget.setPointerCapture(event.pointerId);
-              labelDrag.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, zoom: flow()?.getZoom() ?? 1, offset: e.labelOffset ?? { x: 0, y: 0 }, moved: false, docId: get().docId };
+              labelDrag.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, zoom: flow()?.getZoom() ?? 1, offset: { x: position.x - lx, y: position.y - ly }, moved: false, docId: get().docId };
             }}
             onPointerMove={(event) => {
               const drag = labelDrag.current;
@@ -289,6 +314,7 @@ export const BranchEdge = memo(function BranchEdge({ id, source, target, data }:
   const t = useRect(target);
   const sketch = useSketch();
   const neon = useNeon();
+  const drafting = useApp((st) => getTheme(st.session.theme).connectionStyle === 'draft');
   if (!s || !t) return null;
   const tc = t.x + t.w / 2;
   let ss: Side, ts: Side;
@@ -299,7 +325,7 @@ export const BranchEdge = memo(function BranchEdge({ id, source, target, data }:
   void tc;
   const a = anchor(s, ss), b = anchor(t, ts);
   const [path] = getBezierPath({ sourceX: a.x, sourceY: a.y, sourcePosition: POS[ss], targetX: b.x, targetY: b.y, targetPosition: POS[ts], curvature: 0.35 });
-  const colorName = neon ? neonBranch(d.branchId ?? target, d.color) : d.color;
+  const colorName = neon || drafting ? neonBranch(d.branchId ?? target, d.color) : d.color;
   const stroke = colorName && colorName !== 'default' ? 'var(--c-' + colorName + ')' : 'var(--edge)';
   if (sketch) return <g className="wfc-branch" style={{ stroke }}>{roughPath(path, seedOf(id), d.depth <= 1 ? 2.2 : 1.5).map((p, i) => <path key={i} d={p.d} style={{ strokeWidth: p.strokeWidth }} />)}</g>;
   if (neon) return <path d={path} className="wfc-branch neon" style={{ stroke, strokeWidth: d.depth <= 1 ? 3 : 2.2, ['--ec' as string]: stroke } as CSSProperties} />;
@@ -324,3 +350,29 @@ export function MarkerDefs() {
   );
 }
 
+
+/** Measure actual rendered labels so routing never guesses from character counts. */
+function MeasureLabel({ id, path, middle, labelRef, register }: { id: string; path: string; middle: Point; labelRef: RefObject<HTMLDivElement | null>; register: (id: string, geometry: LabelGeometry | null) => void }) {
+  const { x, y } = middle;
+  // EdgeLabelRenderer mounts in a sibling portal. Wait until all refs from the
+  // commit are attached before measuring; a child layout effect runs too early.
+  useEffect(() => {
+    const label = labelRef.current;
+    const edge = document.getElementById(id) as SVGPathElement | null;
+    if (!label || !edge) return;
+    const measure = () => {
+      const width = label.offsetWidth, height = label.offsetHeight;
+      if (!width || !height) return;
+      const length = edge.getTotalLength(), step = Math.min(width, height) / 2;
+      const candidates = [{ x, y }];
+      for (let at = 0; at <= length; at += step) { const p = edge.getPointAtLength(at); candidates.push({ x: p.x, y: p.y }); }
+      candidates.sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y));
+      register(id, { middle: { x, y }, candidates, width, height });
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(label);
+    return () => { observer.disconnect(); register(id, null); };
+  }, [id, path, x, y, labelRef, register]);
+  return null;
+}
