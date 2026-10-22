@@ -152,12 +152,13 @@ async function start() {
     }
     const existed = await lstat(file).then(() => true, (error) => { if (error.code === 'ENOENT') return false; throw error; });
     const result = await requestFile('save', id, file);
-    if (!existed) await recordCanvas(app.getPath('userData'), file, id);
+    await recordCanvas(app.getPath('userData'), file, id, !existed);
     return result;
   }));
   register('desktop:attach-document', (id, token) => serialized(async () => {
     if (!openedFile || openedFile.token !== token) throw new Error('Choose the file again to attach it.');
     const file = await requestFile('save', id, openedFile.path);
+    await recordCanvas(app.getPath('userData'), openedFile.path, id, false);
     openedFile = null;
     return file;
   }));

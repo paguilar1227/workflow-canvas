@@ -126,3 +126,17 @@ test('active MCP bridge receives the uninstall marker instead of restarting the 
     assert.equal(alreadyStopped, true);
   } finally { port1.close(); port2.close(); }
 });
+
+test('reopening an app-created canvas updates its owner without adopting pre-existing files', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'wfc-reopened-'));
+  const userData = path.join(root, 'user'), data = path.join(root, 'canvas');
+  const store = new Store(data); await store.init();
+  const first = store.create('First', 'blank'); await store.flush();
+  const file = path.join(root, 'created.excalidraw'), existing = path.join(root, 'existing.excalidraw');
+  await writeFile(file, JSON.stringify(exportExcalidraw(first), null, 2)); await recordCanvas(userData, file, first.id);
+  const reopened = store.create('Reopened and edited', 'blank'); await store.flush();
+  await writeFile(file, JSON.stringify(exportExcalidraw(reopened), null, 2)); await recordCanvas(userData, file, reopened.id, false);
+  await writeFile(existing, JSON.stringify(exportExcalidraw(reopened), null, 2)); await recordCanvas(userData, existing, reopened.id, false);
+  const record = await readOwnership(userData); assert.equal(record.canvases.length, 1); assert.equal(record.canvases[0].docId, reopened.id);
+  await cleanupIntegrations(record, false, data); assert.equal(await exists(file), false); assert.equal(await exists(existing), true);
+});

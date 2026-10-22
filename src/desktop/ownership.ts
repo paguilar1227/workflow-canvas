@@ -48,11 +48,13 @@ export async function recordTree(userData: string, root: string, kind: 'skill' |
   record.trees.push({ root, kind, ...await snapshotTree(root) });
   await writeOwnership(userData, record);
 }
-export async function recordCanvas(userData: string, file: string, docId: string) {
+export async function recordCanvas(userData: string, file: string, docId: string, created = true) {
   const record = await readOwnership(userData);
-  if (record.canvases.some(item => item.path === file)) return;
-  await assertNoLinks(file); const st = await lstat(file);
-  record.canvases.push({ path: file, hash: await hashFile(file), docId });
+  const previous = record.canvases.find(item => item.path === file);
+  if (!previous && !created) return;
+  await assertNoLinks(file);
+  const value = { path: file, hash: await hashFile(file), docId };
+  if (previous) Object.assign(previous, value); else record.canvases.push(value);
   await writeOwnership(userData, record);
 }
 export function ownedPath(root: string, relative: string) {

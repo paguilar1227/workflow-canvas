@@ -62,6 +62,7 @@ jobs:
           hdiutil attach "$dmg" -mountpoint "$mount" -nobrowse
           ditto "$mount/Workflow Canvas.app" "$RUNNER_TEMP/Workflow Canvas.app"
           hdiutil detach "$mount"
+          codesign --verify --deep --strict "$RUNNER_TEMP/Workflow Canvas.app"
           export WFC_TEST_EXECUTABLE="$RUNNER_TEMP/Workflow Canvas.app/Contents/MacOS/workflow-canvas"
           npm run test:desktop:smoke
           npm run test:desktop:mcp
