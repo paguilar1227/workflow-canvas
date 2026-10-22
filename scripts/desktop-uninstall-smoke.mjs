@@ -75,7 +75,7 @@ for (const keep of [true, false]) {
   await page.evaluate(() => window.workflowDesktop.installSkill('claude').catch(() => null));
   const loginProof = path.join(testRoot, 'login-' + keep + '.json');
   await electron.evaluate(async ({ app }, proof) => {
-    const { writeFileSync } = await import('node:fs');
+    const { writeFileSync } = process.getBuiltinModule('node:fs');
     const original = app.setLoginItemSettings.bind(app);
     app.setLoginItemSettings = value => { original(value); writeFileSync(proof, JSON.stringify(app.getLoginItemSettings({ path: process.execPath }))); };
   }, loginProof);
