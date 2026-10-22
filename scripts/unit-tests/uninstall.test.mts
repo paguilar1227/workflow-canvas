@@ -8,6 +8,7 @@ import { readOwnership, cleanupIntegrations, emptyOwnership, recordCanvas } from
 import { backupCanvases, validateRemoval } from '../../src/desktop/uninstall';
 import { exportExcalidraw, documentFromExcalidraw } from '../../src/shared/excalidraw';
 import { Store } from '../../src/server/store';
+import { ownsServeRoute } from '../../src/desktop/tailscale';
 import { createApp } from '../../src/server/app';
 const exists = (file: string) => lstat(file).then(() => true, () => false);
 
@@ -98,4 +99,15 @@ test('kept canvases include directly reopenable drawings with original content',
   await backupCanvases(data, backup, [data]);
   const reopened = documentFromExcalidraw(await readFile(path.join(backup, 'drawings', doc.id + '.excalidraw'), 'utf8'));
   assert.equal(reopened.title, doc.title); assert.deepEqual(reopened.nodes, doc.nodes);
+});
+
+test('uninstall removes only its recorded private Tailscale root route', () => {
+  const host = 'canvas.example.ts.net', port = 8791, target = 'http://127.0.0.1:8790';
+  const config = { Web: { [host + ':' + port]: { Handlers: { '/': { Proxy: target } } } } };
+  assert.equal(ownsServeRoute(config, host, port, target), true);
+  assert.equal(ownsServeRoute({}, host, port, target), false);
+  assert.equal(ownsServeRoute(config, host, port, 'http://127.0.0.1:8888'), false);
+  assert.equal(ownsServeRoute({ ...config, AllowFunnel: { [host + ':' + port]: true } }, host, port, target), false);
+  config.Web[host + ':' + port].Handlers['/other'] = { Proxy: 'http://127.0.0.1:8888' };
+  assert.equal(ownsServeRoute(config, host, port, target), false);
 });

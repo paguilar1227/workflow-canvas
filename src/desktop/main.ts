@@ -232,9 +232,7 @@ async function uninstall(): Promise<{ canceled: boolean }> {
     if (backup) await backupCanvases(dataDir(), backup, [...roots, appDir, removal.installRoot]);
     // Removing a route is allowed only if it still points to this app's recorded server.
     for (const route of record.routes) {
-      const address = new URL(route.target);
-      if (address.hostname !== '127.0.0.1') throw new Error('Invalid recorded Tailscale target.');
-      await tailscale.disable(Number(address.port), route.url);
+      await tailscale.removeOwnedRoute(route.url, route.target);
     }
     const preserved = await cleanupIntegrations(record, keep, dataDir());
     if (preserved.length) await message({ type: 'info', title: 'Your edited files are preserved', message: 'Some integration files were edited or added after installation.', detail: 'These belong to you and will be kept:\n' + preserved.join('\n'), buttons: ['Continue'], noLink: true });

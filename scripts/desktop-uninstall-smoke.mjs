@@ -3,7 +3,7 @@ import { expect } from '@playwright/test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { cp, lstat, mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises';
+import { cp, lstat, mkdir, mkdtemp, readFile, readdir, readlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 const exec = promisify(execFile);
@@ -32,7 +32,10 @@ async function install() {
     const mount = path.join(testRoot, 'mount-' + Date.now()); await mkdir(mount);
     await exec('hdiutil', ['attach', process.env.WFC_TEST_INSTALLER, '-mountpoint', mount, '-nobrowse']);
     const dest = path.join(testRoot, 'installed-' + Date.now(), 'Workflow Canvas.app');
-    try { await cp(path.join(mount, 'Workflow Canvas.app'), dest, { recursive: true }); }
+    try {
+      await exec('ditto', [path.join(mount, 'Workflow Canvas.app'), dest]);
+      assert.equal((await readlink(path.join(dest, 'Contents/Frameworks/Electron Framework.framework/Electron Framework'))).includes(mount), false, 'installed framework links survive DMG eject');
+    }
     finally { await exec('hdiutil', ['detach', mount]); }
     return { executable: path.join(dest, 'Contents', 'MacOS', 'workflow-canvas'), installRoot: dest };
   }
@@ -43,7 +46,9 @@ async function install() {
   return { executable: path.join(installRoot, version, 'workflow-canvas.exe'), installRoot };
 }
 for (const keep of [true, false]) {
+  console.log(JSON.stringify({ phase: 'install', keep }));
   const installed = await install();
+  console.log(JSON.stringify({ phase: 'launch', keep, executable: installed.executable }));
   const electron = await _electron.launch({ executablePath: installed.executable, env: { ...process.env, WFC_USER_DATA: path.join(testRoot, keep ? 'keep-data' : 'delete-data'), WFC_PORT: '8796' } });
   const page = await electron.firstWindow(); page.setDefaultTimeout(15000);
   await page.waitForSelector('[data-testid="doc-title"]');
@@ -72,6 +77,7 @@ for (const keep of [true, false]) {
   for (const root of extraRoots) { if (!await exists(root)) { if (root.endsWith('.plist')) await writeFile(root, 'owned preferences'); else { await mkdir(root, { recursive: true }); await writeFile(path.join(root, 'owned-cache'), 'cache'); } } }
   const unrelated = path.join(paths.home, 'Library', 'Caches', 'unrelated-wfc-test');
   await mkdir(unrelated, { recursive: true }); await writeFile(path.join(unrelated, 'sentinel'), 'preserve');
+  console.log(JSON.stringify({ phase: 'cancel and backup recovery', keep }));
   const beforeCancel = await helperFolders();
   await electron.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 2, checkboxChecked: false }); });
   assert.equal((await page.evaluate(() => window.workflowDesktop.uninstall())).canceled, true);
@@ -97,12 +103,14 @@ for (const keep of [true, false]) {
     dialog.showMessageBox = async options => ({ response: called++ === 0 ? (keep ? 0 : 1) : 0, checkboxChecked: false });
     dialog.showSaveDialog = async () => ({ canceled: false, filePath: backup });
   }, { keep, backup });
+  console.log(JSON.stringify({ phase: 'uninstall', keep }));
   if (process.platform === 'win32' && !keep) {
     const { stdout } = await exec('reg.exe', ['query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\WorkflowCanvas', '/v', 'UninstallString']);
     assert.ok(stdout.includes(installed.executable) && stdout.includes('--uninstall'));
     // Exercise the command registered in Windows Installed apps while the app is running.
     await exec(installed.executable, ['--uninstall'], { env: { ...process.env, WFC_USER_DATA: paths.userData } });
   } else await page.getByRole('button', { name: 'Uninstall Workflow Canvas…' }).click();
+  console.log(JSON.stringify({ phase: 'verify no leftovers', keep }));
   // Project E2E timeout is 180 seconds; the OS uninstaller is part of this journey.
   await expect.poll(async () => await exists(installed.installRoot), { timeout: 180000 }).toBe(false);
   await expect.poll(async () => await exists(paths.userData), { timeout: 180000 }).toBe(false);

@@ -56,3 +56,20 @@ export async function disable(localPort: number, url: string) {
   const after = JSON.parse(await run(['serve', 'status', '--json']));
   if (after.Web?.[state.hostname + ':' + port]) throw new Error('Tailscale still reports this route. Refresh and try again.');
 }
+
+/** A later owner of this port must survive uninstall. */
+export function ownsServeRoute(config: any, hostname: string, port: number, target: string) {
+  const key = hostname + ':' + port;
+  const handlers = config.Web?.[key]?.Handlers;
+  return !config.AllowFunnel?.[key] && !!handlers && Object.keys(handlers).length === 1 && handlers['/']?.Proxy === target;
+}
+export async function removeOwnedRoute(url: string, target: string) {
+  const address = new URL(url), local = new URL(target);
+  if (address.protocol !== 'https:' || !address.hostname.endsWith('.ts.net') || address.pathname !== '/' || address.username || address.password || address.search || address.hash || local.protocol !== 'http:' || local.hostname !== '127.0.0.1' || local.pathname !== '/' || !local.port) throw new Error('Invalid recorded Tailscale route.');
+  const state = await status();
+  if (!state.connected || state.hostname !== address.hostname) throw new Error('Open Tailscale on this device to remove its phone-sharing route, then retry uninstall.');
+  const port = Number(address.port || 443);
+  const config = JSON.parse(await run(['serve', 'status', '--json']));
+  if (!ownsServeRoute(config, state.hostname, port, target)) return;
+  await disable(Number(local.port), url);
+}
