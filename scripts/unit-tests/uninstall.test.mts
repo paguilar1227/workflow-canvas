@@ -6,7 +6,7 @@ import path from 'node:path';
 import { exportDesktopPlugin, installBundledSkill } from '../../src/desktop/plugin';
 import { readOwnership, cleanupIntegrations, emptyOwnership, recordCanvas } from '../../src/desktop/ownership';
 import { backupCanvases, validateRemoval } from '../../src/desktop/uninstall';
-import { exportExcalidraw } from '../../src/shared/excalidraw';
+import { exportExcalidraw, documentFromExcalidraw } from '../../src/shared/excalidraw';
 import { Store } from '../../src/server/store';
 import { createApp } from '../../src/server/app';
 const exists = (file: string) => lstat(file).then(() => true, () => false);
@@ -89,4 +89,13 @@ test('uninstall checkpoint blocks edits and resume restores them after a cancele
   await runtime.checkpoint(); assert.equal((await call()).status, 503);
   runtime.resume(); assert.equal((await call()).status, 200);
   await runtime.close();
+});
+
+test('kept canvases include directly reopenable drawings with original content', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'wfc-reopen-'));
+  const data = path.join(root, 'data'), backup = path.join(root, 'kept');
+  const store = new Store(data); await store.init(); const doc = store.create('Preserved drawing', 'blank'); await store.flush();
+  await backupCanvases(data, backup, [data]);
+  const reopened = documentFromExcalidraw(await readFile(path.join(backup, 'drawings', doc.id + '.excalidraw'), 'utf8'));
+  assert.equal(reopened.title, doc.title); assert.deepEqual(reopened.nodes, doc.nodes);
 });

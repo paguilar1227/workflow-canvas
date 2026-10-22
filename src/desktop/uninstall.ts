@@ -1,8 +1,10 @@
 import { execFile, spawn } from 'node:child_process';
-import { cp, rm, lstat, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { cp, rm, lstat, mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { exportExcalidraw } from '../shared/excalidraw';
+import type { CanvasDocument } from '../shared/types';
 import { assertNoLinks, hashFile, snapshotTree } from './ownership';
 const exec = promisify(execFile);
 const appId = 'com.paguilar.workflowcanvas';
@@ -24,6 +26,17 @@ export async function backupCanvases(dataDir: string, target: string, forbidden:
   const original = await snapshotTree(dataDir);
   await cp(dataDir, target, { recursive: true, errorOnExist: true, force: false });
   for (const file of original.files) if (await hashFile(path.join(target, file.relative)) !== file.hash) throw new Error('Canvas backup verification failed. The app has not been removed.');
+  // Keep the original store and provide drawings that Open can import directly.
+  const docs = await readdir(path.join(dataDir, 'documents')).catch(error => { if (error.code === 'ENOENT') return []; throw error; });
+  if (docs.length) await mkdir(path.join(target, 'drawings'));
+  for (const file of docs.filter(name => name.endsWith('.json'))) {
+    const doc = JSON.parse(await readFile(path.join(dataDir, 'documents', file), 'utf8')) as CanvasDocument;
+    const drawing = JSON.stringify(exportExcalidraw(doc), null, 2);
+    const saved = path.join(target, 'drawings', file.slice(0, -5) + '.excalidraw');
+    await writeFile(saved, drawing, { flag: 'wx' });
+    if (await readFile(saved, 'utf8') !== drawing) throw new Error('Canvas drawing backup verification failed.');
+  }
+  await writeFile(path.join(target, 'README.txt'), 'Your canvas data is preserved here. Open files from drawings/ in Workflow Canvas or Excalidraw. The original documents/, trash/ and session files are also retained. Files you saved elsewhere remain in their original locations.\n', { flag: 'wx' });
 }
 export function cleanupRoots(platform: NodeJS.Platform, home: string, userData: string, dataDir: string) {
   const roots = [userData];

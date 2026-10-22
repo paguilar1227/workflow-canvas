@@ -113,7 +113,11 @@ for (const keep of [true, false]) {
   assert.equal(await readFile(path.join(unrelated, 'sentinel'), 'utf8'), 'preserve');
   assert.equal(await exists(preexisting), true, 'existing external canvas stays user-owned');
   assert.equal(await exists(external), keep, 'created external canvas follows keep/delete choice');
-  if (keep) assert.equal(JSON.parse(await readFile(path.join(backup, 'documents', originalDocId + '.json'), 'utf8')).title, title);
+  if (keep) {
+    assert.equal(JSON.parse(await readFile(path.join(backup, 'documents', originalDocId + '.json'), 'utf8')).title, title);
+    const drawing = JSON.parse(await readFile(path.join(backup, 'drawings', originalDocId + '.excalidraw'), 'utf8'));
+    assert.equal(drawing.type, 'excalidraw'); assert.equal(drawing.workflowCanvas.title, title);
+  }
   else assert.equal(await exists(backup), true, 'the previous explicit keep backup survives later uninstall');
   await expect.poll(helperFolders, { timeout: 180000 }).toEqual(originalHelpers);
   if (process.platform === 'win32') {
