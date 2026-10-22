@@ -75,8 +75,9 @@ export async function prepareRemoval(executable: string, appPath: string, roots:
     if (platform === 'win32') {
       // A detached Node child remains in a Windows process tree. WMI creates a
       // separate process, so closing the app cannot also terminate its uninstaller.
+      // Keep its working directory outside the helper folder so Windows can remove it.
       const command = 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + file + '"';
-      const launch = "$result = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = " + ps(command) + "; CurrentDirectory = " + ps(helperDir) + " }; if ($result.ReturnValue -ne 0) { throw ('Could not start cleanup: ' + $result.ReturnValue) }";
+      const launch = "$result = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = " + ps(command) + "; CurrentDirectory = " + ps(os.tmpdir()) + " }; if ($result.ReturnValue -ne 0) { throw ('Could not start cleanup: ' + $result.ReturnValue) }";
       await exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', launch], { windowsHide: true });
       return;
     }
