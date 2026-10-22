@@ -15,7 +15,10 @@ if (!['darwin', 'win32'].includes(process.platform)) throw new Error('A native M
 if (!process.env.WFC_TEST_INSTALLER) throw new Error('WFC_TEST_INSTALLER must point to the tested DMG or Setup.exe.');
 // Stop only the preceding CI smoke-test installation, which used its own test data.
 if (process.env.WFC_TEST_EXECUTABLE) {
-  if (process.platform === 'darwin') await exec('osascript', ['-e', 'if application id "com.paguilar.workflowcanvas" is running then tell application id "com.paguilar.workflowcanvas" to quit']);
+  if (process.platform === 'darwin') {
+    const exactProcess = '^' + process.env.WFC_TEST_EXECUTABLE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([[:space:]]|$)';
+    await exec('pkill', ['-TERM', '-f', exactProcess]).catch(error => { if (error.code !== 1) throw error; });
+  }
   else await exec('powershell.exe', ['-NoProfile', '-Command', "Get-Process | Where-Object { $_.Path -eq '" + process.env.WFC_TEST_EXECUTABLE.replace(/'/g, "''") + "' } | Stop-Process -Force"]);
 }
 const testRoot = await mkdtemp(path.join(os.tmpdir(), 'wfc-uninstall-evidence-'));
