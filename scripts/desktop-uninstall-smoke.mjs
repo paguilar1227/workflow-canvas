@@ -73,7 +73,14 @@ for (const keep of [true, false]) {
   if (!await exists(preexistingSkill)) { await mkdir(preexistingSkill, { recursive: true }); await writeFile(path.join(preexistingSkill, 'SKILL.md'), 'User-owned skill'); }
   const skillBefore = await readFile(path.join(preexistingSkill, 'SKILL.md'), 'utf8');
   await page.evaluate(() => window.workflowDesktop.installSkill('claude').catch(() => null));
+  const loginProof = path.join(testRoot, 'login-' + keep + '.json');
+  await electron.evaluate(async ({ app }, proof) => {
+    const { writeFileSync } = await import('node:fs');
+    const original = app.setLoginItemSettings.bind(app);
+    app.setLoginItemSettings = value => { original(value); writeFileSync(proof, JSON.stringify(app.getLoginItemSettings({ path: process.execPath }))); };
+  }, loginProof);
   await page.evaluate(async () => { const data = await window.workflowDesktop.info(); await window.workflowDesktop.savePreferences({ ...data.preferences, openAtLogin: true }); });
+  assert.equal(JSON.parse(await readFile(loginProof, 'utf8')).openAtLogin, true, 'native login item enabled before uninstall');
   for (const root of extraRoots) { if (!await exists(root)) { if (root.endsWith('.plist')) await writeFile(root, 'owned preferences'); else { await mkdir(root, { recursive: true }); await writeFile(path.join(root, 'owned-cache'), 'cache'); } } }
   const unrelated = path.join(paths.home, 'Library', 'Caches', 'unrelated-wfc-test');
   await mkdir(unrelated, { recursive: true }); await writeFile(path.join(unrelated, 'sentinel'), 'preserve');
@@ -135,10 +142,8 @@ for (const keep of [true, false]) {
     assert.equal(run.includes(installed.executable), false, 'login entry removed');
     const desktop = path.join(paths.home, 'Desktop', 'Workflow Canvas.lnk');
     assert.equal(await exists(desktop), false, 'desktop shortcut removed');
-  } else {
-    const { stdout } = await exec('osascript', ['-e', 'tell application "System Events" to get the path of every login item']);
-    assert.equal(stdout.includes(installed.installRoot), false, 'login entry removed');
   }
+  assert.equal(JSON.parse(await readFile(loginProof, 'utf8')).openAtLogin, false, 'native login item disabled by uninstall');
   await electron.close().catch(() => {});
   summaries.push({ keep, installRoot: installed.installRoot, userData: paths.userData, backup: keep ? backup : null, appRemoved: true, noOwnedLeftovers: true });
 }
