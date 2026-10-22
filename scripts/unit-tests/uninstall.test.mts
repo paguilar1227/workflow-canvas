@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { MessageChannel } from 'node:worker_threads';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, lstat, symlink } from 'node:fs/promises';
 import os from 'node:os';
@@ -115,8 +116,13 @@ test('uninstall removes only its recorded private Tailscale root route', () => {
 
 test('active MCP bridge receives the uninstall marker instead of restarting the app', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'wfc-marker-'));
-  const stopped = new Promise<void>(resolve => watchUninstall(root, resolve));
-  await writeFile(uninstallMarker(root), '{}'); await stopped;
-  let alreadyStopped = false; watchUninstall(root, () => { alreadyStopped = true; });
-  assert.equal(alreadyStopped, true);
+  // The real MCP transport keeps Node alive. Model that handle while the
+  // deliberately unreferenced watcher waits for macOS filesystem events.
+  const { port1, port2 } = new MessageChannel(); port1.on('message', () => {});
+  try {
+    const stopped = new Promise<void>(resolve => watchUninstall(root, resolve));
+    await writeFile(uninstallMarker(root), '{}'); await stopped;
+    let alreadyStopped = false; watchUninstall(root, () => { alreadyStopped = true; });
+    assert.equal(alreadyStopped, true);
+  } finally { port1.close(); port2.close(); }
 });
