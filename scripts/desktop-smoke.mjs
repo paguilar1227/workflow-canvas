@@ -79,9 +79,15 @@ try {
   assert.equal(health.name, 'workflow-canvas');
   await electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].show());
   const finalTitle = title + ' final before quit';
-  await fetch('http://127.0.0.1:' + port + '/api/tools/update_document', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ documentId: docId, title: finalTitle }) });
+
   await rename(savePath, savePath + '.backup');
   await mkdir(savePath);
+  await fetch('http://127.0.0.1:' + port + '/api/tools/update_document', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ documentId: docId, title: finalTitle }) });
+  const saveError = await page.evaluate(async (id) => {
+    try { await window.workflowDesktop.saveDocument(id); return ''; }
+    catch (error) { return error.message; }
+  }, docId);
+  assert.match(saveError, /EISDIR|EEXIST|EPERM|EACCES/);
   await page.evaluate(async () => {
     const info = await window.workflowDesktop.info();
     await window.workflowDesktop.savePreferences({ ...info.preferences, closeToTray: false });
