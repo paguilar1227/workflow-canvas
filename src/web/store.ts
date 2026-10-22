@@ -50,6 +50,7 @@ export interface AppState {
   helpOpen: boolean;
   importOpen: boolean;
   aiOpen: boolean;
+  settingsOpen: boolean;
   menu: ContextMenuState | null;
   openMenu: string | null;
   toast: string | null;
@@ -90,6 +91,7 @@ export const useApp = create<AppState>(() => ({
   helpOpen: false,
   importOpen: false,
   aiOpen: false,
+  settingsOpen: false,
   menu: null,
   openMenu: null,
   toast: null,

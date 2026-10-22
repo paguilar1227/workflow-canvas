@@ -9,6 +9,18 @@ Workflow Canvas is an infinite canvas: XMind-style mind maps plus free-form diag
 
 When the tools come from the workflow-canvas plugin, its server launcher starts Docker and the canvas container if needed, so they are usually ready. If they are missing or cannot connect, see "When the canvas is not available".
 
+## Desktop app
+
+With the installed Workflow Canvas app, the local MCP endpoint is provided by the app.
+Use **Settings → AI connections** for the current endpoint and **Settings → Skills & plugin**
+to export an MCP plugin that launches the installed app. This works on Windows and macOS
+without Docker. The bundled shell launcher prefers the installed macOS app, then retains
+the Docker fallback for web-only installations.
+
+For a phone link, use the app's **Settings → Phone access**. Preserve its exact private
+Tailscale address, port and document query. Closing the window can leave the app in the
+tray; quitting or sleeping the serving computer makes the phone link unavailable.
+
 ## Workflow
 
 1. **Orient.** Call get_canvas_state: it gives the canvas address (canvasUrl), lists documents and tells you which one the user has open and what they selected. When the request refers to "this diagram" or "the selected step", that is where to look.

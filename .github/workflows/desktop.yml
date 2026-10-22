@@ -1,0 +1,68 @@
+name: Desktop installers
+on:
+  workflow_dispatch:
+  push:
+    tags: ['desktop-v*']
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-26
+            arch: arm64
+          - os: macos-15-intel
+            arch: x64
+          - os: windows-latest
+            arch: x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test:desktop
+      - run: npx playwright install chromium
+      - run: npm run build:desktop
+      - run: npm run test:desktop:smoke
+      - run: npm run desktop:make -- --arch=${{ matrix.arch }}
+      - name: Install and test Windows application
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem out/make -Recurse -Filter '*Setup.exe' | Select-Object -First 1
+          if (-not $installer) { throw 'Windows installer missing' }
+          $setup = Start-Process -FilePath $installer.FullName -ArgumentList '--silent' -Wait -PassThru
+          if ($setup.ExitCode -ne 0) { throw "Installer failed: $($setup.ExitCode)" }
+          $installed = Get-ChildItem "$env:LOCALAPPDATA/WorkflowCanvas" -Recurse -Filter 'workflow-canvas.exe' |
+            Where-Object { $_.Directory.Name -like 'app-*' } | Select-Object -First 1
+          if (-not $installed) { throw 'Installed executable missing' }
+          $env:WFC_TEST_EXECUTABLE = $installed.FullName
+          npm run test:desktop:smoke
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Install and test macOS application
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg="$(find out/make -name '*.dmg' -print -quit)"
+          mount="$RUNNER_TEMP/canvas-mount"
+          mkdir -p "$mount"
+          hdiutil attach "$dmg" -mountpoint "$mount" -nobrowse
+          ditto "$mount/Workflow Canvas.app" "$RUNNER_TEMP/Workflow Canvas.app"
+          hdiutil detach "$mount"
+          export WFC_TEST_EXECUTABLE="$RUNNER_TEMP/Workflow Canvas.app/Contents/MacOS/workflow-canvas"
+          npm run test:desktop:smoke
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workflow-canvas-${{ runner.os }}-${{ matrix.arch }}
+          path: |
+            out/make/
+            test-results/desktop/
+          if-no-files-found: error

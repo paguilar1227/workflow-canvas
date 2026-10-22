@@ -9,3 +9,5 @@ evidence/raw
 
 demo-deploy.json
 .scratch/
+
+out/

@@ -1,4 +1,4 @@
-import type { Server } from 'node:http';
+import type { Server, IncomingMessage } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { nanoid } from 'nanoid';
 import { commandSchema } from '../shared/schema';
@@ -25,6 +25,8 @@ const VIEW_ACK_TIMEOUT_MS = 4000;
 const CAPTURE_TIMEOUT_MS = 20000;
 
 export class Hub {
+  private paused = false;
+  pause(value: boolean) { this.paused = value; }
   private clients = new Map<string, Client>();
   private pending = new Map<string, Pending>();
 
@@ -38,14 +40,23 @@ export class Hub {
     });
   }
 
-  attach(server: Server) {
+  private sockets: WebSocketServer[] = [];
+
+  close() {
+    for (const server of this.sockets) { for (const client of server.clients) client.terminate(); server.close(); }
+    for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.resolve({ delivered: false }); }
+    this.pending.clear();
+  }
+
+  attach(server: Server, trusted: (req: IncomingMessage) => boolean = isTrustedRequest) {
     const wss = new WebSocketServer({ noServer: true });
     const echo = new WebSocketServer({ noServer: true });
+    this.sockets = [wss, echo];
     echo.on('connection', (ws) => ws.on('message', (data, isBinary) => ws.send(data, { binary: isBinary })));
     server.on('upgrade', (req, socket, head) => {
       const route = (req.url ?? '').split('?')[0];
       if (route !== '/sync' && route !== '/ws') return;
-      if (!isTrustedRequest(req)) { socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); socket.destroy(); return; }
+      if (!trusted(req)) { socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); socket.destroy(); return; }
       const target = route === '/sync' ? wss : echo;
       target.handleUpgrade(req, socket, head, (ws) => target.emit('connection', ws, req));
     });
@@ -84,6 +95,7 @@ export class Hub {
     let msg: any;
     try { msg = JSON.parse(raw); } catch { return; }
     c.lastActive = Date.now();
+    if (this.paused) { if (msg.type === 'command') this.send(c, { type: 'reject', opId: msg.opId, error: 'The app is saving before shutdown.' }); return; }
     switch (msg.type) {
       case 'open':
         this.openFor(c, msg.docId);

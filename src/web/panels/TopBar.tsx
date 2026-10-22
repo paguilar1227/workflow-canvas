@@ -1,7 +1,7 @@
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Undo2, Redo2, LayoutGrid, Palette, Download, Upload, PanelLeft, PanelRight, Map as MapIcon, HelpCircle, Bot, Search, ChevronDown, Check, Eye, Save, FolderOpen, MoreHorizontal } from 'lucide-react';
+import { Undo2, Redo2, LayoutGrid, Palette, Download, Upload, PanelLeft, PanelRight, Map as MapIcon, HelpCircle, Bot, Search, ChevronDown, Check, Eye, Save, FolderOpen, MoreHorizontal, Settings } from 'lucide-react';
 import * as files from '../files';
 import { useApp, set } from '../store';
 import * as actions from '../actions';
@@ -92,6 +92,7 @@ export function TopBar() {
           <MenuItem testId="open-search" onClick={() => actions.openSearch()}><Search size={14} />Search</MenuItem>
           <MenuItem testId="open-import" onClick={() => set({ importOpen: true })}><Upload size={14} />Import…</MenuItem>
           <MenuItem testId="ai-chip" onClick={() => set({ aiOpen: true })}><Bot size={14} />{aiLive ? 'AI is editing · connect another' : 'Connect an AI agent (MCP)'}</MenuItem>
+          <MenuItem testId="open-settings" onClick={() => set({ settingsOpen: true })}><Settings size={14} />Settings</MenuItem>
           <MenuItem testId="open-help" onClick={() => set({ helpOpen: true })}><HelpCircle size={14} />Help & gestures</MenuItem>
           <hr />
           <div className="menu-label">File</div>
@@ -137,6 +138,7 @@ export function TopBar() {
       <Button className={'btn icon' + (panels.outline ? ' active' : '')} aria-label="Toggle outline panel" data-testid="toggle-outline" title="Outline & documents" onClick={() => actions.togglePanel('outline')}><PanelLeft size={16} /></Button>
       <Button className={'btn icon' + (panels.minimap ? ' active' : '')} aria-label="Toggle minimap" data-testid="toggle-minimap" title="Minimap" onClick={() => actions.togglePanel('minimap')}><MapIcon size={16} /></Button>
       <Button className={'btn icon' + (panels.inspector ? ' active' : '')} aria-label="Toggle inspector panel" data-testid="toggle-inspector" title="Inspector" onClick={() => actions.togglePanel('inspector')}><PanelRight size={16} /></Button>
+      <Button className="btn icon" aria-label="Settings" data-testid="open-settings" title="Settings" onClick={() => set({ settingsOpen: true })}><Settings size={16} /></Button>
       <Button className="btn icon" aria-label="Help and shortcuts" data-testid="open-help" title="Shortcuts (?)" onClick={() => set({ helpOpen: true })}><HelpCircle size={16} /></Button>
     </header>
   );

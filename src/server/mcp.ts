@@ -31,7 +31,7 @@ function buildServer(tools: ToolDef[], canvasUrl: string) {
   return server;
 }
 
-export function mountMcp(app: Express, tools: ToolDef[]) {
+export function mountMcp(app: Express, tools: ToolDef[], publicUrl?: () => string) {
   const transports = new Map<string, StreamableHTTPServerTransport>();
 
   app.post('/mcp', async (req: Request, res: Response) => {
@@ -47,7 +47,7 @@ export function mountMcp(app: Express, tools: ToolDef[]) {
         onsessioninitialized: (id) => { transports.set(id, t); },
       });
       t.onclose = () => { if (t.sessionId) transports.delete(t.sessionId); };
-      await buildServer(tools, req.protocol + '://' + req.host).connect(t);
+      await buildServer(tools, publicUrl?.() || req.protocol + '://' + req.host).connect(t);
       transport = t;
     }
     await transport.handleRequest(req, res, req.body);
@@ -61,5 +61,6 @@ export function mountMcp(app: Express, tools: ToolDef[]) {
   };
   app.get('/mcp', sessionRequest);
   app.delete('/mcp', sessionRequest);
+  return async () => { await Promise.all([...transports.values()].map((transport) => transport.close())); transports.clear(); };
 }
 

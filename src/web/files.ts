@@ -13,7 +13,7 @@ const picker = window as unknown as {
   showSaveFilePicker?: (o: unknown) => Promise<FsHandle>;
   showOpenFilePicker?: (o: unknown) => Promise<FsHandle[]>;
 };
-export const fileApiSupported = typeof picker.showSaveFilePicker === 'function';
+export const fileApiSupported = !!window.workflowDesktop || typeof picker.showSaveFilePicker === 'function';
 
 const SAVE_TYPES = [{ description: 'Excalidraw drawing', accept: { 'application/vnd.excalidraw+json': ['.excalidraw'] } }];
 const OPEN_TYPES = [{ description: 'Excalidraw drawing', accept: { 'application/vnd.excalidraw+json': ['.excalidraw'], 'application/json': ['.excalidraw', '.json'] } }];
@@ -49,7 +49,15 @@ async function permitted(h: FsHandle, ask: boolean) {
 /** One in-flight write per document; callers that arrive mid-write get a promise that settles after a pass that includes their change. */
 const inflight = new Map<string, Promise<void>>();
 const again = new Set<string>();
-function write(docId: string): Promise<void> {
+async function write(docId: string): Promise<void> {
+  if (window.workflowDesktop) {
+    try {
+      setFile({ state: 'saving' });
+      const file = await window.workflowDesktop.saveDocument(docId);
+      if (get().docId === docId) setFile(file ? { state: 'saved', name: file.split(/[\\/]/).pop()!, savedAt: Date.now() } : { state: 'none' });
+    } catch (e) { setFile({ state: 'error', error: (e as Error).message }); }
+    return;
+  }
   const h = handles.get(docId);
   if (!h || get().doc?.id !== docId) return Promise.resolve();
   const running = inflight.get(docId);
@@ -80,6 +88,11 @@ function write(docId: string): Promise<void> {
 async function bindDoc(docId: string | null) {
   setFile({ docId, name: null, state: fileApiSupported ? 'none' : 'unsupported', error: undefined, savedAt: undefined });
   if (!docId || !fileApiSupported) return;
+  if (window.workflowDesktop) {
+    const file = await window.workflowDesktop.documentFile(docId).catch(() => null);
+    if (get().docId === docId && file) setFile({ state: 'saved', name: file.split(/[\\/]/).pop()! });
+    return;
+  }
   const h = handles.get(docId) ?? (await idb<FsHandle | undefined>('readonly', (s) => s.get(docId)).catch(() => undefined));
   if (!h || get().docId !== docId) return;
   handles.set(docId, h);
@@ -93,7 +106,7 @@ async function bindDoc(docId: string | null) {
 useApp.subscribe((s, prev) => {
   if (s.docId !== prev.docId) { void bindDoc(s.docId); return; }
   if (!s.doc || !prev.doc || s.doc === prev.doc || s.doc.id !== s.file.docId) return;
-  if ((s.file.state === 'saved' || s.file.state === 'saving') && handles.has(s.doc.id)) void write(s.doc.id);
+  if ((s.file.state === 'saved' || s.file.state === 'saving') && (window.workflowDesktop || handles.has(s.doc.id))) void write(s.doc.id);
 });
 
 function download(name: string, content: string) {
@@ -108,6 +121,13 @@ function download(name: string, content: string) {
 export async function save(opts: { as?: boolean } = {}) {
   const doc = get().doc;
   if (!doc) return;
+  if (window.workflowDesktop) {
+    try {
+      const file = await window.workflowDesktop.saveDocument(doc.id, opts.as);
+      if (file) { setFile({ docId: doc.id, name: file.split(/[\\/]/).pop()!, state: 'saved', savedAt: Date.now() }); toast('Saved · autosave is on'); }
+    } catch (error) { setFile({ state: 'error', error: (error as Error).message }); toast('Save failed: ' + (error as Error).message); }
+    return;
+  }
   if (!fileApiSupported) {
     download(excalidrawFileName(doc.title), JSON.stringify(exportExcalidraw(doc), null, 2));
     toast('Downloaded a copy. This browser cannot autosave to a file; use Chrome or Edge for autosave.');
@@ -144,8 +164,14 @@ function pickWithInput(): Promise<File | null> {
 export async function openFile() {
   let h: FsHandle | undefined;
   let file: File | null;
+  let nativeToken: string | undefined;
   try {
-    if (picker.showOpenFilePicker) { [h] = await picker.showOpenFilePicker({ types: OPEN_TYPES, multiple: false }); file = await h.getFile(); }
+    if (window.workflowDesktop) {
+      const result = await window.workflowDesktop.openDocumentFile();
+      file = result ? new File([result.content], result.name, { type: 'application/json' }) : null;
+      nativeToken = result?.token;
+    }
+    else if (picker.showOpenFilePicker) { [h] = await picker.showOpenFilePicker({ types: OPEN_TYPES, multiple: false }); file = await h.getFile(); }
     else file = await pickWithInput();
   } catch (err) {
     if ((err as DOMException).name === 'AbortError') return;
@@ -168,13 +194,31 @@ export async function openFile() {
     { type: 'replace_content', nodes: opened.nodes, edges: opened.edges },
     { type: 'update_document', ...(opened.description ? { description: opened.description } : {}), ...(opened.settings ? { settings: opened.settings } : {}) },
   ] });
-  toast('Opened ' + file.name + (h ? '' : ' (this browser cannot autosave back to it)'));
+  if (nativeToken && window.workflowDesktop) {
+    try {
+      if (get().pending.length) await new Promise<void>((resolve, reject) => {
+        const stop = useApp.subscribe((state) => {
+          if (!state.connected) { stop(); reject(new Error('The canvas disconnected before the file was loaded.')); }
+          else if (!state.pending.length) { stop(); resolve(); }
+        });
+      });
+      const attached = await window.workflowDesktop.attachDocumentFile(id, nativeToken);
+      if (attached) setFile({ docId: id, name: file.name, state: 'saved', savedAt: Date.now() });
+    } catch (error) { toast('Opened a copy, but could not attach autosave: ' + (error as Error).message); return; }
+  }
+  toast('Opened ' + file.name + (h || nativeToken ? ' · autosave is on' : ' (this browser cannot autosave back to it)'));
 }
 
 /** For the AI save_to_file tool: browsers only open file pickers from a person's click. */
 export async function saveForAi(): Promise<Record<string, unknown>> {
   const doc = get().doc;
   if (!doc) return { ok: false, reason: 'No document is open in this tab.' };
+  if (window.workflowDesktop) {
+    const file = await window.workflowDesktop.documentFile(doc.id);
+    if (!file) return { ok: false, reason: 'Press Save once to choose a file before AI can save to it.' };
+    await write(doc.id);
+    return { ok: get().file.state === 'saved', file, autosave: true, error: get().file.error };
+  }
   const h = handles.get(doc.id);
   if (!fileApiSupported) return { ok: false, reason: 'This browser cannot write files; the person can use File > Save to download a copy.' };
   if (!h) return { ok: false, reason: 'No file is attached to this document. The person must press Save once to choose where to save it.' };

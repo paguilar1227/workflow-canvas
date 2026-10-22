@@ -40,6 +40,8 @@ export class FileSaver {
     this.store.on('deleted', (id: string) => { if (this.files.delete(id)) void this.persistIndex(); });
   }
 
+  async flush() { await Promise.all(this.inflight.values()); await Promise.all([...this.errors.keys()].map((id) => this.save(id))); await this.persistIndex(); if (this.errors.size) throw new Error([...this.errors.values()].join("; ")); }
+
   fileFor(docId: string) { return this.files.get(docId); }
 
   /** Where a save to the requested path would land: a .excalidraw file, or a folder to put "<title>.excalidraw" in. */

@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefO
 import { ReactFlowProvider } from '@xyflow/react';
 import { useApp, set, get } from './store';
 import { Canvas } from './canvas/Canvas';
+import { SettingsPanel } from './panels/Settings';
 import { TopBar } from './panels/TopBar';
 import { LeftPanel } from './panels/LeftPanel';
 import { usePanelWidth } from './panels/PanelResize';
@@ -150,6 +151,7 @@ export function App() {
         </div>
         <ContextMenu />
         <NodePopover />
+        <SettingsPanel />
         <HelpModal />
         <AiModal />
         <ImportModal />

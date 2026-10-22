@@ -2,10 +2,10 @@ import type { IncomingMessage } from 'node:http';
 
 const DEFAULT_HOSTS = ['localhost', '127.0.0.1', '::1', 'host.docker.internal'];
 
-function allowedHosts(): string[] | null {
+function allowedHosts(extra: string[] = []): string[] | null {
   const raw = (process.env.WFC_ALLOWED_HOSTS ?? '').trim();
   if (raw === '*') return null;
-  return [...DEFAULT_HOSTS, ...raw.split(',').map((h) => h.trim().toLowerCase()).filter(Boolean)];
+  return [...DEFAULT_HOSTS, ...extra, ...raw.split(',').map((h) => h.trim().toLowerCase()).filter(Boolean)];
 }
 
 function hostname(host: string): string {
@@ -18,11 +18,11 @@ function hostname(host: string): string {
  * The app has no login, so only trust requests addressed to an allowed host name (blocks DNS rebinding)
  * and, when a browser sends an Origin, only same-origin pages (blocks other websites driving the tools or live sync).
  */
-export function isTrustedRequest(req: IncomingMessage): boolean {
+export function isTrustedRequest(req: IncomingMessage, extraHosts: string[] = []): boolean {
   if (behindPreviewGateway()) return true;
   const host = req.headers.host;
   if (!host) return false;
-  const allowed = allowedHosts();
+  const allowed = allowedHosts(extraHosts);
   if (allowed && !allowed.includes(hostname(host))) return false;
   const origin = req.headers.origin;
   if (!origin) return true;

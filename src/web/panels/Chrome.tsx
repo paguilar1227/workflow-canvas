@@ -249,7 +249,7 @@ export function AiModal() {
     <div className="modal-backdrop" onClick={() => set({ aiOpen: false })}>
       <div className="modal" onClick={(e) => e.stopPropagation()} data-testid="ai-modal">
         <h2>Connect an AI agent</h2>
-        <p className="lead">The canvas exposes 35 MCP tools — documents, nodes, connectors, frames, layout, selection, viewport, themes, panels, undo/redo, import/export and screenshots. AI edits show up here live.</p>
+        <p className="lead">The canvas exposes MCP tools — documents, nodes, connectors, frames, layout, selection, viewport, themes, panels, undo/redo, import/export and screenshots. AI edits show up here live.</p>
         <h3>MCP endpoint (streamable HTTP)</h3>
         <div className="code">{url}</div>
         <h3>Codex CLI</h3>
@@ -257,7 +257,7 @@ export function AiModal() {
         <h3>Claude Code</h3>
         <div className="code">claude mcp add --transport http workflow-canvas {url}</div>
         <h3>stdio clients (Claude Desktop, etc.)</h3>
-        <div className="code">docker exec -i workflow-canvas node dist/server/stdio.js</div>
+        {window.workflowDesktop ? <p className="lead">Export the desktop plugin in Settings → Skills & plugin. It connects to this app without Docker.</p> : <div className="code">docker exec -i workflow-canvas node dist/server/stdio.js</div>}
         <h3>Plain HTTP</h3>
         <div className="code">GET {location.origin}/api/tools{'\n'}POST {location.origin}/api/tools/&lt;tool_name&gt;  (JSON body = arguments)</div>
         <h3>Recent AI activity</h3>

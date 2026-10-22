@@ -21,6 +21,9 @@ export class Store extends EventEmitter {
   private docs = new Map<string, Entry>();
   session: SessionState = structuredClone(DEFAULT_SESSION);
   private timers = new Map<string, NodeJS.Timeout>();
+  private writes = new Set<Promise<void>>();
+
+  private track(job: Promise<void>) { this.writes.add(job); void job.finally(() => this.writes.delete(job)).catch(() => {}); return job; }
 
   constructor(private dir: string) { super(); }
 
@@ -85,6 +88,9 @@ export class Store extends EventEmitter {
 
   async remove(id: string) {
     if (!this.docs.has(id)) throw new Error('Document not found: ' + id);
+    clearTimeout(this.timers.get(id));
+    this.timers.delete(id);
+    await Promise.all(this.writes);
     this.docs.delete(id);
     this.selections.delete(id);
     const file = path.join(this.docDir, id + '.json');
@@ -159,15 +165,30 @@ export class Store extends EventEmitter {
     this.timers.set(id, setTimeout(() => {
       this.timers.delete(id);
       const doc = this.get(id);
-      if (doc) writeFile(path.join(this.docDir, id + '.json'), JSON.stringify(doc, null, 1)).catch((e) => console.error('[store] write failed', e));
+      if (doc) this.track(writeFile(path.join(this.docDir, id + '.json'), JSON.stringify(doc, null, 1))).catch((e) => console.error('[store] write failed', e));
     }, 150));
+  }
+
+  async flush() {
+    for (const timer of this.timers.values()) clearTimeout(timer);
+    this.timers.clear();
+    await Promise.all(this.writes);
+    const { activeDocumentId, theme, panels, snapToGrid, background } = this.session;
+    await Promise.all([
+      ...[...this.docs.values()].map(async ({ doc }) => {
+        const file = path.join(this.docDir, doc.id + '.json');
+        await writeFile(file + '.tmp', JSON.stringify(doc, null, 1));
+        await rename(file + '.tmp', file);
+      }),
+      writeFile(path.join(this.dir, 'session.json'), JSON.stringify({ activeDocumentId, theme, panels, snapToGrid, background }, null, 1)),
+    ]);
   }
 
   private persistSession() {
     clearTimeout(this.timers.get('__session'));
     this.timers.set('__session', setTimeout(() => {
       const { activeDocumentId, theme, panels, snapToGrid, background } = this.session;
-      writeFile(path.join(this.dir, 'session.json'), JSON.stringify({ activeDocumentId, theme, panels, snapToGrid, background }, null, 1)).catch(() => {});
+      this.track(writeFile(path.join(this.dir, 'session.json'), JSON.stringify({ activeDocumentId, theme, panels, snapToGrid, background }, null, 1))).catch(() => {});
     }, 150));
   }
 }

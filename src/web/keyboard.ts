@@ -23,6 +23,7 @@ export function useKeyboard() {
       const s = get();
       const mod = e.metaKey || e.ctrlKey;
       if (e.key === 'Escape' && s.session.mode === 'draw') actions.setMode('select');
+      if (get().settingsOpen) return;
       if (e.key === 'Escape') { set({ placing: null, areaSelect: false, menu: null, openMenu: null, nodeMenu: null, helpOpen: false, importOpen: false, aiOpen: false, editingId: null, editingEdgeId: null }); if (!isTyping(e)) set({ selection: { nodes: [], edges: [] } }); return; }
       if (mod && e.key.toLowerCase() === 'f') { e.preventDefault(); actions.openSearch(); return; }
       if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); void files.save({ as: e.shiftKey }); return; }
