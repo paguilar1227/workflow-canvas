@@ -31,11 +31,11 @@ The Desktop installers workflow builds on native macOS and Windows runners and
 uploads artifacts. It does not publish releases. Run it manually on the feature
 branch, or use a `desktop-v*` tag.
 
-Signing is optional for development builds. Distribution builds should provide
+Mac development builds use ad-hoc signing so native OS integrations can validate the bundle. They are not notarized or signed with a trusted developer identity. Distribution builds should provide
 `APPLE_SIGN_IDENTITY`, plus `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and
 `APPLE_TEAM_ID` for notarization. Windows builds accept
 `WINDOWS_CERTIFICATE_FILE` and `WINDOWS_CERTIFICATE_PASSWORD`. Keep credentials
-in the runner's secret store. Unsigned packages are development artifacts; do not
+in the runner's secret store. Development packages are not public-release artifacts; do not
 disable operating-system security to distribute them.
 
 ## Settings

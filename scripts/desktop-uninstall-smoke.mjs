@@ -137,6 +137,10 @@ for (const keep of [true, false]) {
   // Project E2E timeout is 180 seconds; the OS uninstaller is part of this journey.
   try {
     await expect.poll(async () => await exists(installed.installRoot), { timeout: 180000 }).toBe(false);
+    await expect.poll(async () => await exists(paths.userData), { timeout: 180000 }).toBe(false);
+    // The helper removes caches after the program and data, then removes itself.
+    // Inspect all paths only after that completion signal.
+    await expect.poll(helperFolders, { timeout: 180000 }).toEqual(originalHelpers);
   } catch (error) {
     const diagnostics = [];
     for (const folder of await helperFolders()) {
@@ -157,7 +161,6 @@ for (const keep of [true, false]) {
     console.error(JSON.stringify(diagnostics));
     throw error;
   }
-  await expect.poll(async () => await exists(paths.userData), { timeout: 180000 }).toBe(false);
   for (const root of extraRoots) assert.equal(await exists(root), false, 'no app cache/preferences left: ' + root);
   assert.equal(await exists(ownedSkill), false);
   assert.equal(await exists(exported), false);
@@ -173,7 +176,6 @@ for (const keep of [true, false]) {
   else assert.equal(await exists(backup), true, 'the previous explicit keep backup survives later uninstall');
   await expect.poll(() => mcpClosed, { timeout: 180000 }).toBe(true);
   await mcpClient.close();
-  await expect.poll(helperFolders, { timeout: 180000 }).toEqual(originalHelpers);
   if (process.platform === 'win32') {
     const result = await exec('reg.exe', ['query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\WorkflowCanvas']).then(() => true, () => false);
     assert.equal(result, false, 'Windows uninstall registration removed');
