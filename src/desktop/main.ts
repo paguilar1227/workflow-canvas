@@ -48,7 +48,7 @@ async function installSkill(harness: string) {
 async function exportPlugin() {
   const result = await dialog.showOpenDialog(win!, { title: 'Choose a folder for the Workflow Canvas plugin', properties: ['openDirectory', 'createDirectory'] });
   if (result.canceled) return null;
-  return exportDesktopPlugin(pluginDir, path.join(result.filePaths[0], 'workflow-canvas'), process.execPath);
+  return exportDesktopPlugin(pluginDir, path.join(result.filePaths[0], 'workflow-canvas'), process.execPath, path.join(here, 'mcp.mjs'), app.getPath('userData'));
 }
 let openedFile: { token: string; path: string } | null = null;
 let requestId = 0;

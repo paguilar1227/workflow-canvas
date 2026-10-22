@@ -40,7 +40,9 @@ try {
   await page.getByRole('status').filter({ hasText: 'Plugin exported' }).waitFor();
   for (const manifest of ['mcp.json', '.mcp.json']) {
     const config = JSON.parse(await readFile(path.join(exportFolder, 'workflow-canvas', manifest), 'utf8')).mcpServers['workflow-canvas'];
-    assert.deepEqual(config.args, ['--mcp-stdio']);
+    assert.equal(config.args.length, 1);
+    assert.ok(config.args[0].endsWith('mcp.mjs'));
+    assert.deepEqual(config.env, { ELECTRON_RUN_AS_NODE: '1', WFC_USER_DATA: userData });
     assert.notEqual(config.command, 'bash');
   }
   await page.getByText('Read the bundled skill', { exact: true }).click();

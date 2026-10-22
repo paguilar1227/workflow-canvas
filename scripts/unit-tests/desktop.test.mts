@@ -91,14 +91,16 @@ test('desktop plugin exports both manifest formats without Bash and preserves ex
   const root = await mkdtemp(path.join(os.tmpdir(), 'wfc-export-'));
   const target = path.join(root, 'workflow-canvas');
   const executable = 'C:\\Program Files\\Workflow Canvas\\workflow-canvas.exe';
-  await exportDesktopPlugin(path.resolve('plugins/workflow-canvas'), target, executable);
+  const launcher = executable + '.mcp.mjs';
+  await exportDesktopPlugin(path.resolve('plugins/workflow-canvas'), target, executable, launcher, root);
   for (const manifest of ['mcp.json', '.mcp.json']) {
     const config = JSON.parse(await readFile(path.join(target, manifest), 'utf8')).mcpServers['workflow-canvas'];
     assert.equal(config.command, executable);
-    assert.deepEqual(config.args, ['--mcp-stdio']);
+    assert.deepEqual(config.args, [launcher]);
+    assert.deepEqual(config.env, { ELECTRON_RUN_AS_NODE: '1', WFC_USER_DATA: root });
     assert.equal(config.type, manifest.startsWith('.') ? 'local' : 'stdio');
   }
-  await assert.rejects(exportDesktopPlugin(path.resolve('plugins/workflow-canvas'), target, 'other'));
+  await assert.rejects(exportDesktopPlugin(path.resolve('plugins/workflow-canvas'), target, 'other', launcher, root));
   assert.match(await readFile(path.join(target, 'skills/workflow-canvas/SKILL.md'), 'utf8'), /Workflow Canvas/);
 });
 

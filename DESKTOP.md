@@ -59,9 +59,10 @@ the remote link unavailable.
 ## MCP plugin
 
 The app listens on loopback port 8790 by default. HTTP clients use
-`http://127.0.0.1:8790/mcp`. The exported plugin calls the app executable with
-`--mcp-stdio`; it starts the desktop app if needed and proxies tools to the same
-server. The existing macOS shell launcher prefers an installed desktop app,
+`http://127.0.0.1:8790/mcp`. The exported plugin runs its bundled MCP entry point
+with the app executable in Electron's Node mode (`ELECTRON_RUN_AS_NODE=1`). This
+provides stdio on both Windows and macOS without installing Node separately. It
+starts the desktop app if needed and proxies tools to the same server. The existing macOS shell launcher prefers an installed desktop app,
 then retains its Docker fallback. For Windows, export the desktop plugin so no
 Bash or Docker command is required.
 

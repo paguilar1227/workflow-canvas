@@ -1,10 +1,10 @@
 import { cp, lstat, writeFile, readFile, readdir, mkdir } from 'node:fs/promises';
 import path from 'node:path';
-export async function exportDesktopPlugin(source: string, target: string, executable: string) {
+export async function exportDesktopPlugin(source: string, target: string, executable: string, launcher: string, userData: string) {
   try { await lstat(target); throw new Error('That folder already contains workflow-canvas. Choose a different folder to preserve its files.'); }
   catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
   await cp(source, target, { recursive: true, force: false, errorOnExist: true });
-  const command = { command: executable, args: ['--mcp-stdio'] };
+  const command = { command: executable, args: [launcher], env: { ELECTRON_RUN_AS_NODE: '1', WFC_USER_DATA: userData } };
   await writeFile(path.join(target, 'mcp.json'), JSON.stringify({ mcpServers: { 'workflow-canvas': { type: 'stdio', ...command } } }, null, 2));
   await writeFile(path.join(target, '.mcp.json'), JSON.stringify({ mcpServers: { 'workflow-canvas': { type: 'local', ...command, tools: ['*'] } } }, null, 2));
   return target;
