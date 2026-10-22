@@ -16,9 +16,11 @@ const electron = await _electron.launch({ executablePath: process.env.WFC_TEST_E
 let browser;
 try {
   const page = await electron.firstWindow();
+  page.setDefaultTimeout(15000); // Match the project's Playwright actionTimeout.
   page.on('pageerror', e => console.error('renderer:', e));
   await page.waitForSelector('[data-testid="doc-title"]');
   await page.waitForFunction(() => window.__wfc.state().connected);
+  if (!await page.getByTestId('open-settings').isVisible()) await page.getByTestId('menu-more').click();
   await page.getByTestId('open-settings').click();
   await page.getByRole('heading', { name: 'Settings', exact: true }).waitFor();
   await page.getByLabel('Keep running when the window closes').uncheck();
@@ -103,7 +105,9 @@ try {
 
 const recovery = await _electron.launch({ executablePath: process.env.WFC_TEST_EXECUTABLE || undefined, args: [...(process.platform === 'linux' ? ['--no-sandbox', '--disable-gpu'] : []), ...(process.env.WFC_TEST_EXECUTABLE ? [] : [root])], env: { ...process.env, WFC_USER_DATA: userData, WFC_PORT: String(port) } });
 try {
-  await (await recovery.firstWindow()).waitForSelector('[data-testid="doc-title"]');
+  const recoveryPage = await recovery.firstWindow();
+  recoveryPage.setDefaultTimeout(15000);
+  await recoveryPage.waitForSelector('[data-testid="doc-title"]');
   await recovery.evaluate(({ app, dialog }) => new Promise((resolve, reject) => {
     dialog.showErrorBox = () => resolve(true);
     const worker = app.getAppMetrics().find(metric => metric.name === 'Workflow Canvas server');
