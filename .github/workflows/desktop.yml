@@ -46,6 +46,8 @@ jobs:
           $env:WFC_TEST_EXECUTABLE = $installed.FullName
           npm run test:desktop:smoke
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:desktop:mcp
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install and test macOS application
         if: runner.os == 'macOS'
         shell: bash
@@ -59,6 +61,7 @@ jobs:
           hdiutil detach "$mount"
           export WFC_TEST_EXECUTABLE="$RUNNER_TEMP/Workflow Canvas.app/Contents/MacOS/workflow-canvas"
           npm run test:desktop:smoke
+          npm run test:desktop:mcp
       - uses: actions/upload-artifact@v4
         if: always()
         with:
