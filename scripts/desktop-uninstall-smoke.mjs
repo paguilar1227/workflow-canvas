@@ -36,7 +36,8 @@ async function install() {
   if (process.platform === 'darwin') {
     const mount = path.join(testRoot, 'mount-' + Date.now()); await mkdir(mount);
     await exec('hdiutil', ['attach', process.env.WFC_TEST_INSTALLER, '-mountpoint', mount, '-nobrowse']);
-    const dest = path.join(testRoot, 'installed-' + Date.now(), 'Workflow Canvas.app');
+    const dest = '/Applications/Workflow Canvas.app';
+    assert.equal(await exists(dest), false, 'test must not replace an existing Mac installation');
     try {
       await exec('ditto', [path.join(mount, 'Workflow Canvas.app'), dest]);
       assert.equal((await readlink(path.join(dest, 'Contents/Frameworks/Electron Framework.framework/Electron Framework'))).includes(mount), false, 'installed framework links survive DMG eject');
@@ -55,6 +56,7 @@ for (const keep of [true, false]) {
   const installed = await install();
   console.log(JSON.stringify({ phase: 'launch', keep, executable: installed.executable }));
   const electron = await _electron.launch({ executablePath: installed.executable, env: { ...process.env, WFC_USER_DATA: path.join(testRoot, keep ? 'keep-data' : 'delete-data'), WFC_PORT: '8796' } });
+  electron.process().stderr?.on('data', chunk => { const text = String(chunk); if (text.includes('login item')) process.stderr.write(text); });
   const page = await electron.firstWindow(); page.setDefaultTimeout(15000);
   await page.waitForSelector('[data-testid="doc-title"]');
   const paths = await electron.evaluate(({ app }) => ({ userData: app.getPath('userData'), home: app.getPath('home') }));
@@ -85,7 +87,9 @@ for (const keep of [true, false]) {
     app.setLoginItemSettings = value => { original(value); writeFileSync(proof, JSON.stringify(app.getLoginItemSettings({ path: process.execPath }))); };
   }, loginProof);
   await page.evaluate(async () => { const data = await window.workflowDesktop.info(); await window.workflowDesktop.savePreferences({ ...data.preferences, openAtLogin: true }); });
-  assert.equal(JSON.parse(await readFile(loginProof, 'utf8')).openAtLogin, true, 'native login item enabled before uninstall');
+  const loginBefore = JSON.parse(await readFile(loginProof, 'utf8'));
+  console.log(JSON.stringify({ phase: 'native login item registered', keep, loginBefore }));
+  assert.ok(loginBefore.openAtLogin || loginBefore.status === 'requires-approval', 'native login item registered before uninstall: ' + JSON.stringify(loginBefore));
   for (const root of extraRoots) { if (!await exists(root)) { if (root.endsWith('.plist')) await writeFile(root, 'owned preferences'); else { await mkdir(root, { recursive: true }); await writeFile(path.join(root, 'owned-cache'), 'cache'); } } }
   const unrelated = path.join(paths.home, 'Library', 'Caches', 'unrelated-wfc-test');
   await mkdir(unrelated, { recursive: true }); await writeFile(path.join(unrelated, 'sentinel'), 'preserve');
@@ -131,7 +135,28 @@ for (const keep of [true, false]) {
   } else await page.getByRole('button', { name: 'Uninstall Workflow Canvas…' }).click();
   console.log(JSON.stringify({ phase: 'verify no leftovers', keep }));
   // Project E2E timeout is 180 seconds; the OS uninstaller is part of this journey.
-  await expect.poll(async () => await exists(installed.installRoot), { timeout: 180000 }).toBe(false);
+  try {
+    await expect.poll(async () => await exists(installed.installRoot), { timeout: 180000 }).toBe(false);
+  } catch (error) {
+    const diagnostics = [];
+    for (const folder of await helperFolders()) {
+      const base = path.join(os.tmpdir(), folder);
+      for (const name of await readdir(base)) {
+        const file = path.join(base, name);
+        diagnostics.push({ file, content: await readFile(file, 'utf8').catch(() => '') });
+      }
+    }
+    if (!page.isClosed()) {
+      diagnostics.push({ uiError: await page.getByRole('alert').allTextContents().catch(() => []) });
+      await page.screenshot({ path: path.join(evidence, 'uninstall-failure.png') }).catch(() => {});
+    }
+    if (process.platform === 'win32') {
+      diagnostics.push({ processes: await exec('powershell.exe', ['-NoProfile', '-Command', "Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'workflow-canvas|powershell|Update' } | Select-Object ProcessId,ParentProcessId,Name,CommandLine | ConvertTo-Json"]).then(r => r.stdout, e => e.message) });
+    }
+    await writeFile(path.join(evidence, 'uninstall-failure.json'), JSON.stringify(diagnostics, null, 2));
+    console.error(JSON.stringify(diagnostics));
+    throw error;
+  }
   await expect.poll(async () => await exists(paths.userData), { timeout: 180000 }).toBe(false);
   for (const root of extraRoots) assert.equal(await exists(root), false, 'no app cache/preferences left: ' + root);
   assert.equal(await exists(ownedSkill), false);
@@ -157,7 +182,9 @@ for (const keep of [true, false]) {
     const desktop = path.join(paths.home, 'Desktop', 'Workflow Canvas.lnk');
     assert.equal(await exists(desktop), false, 'desktop shortcut removed');
   }
-  assert.equal(JSON.parse(await readFile(loginProof, 'utf8')).openAtLogin, false, 'native login item disabled by uninstall');
+  const loginAfter = JSON.parse(await readFile(loginProof, 'utf8'));
+  assert.equal(loginAfter.openAtLogin, false, 'native login item disabled by uninstall');
+  assert.notEqual(loginAfter.status, 'requires-approval', 'pending login registration removed');
   await electron.close().catch(() => {});
   summaries.push({ keep, installRoot: installed.installRoot, userData: paths.userData, backup: keep ? backup : null, appRemoved: true, noOwnedLeftovers: true });
 }

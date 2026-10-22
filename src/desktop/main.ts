@@ -241,7 +241,8 @@ async function uninstall(): Promise<{ canceled: boolean }> {
     if (preserved.length) await message({ type: 'info', title: 'Your edited files are preserved', message: 'Some integration files were edited or added after installation.', detail: 'These belong to you and will be kept:\n' + preserved.join('\n'), buttons: ['Continue'], noLink: true });
     if (process.platform === 'darwin' || process.platform === 'win32') {
       app.setLoginItemSettings({ openAtLogin: false, path: process.execPath });
-      if (app.getLoginItemSettings({ path: process.execPath }).openAtLogin) throw new Error('Could not remove the login entry. Turn off Open at login and retry uninstall.');
+      const login = app.getLoginItemSettings({ path: process.execPath });
+      if (login.openAtLogin || login.status === 'requires-approval') throw new Error('Could not remove the login entry. Turn off Open at login and retry uninstall.');
     }
     uninstalling = true;
     if (worker) {
