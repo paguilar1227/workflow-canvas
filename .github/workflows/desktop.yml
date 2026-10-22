@@ -2,6 +2,7 @@ name: Desktop installers
 on:
   workflow_dispatch:
   push:
+    branches: ['codex/electron-desktop']
     tags: ['desktop-v*']
 permissions:
   contents: read
