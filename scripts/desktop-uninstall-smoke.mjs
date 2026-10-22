@@ -1,3 +1,5 @@
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { _electron } from 'playwright';
 import { expect } from '@playwright/test';
 import assert from 'node:assert/strict';
@@ -110,6 +112,13 @@ for (const keep of [true, false]) {
     dialog.showMessageBox = async options => ({ response: called++ === 0 ? (keep ? 0 : 1) : 0, checkboxChecked: false });
     dialog.showSaveDialog = async () => ({ canceled: false, filePath: backup });
   }, { keep, backup });
+  const mcpClient = new Client({ name: 'uninstall-active-mcp', version: '1' });
+  const mcpScript = path.resolve(path.dirname(installed.executable), process.platform === 'darwin' ? '../Resources' : 'resources', 'app.asar/dist/desktop/mcp.mjs');
+  const mcpTransport = new StdioClientTransport({ command: installed.executable, args: [mcpScript], env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', WFC_USER_DATA: paths.userData, WFC_PORT: '8796' } });
+  await mcpClient.connect(mcpTransport);
+  let mcpClosed = false;
+  const previousClose = mcpTransport.onclose;
+  mcpTransport.onclose = () => { mcpClosed = true; previousClose?.(); };
   console.log(JSON.stringify({ phase: 'uninstall', keep }));
   if (process.platform === 'win32' && !keep) {
     const { stdout } = await exec('reg.exe', ['query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\WorkflowCanvas', '/v', 'UninstallString']);
@@ -134,6 +143,8 @@ for (const keep of [true, false]) {
     assert.equal(drawing.type, 'excalidraw'); assert.equal(drawing.workflowCanvas.title, title);
   }
   else assert.equal(await exists(backup), true, 'the previous explicit keep backup survives later uninstall');
+  await expect.poll(() => mcpClosed, { timeout: 180000 }).toBe(true);
+  await mcpClient.close();
   await expect.poll(helperFolders, { timeout: 180000 }).toEqual(originalHelpers);
   if (process.platform === 'win32') {
     const result = await exec('reg.exe', ['query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\WorkflowCanvas']).then(() => true, () => false);

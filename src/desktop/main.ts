@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray, utilityProcess, type UtilityProcess } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { lstat, readFile } from 'node:fs/promises';
+import { lstat, readFile, writeFile, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -10,6 +10,7 @@ import { readSettings, writeSettings, defaults, type DesktopSettings } from './s
 import { exportDesktopPlugin, installBundledSkill } from './plugin';
 import * as tailscale from './tailscale';
 import { readOwnership, writeOwnership, recordCanvas, cleanupIntegrations } from './ownership';
+import { uninstallMarker, watchUninstall } from './uninstall-marker';
 import { backupCanvases, cleanupRoots, prepareRemoval, registerWindowsUninstall, validateRemoval } from './uninstall';
 
 if (process.env.WFC_USER_DATA) app.setPath('userData', process.env.WFC_USER_DATA);
@@ -187,6 +188,7 @@ async function start() {
 }
 async function runBridge() {
   if (process.env.WFC_USER_DATA) app.setPath('userData', process.env.WFC_USER_DATA);
+  watchUninstall(app.getPath('userData'), () => app.exit(0));
   const saved = await readSettings(app.getPath('userData'));
   const url = process.env.WFC_URL || 'http://127.0.0.1:' + (process.env.WFC_PORT || saved.port);
   process.env.WFC_PUBLIC_URL ||= saved.shareUrl;
@@ -230,6 +232,7 @@ async function uninstall(): Promise<{ canceled: boolean }> {
   try {
     if (worker) { await requestFile('checkpoint', ''); paused = true; }
     if (backup) await backupCanvases(dataDir(), backup, [...roots, appDir, removal.installRoot]);
+    await writeFile(uninstallMarker(userData), JSON.stringify({ pid: process.pid }));
     // Removing a route is allowed only if it still points to this app's recorded server.
     for (const route of record.routes) {
       await tailscale.removeOwnedRoute(route.url, route.target);
@@ -257,7 +260,7 @@ async function uninstall(): Promise<{ canceled: boolean }> {
     return { canceled: false };
   } catch (error) {
     uninstalling = false;
-    if (!helperStarted) await removal.discard();
+    if (!helperStarted) { await removal.discard(); await unlink(uninstallMarker(userData)).catch(error => { if (error.code !== 'ENOENT') throw error; }); }
     if (paused && worker) await requestFile('resume', '');
     throw error;
   }
@@ -293,7 +296,7 @@ else {
     }
   });
   void app.whenReady().then(async () => {
-    if (process.argv.includes('--uninstall')) { preferences = await readSettings(app.getPath('userData')); await uninstall(); if (!uninstalling) app.quit(); }
+    if (process.argv.includes('--uninstall') || await lstat(uninstallMarker(app.getPath('userData'))).then(() => true, () => false)) { preferences = await readSettings(app.getPath('userData')); await uninstall(); if (!uninstalling) app.quit(); }
     else await start();
   }).catch((error) => { dialog.showErrorBox('Workflow Canvas could not start', String(error) + '\nIf another canvas is using the port, stop it or set WFC_PORT to a free port.'); stopped = true; app.quit(); });
 }

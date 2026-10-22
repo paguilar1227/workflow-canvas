@@ -9,6 +9,7 @@ import { backupCanvases, validateRemoval } from '../../src/desktop/uninstall';
 import { exportExcalidraw, documentFromExcalidraw } from '../../src/shared/excalidraw';
 import { Store } from '../../src/server/store';
 import { ownsServeRoute } from '../../src/desktop/tailscale';
+import { uninstallMarker, watchUninstall } from '../../src/desktop/uninstall-marker';
 import { createApp } from '../../src/server/app';
 const exists = (file: string) => lstat(file).then(() => true, () => false);
 
@@ -110,4 +111,12 @@ test('uninstall removes only its recorded private Tailscale root route', () => {
   assert.equal(ownsServeRoute({ ...config, AllowFunnel: { [host + ':' + port]: true } }, host, port, target), false);
   config.Web[host + ':' + port].Handlers['/other'] = { Proxy: 'http://127.0.0.1:8888' };
   assert.equal(ownsServeRoute(config, host, port, target), false);
+});
+
+test('active MCP bridge receives the uninstall marker instead of restarting the app', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'wfc-marker-'));
+  const stopped = new Promise<void>(resolve => watchUninstall(root, resolve));
+  await writeFile(uninstallMarker(root), '{}'); await stopped;
+  let alreadyStopped = false; watchUninstall(root, () => { alreadyStopped = true; });
+  assert.equal(alreadyStopped, true);
 });

@@ -66,7 +66,7 @@ export async function prepareRemoval(executable: string, appPath: string, roots:
   await validateRemoval(roots, installRoot, os.homedir());
   const helperDir = await mkdtemp(path.join(os.tmpdir(), 'workflow-canvas-uninstall-'));
   const file = path.join(helperDir, platform === 'darwin' ? 'remove.sh' : 'remove.ps1');
-  const allRoots = [...new Set([...roots, installRoot])];
+  const allRoots = [...new Set([installRoot, ...roots])];
   const script = platform === 'darwin'
     ? `#!/bin/sh\nset -eu\ntrap 'printf \"Cleanup failed; diagnostic folder: %s\\n\" \"$0\" > \"$0.failure\"' EXIT\nwhile kill -0 ${process.pid} 2>/dev/null; do sleep 0.1; done\n` + allRoots.map(root => `rm -rf -- ${sh(root)}\n[ ! -e ${sh(root)} ] || exit 1\n`).join('') + `trap - EXIT\nrm -rf -- ${sh(helperDir)}\n`
     : `$ErrorActionPreference = 'Stop'\nWait-Process -Id ${process.pid} -ErrorAction SilentlyContinue\ntry {\n  $p = Start-Process -FilePath ${ps(updater)} -ArgumentList '--uninstall','--silent' -Wait -PassThru\n  if ($p.ExitCode -ne 0) { throw 'Windows uninstaller failed' }\n` + allRoots.map(root => `  if (Test-Path -LiteralPath ${ps(root)}) { Remove-Item -LiteralPath ${ps(root)} -Recurse -Force }\n  if (Test-Path -LiteralPath ${ps(root)}) { throw 'A Workflow Canvas folder could not be removed' }\n`).join('') + `  Remove-Item -LiteralPath ${ps(helperDir)} -Recurse -Force\n} catch {\n  $_ | Out-File -LiteralPath ${ps(path.join(helperDir, 'failure.txt'))}\n  Add-Type -AssemblyName System.Windows.Forms\n  [System.Windows.Forms.MessageBox]::Show('Cleanup could not finish. Details: ' + ${ps(helperDir)}, 'Workflow Canvas uninstall')\n  exit 1\n}\n`;

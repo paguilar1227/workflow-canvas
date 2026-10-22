@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { watchUninstall } from './uninstall-marker';
 import { readSettings } from './settings';
 
 // Run with ELECTRON_RUN_AS_NODE=1 so Windows provides real stdio handles.
@@ -11,6 +12,7 @@ async function startBridge() {
     : process.platform === 'win32' ? process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming')
     : process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
   const userData = process.env.WFC_USER_DATA || path.join(configHome, 'Workflow Canvas');
+  const watching = watchUninstall(userData);
   const saved = await readSettings(userData);
   const url = (process.env.WFC_URL || 'http://127.0.0.1:' + (process.env.WFC_PORT || saved.port)).replace(/\/$/, '');
   process.env.WFC_PUBLIC_URL ||= saved.shareUrl;
@@ -32,6 +34,7 @@ async function startBridge() {
       });
     });
   }
+  if (!watching) watchUninstall(userData);
   process.env.WFC_URL = url;
   await import(pathToFileURL(path.join(here, 'stdio.mjs')).href);
   process.stdin.once('end', () => process.exit(0));
