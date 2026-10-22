@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { DesktopBridge } from '../shared/desktop';
 const bridge: DesktopBridge = {
+  uninstall: () => ipcRenderer.invoke('desktop:uninstall'),
   info: () => ipcRenderer.invoke('desktop:info'),
   savePreferences: (value) => ipcRenderer.invoke('desktop:save', value),
   enableSharing: (port) => ipcRenderer.invoke('desktop:share', port),

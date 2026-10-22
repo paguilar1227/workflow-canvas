@@ -75,6 +75,7 @@ export function SettingsPanel() {
                 <Button className="btn primary" disabled={busy} onClick={() => action(async () => apply(await window.workflowDesktop!.savePreferences(draft)), 'Desktop preferences saved.')}>Save preferences</Button>
               </div>
               <div className="settings-card"><h4>Your files</h4><p>Canvas documents are stored on this computer. Separate installations keep separate data.</p><code className="settings-path">{desktop.dataDir}</code><Button className="btn" onClick={() => action(() => window.workflowDesktop!.openDataFolder())}><FolderOpen size={15} />Open data folder</Button></div>
+              <div className="settings-card"><h4>Remove Workflow Canvas</h4><p>Uninstall the app, its settings and caches, and the integrations it created. Choose whether to keep your canvases in a backup folder. Pre-existing and customized files are preserved.</p><Button kind="danger" disabled={busy} onClick={() => action(() => window.workflowDesktop!.uninstall())}>Uninstall Workflow Canvas…</Button></div>
               {desktop.startupWarning && <p role="alert" className="settings-error">{desktop.startupWarning}</p>}
             </> : <div className="settings-card"><h4>Browser session</h4><p>Desktop startup and file settings are available in the installed app. You can use this browser for the same canvas and live AI edits.</p></div>}
           </>}

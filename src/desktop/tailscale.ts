@@ -29,7 +29,7 @@ export function checkServeSlot(config: any, hostname: string, httpsPort: number,
   }
   if (config.AllowFunnel?.[key]) throw new Error('This port has public Funnel access. Choose a private Serve port.');
 }
-export async function enable(localPort: number, httpsPort: number) {
+export async function enable(localPort: number, httpsPort: number, onCreated?: (url: string, target: string) => Promise<void>) {
   if (!Number.isInteger(httpsPort) || httpsPort < 1 || httpsPort > 65535) throw new Error('Choose an HTTPS port from 1 to 65535.');
   const state = await status();
   if (!state.connected || !state.hostname.endsWith('.ts.net')) throw new Error('Connect Tailscale and enable MagicDNS before sharing.');
@@ -37,6 +37,7 @@ export async function enable(localPort: number, httpsPort: number) {
   const config = JSON.parse(await run(['serve', 'status', '--json']));
   checkServeSlot(config, state.hostname, httpsPort, target);
   await run(['serve', '--bg', '--https=' + httpsPort, target]);
+  if (!config.Web?.[state.hostname + ':' + httpsPort]) await onCreated?.('https://' + state.hostname + ':' + httpsPort, target);
   const confirmed = JSON.parse(await run(['serve', 'status', '--json']));
   const actual = confirmed.Web?.[state.hostname + ':' + httpsPort]?.Handlers?.['/']?.Proxy;
   if (actual !== target) throw new Error('Tailscale did not confirm the new proxy. Check Tailscale Serve status.');

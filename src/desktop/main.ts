@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray, utilityProcess, type UtilityProcess } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -9,6 +9,8 @@ import os from 'node:os';
 import { readSettings, writeSettings, defaults, type DesktopSettings } from './settings';
 import { exportDesktopPlugin, installBundledSkill } from './plugin';
 import * as tailscale from './tailscale';
+import { readOwnership, writeOwnership, recordCanvas, cleanupIntegrations } from './ownership';
+import { backupCanvases, cleanupRoots, prepareRemoval, registerWindowsUninstall, validateRemoval } from './uninstall';
 
 if (process.env.WFC_USER_DATA) app.setPath('userData', process.env.WFC_USER_DATA);
 let win: BrowserWindow | null = null;
@@ -18,6 +20,7 @@ let preferences: DesktopSettings = { ...defaults };
 let quitting = false;
 let stopped = false;
 let localUrl = '';
+let uninstalling = false;
 let startupWarning = '';
 const appDir = app.getAppPath();
 const pluginDir = path.join(appDir, 'plugins', 'workflow-canvas');
@@ -43,7 +46,7 @@ function register(channel: string, handler: (...args: any[]) => unknown) {
   });
 }
 async function installSkill(harness: string) {
-  return installBundledSkill(path.join(pluginDir, 'skills', 'workflow-canvas'), os.homedir(), harness);
+  return installBundledSkill(path.join(pluginDir, 'skills', 'workflow-canvas'), os.homedir(), harness, app.getPath('userData'));
 }
 async function exportPlugin() {
   const result = await dialog.showOpenDialog(win!, { title: 'Choose a folder for the Workflow Canvas plugin', properties: ['openDirectory', 'createDirectory'] });
@@ -52,8 +55,8 @@ async function exportPlugin() {
 }
 let openedFile: { token: string; path: string } | null = null;
 let requestId = 0;
-function requestFile(type: 'file' | 'save', docId: string, file?: string): Promise<string | null> {
-  if (!worker || !docId) return Promise.reject(new Error('Canvas is not ready.'));
+function requestFile(type: 'file' | 'save' | 'checkpoint' | 'resume', docId: string, file?: string): Promise<string | null> {
+  if (!worker || (!docId && !['checkpoint', 'resume'].includes(type))) return Promise.reject(new Error('Canvas is not ready.'));
   const id = ++requestId;
   return new Promise((resolve, reject) => {
     const child = worker!;
@@ -68,6 +71,9 @@ async function start() {
   if (process.env.WFC_USER_DATA) app.setPath('userData', process.env.WFC_USER_DATA);
   try { preferences = await readSettings(app.getPath('userData')); }
   catch (error) { startupWarning = (error as Error).message; }
+  if (app.isPackaged && process.platform === 'win32') {
+    try { await registerWindowsUninstall(process.execPath); } catch (error) { startupWarning = (error as Error).message; }
+  }
   const activePort = Number(process.env.WFC_PORT || preferences.port);
   localUrl = 'http://127.0.0.1:' + activePort;
   worker = utilityProcess.fork(path.join(here, 'server.mjs'), [], {
@@ -85,6 +91,7 @@ async function start() {
   worker.on('exit', () => {
     worker = null;
     stopped = true;
+    if (uninstalling) return;
     if (!quitting) dialog.showErrorBox('Canvas server stopped', 'Your server stopped unexpectedly. Quit and reopen Workflow Canvas to reconnect.');
     else app.quit();
   });
@@ -105,6 +112,7 @@ async function start() {
   });
   win.on('closed', () => { win = null; if (!quitting) app.quit(); });
   register('desktop:info', info);
+  register('desktop:uninstall', () => serialized(uninstall));
   register('desktop:save', (value) => serialized(async () => {
     preferences = await writeSettings(app.getPath('userData'), value);
     if (process.platform === 'darwin' || process.platform === 'win32') app.setLoginItemSettings({ openAtLogin: preferences.openAtLogin, path: process.execPath });
@@ -112,7 +120,11 @@ async function start() {
     return info();
   }));
   register('desktop:share', (port) => serialized(async () => {
-    const url = await tailscale.enable(activePort, port);
+    const url = await tailscale.enable(activePort, port, async (url, target) => {
+      const record = await readOwnership(app.getPath('userData'));
+      record.routes.push({ url, target });
+      await writeOwnership(app.getPath('userData'), record);
+    });
     worker!.postMessage({ type: 'share', url });
     preferences = await writeSettings(app.getPath('userData'), { ...preferences, shareUrl: url });
     const response = await fetch(url + '/health');
@@ -122,6 +134,9 @@ async function start() {
   }));
   register('desktop:unshare', () => serialized(async () => {
     await tailscale.disable(activePort, preferences.shareUrl);
+    const record = await readOwnership(app.getPath('userData'));
+    record.routes = record.routes.filter(route => route.url !== preferences.shareUrl);
+    await writeOwnership(app.getPath('userData'), record);
     preferences = await writeSettings(app.getPath('userData'), { ...preferences, shareUrl: '' });
     worker!.postMessage({ type: 'share', url: '' });
     return info();
@@ -134,7 +149,10 @@ async function start() {
       if (result.canceled || !result.filePath) return null;
       file = result.filePath.endsWith('.excalidraw') ? result.filePath : result.filePath + '.excalidraw';
     }
-    return requestFile('save', id, file);
+    const existed = await lstat(file).then(() => true, (error) => { if (error.code === 'ENOENT') return false; throw error; });
+    const result = await requestFile('save', id, file);
+    if (!existed) await recordCanvas(app.getPath('userData'), file, id);
+    return result;
   }));
   register('desktop:attach-document', (id, token) => serialized(async () => {
     if (!openedFile || openedFile.token !== token) throw new Error('Choose the file again to attach it.');
@@ -186,6 +204,64 @@ async function runBridge() {
   await import(pathToFileURL(path.join(here, 'stdio.mjs')).href);
   process.stdin.once('end', () => app.exit(0));
 }
+
+async function uninstall(): Promise<{ canceled: boolean }> {
+  if (!app.isPackaged) throw new Error('Uninstall is available in the installed app.');
+  const userData = app.getPath('userData');
+  const record = await readOwnership(userData);
+  const roots = cleanupRoots(process.platform, os.homedir(), userData, dataDir());
+  const message = async (options: Electron.MessageBoxOptions) => win ? dialog.showMessageBox(win, options) : dialog.showMessageBox(options);
+  const choice = await message({ type: 'warning', title: 'Uninstall Workflow Canvas', message: 'Keep your canvases?', detail: 'The app, settings, caches, login entry and app-created integrations will be removed. Keep saves a verified backup of your canvas data. Delete also removes unchanged .excalidraw files created by the app. Pre-existing and customized files are preserved.', buttons: ['Keep canvases…', 'Delete canvases', 'Cancel'], defaultId: 0, cancelId: 2, noLink: true });
+  if (choice.response === 2) return { canceled: true };
+  const keep = choice.response === 0;
+  let backup: string | undefined;
+  if (keep) {
+    const options: Electron.SaveDialogOptions = { title: 'Choose a new folder for your canvas backup', defaultPath: path.join(app.getPath('documents'), 'Workflow Canvas canvases') };
+    const selected = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+    if (selected.canceled || !selected.filePath) return { canceled: true };
+    backup = selected.filePath;
+  }
+  const confirm = await message({ type: 'warning', title: 'Confirm uninstall', message: 'Permanently remove Workflow Canvas?', detail: (backup ? 'Your canvases will be kept in: ' + backup : 'Your app-stored canvases and unchanged app-created canvas files will be deleted.') + '\n\nThe app will quit and remove its files. Other apps, Tailscale itself, and pre-existing or customized files are preserved.', buttons: ['Uninstall', 'Cancel'], defaultId: 1, cancelId: 1, noLink: true });
+  if (confirm.response !== 0) return { canceled: true };
+  await validateRemoval(roots, appDir, os.homedir());
+  const removal = await prepareRemoval(process.execPath, appDir, roots);
+  let paused = false;
+  let helperStarted = false;
+  try {
+    if (worker) { await requestFile('checkpoint', ''); paused = true; }
+    if (backup) await backupCanvases(dataDir(), backup, [...roots, appDir, removal.installRoot]);
+    // Removing a route is allowed only if it still points to this app's recorded server.
+    for (const route of record.routes) {
+      const address = new URL(route.target);
+      if (address.hostname !== '127.0.0.1') throw new Error('Invalid recorded Tailscale target.');
+      await tailscale.disable(Number(address.port), route.url);
+    }
+    const preserved = await cleanupIntegrations(record, keep, dataDir());
+    if (preserved.length) await message({ type: 'info', title: 'Your edited files are preserved', message: 'Some integration files were edited or added after installation.', detail: 'These belong to you and will be kept:\n' + preserved.join('\n'), buttons: ['Continue'], noLink: true });
+    if (process.platform === 'darwin' || process.platform === 'win32') app.setLoginItemSettings({ openAtLogin: false, path: process.execPath });
+    uninstalling = true;
+    if (worker) {
+      await new Promise<void>((resolve, reject) => {
+        const child = worker!;
+        const listener = (value: any) => {
+          if (value.type === 'stopped') { child.off('message', listener); resolve(); }
+          if (value.type === 'error' && !value.id) { child.off('message', listener); reject(new Error(value.error)); }
+        };
+        child.on('message', listener); child.postMessage({ type: 'shutdown' });
+      });
+      worker.kill(); worker = null;
+    }
+    await removal.launch(); helperStarted = true;
+    stopped = true; app.quit();
+    return { canceled: false };
+  } catch (error) {
+    uninstalling = false;
+    if (!helperStarted) await removal.discard();
+    if (paused && worker) await requestFile('resume', '');
+    throw error;
+  }
+}
+
 const squirrelEvent = process.platform === 'win32' ? process.argv.find((arg) => ['--squirrel-install', '--squirrel-updated', '--squirrel-uninstall', '--squirrel-obsolete'].includes(arg)) : undefined;
 if (squirrelEvent) {
   if (squirrelEvent === '--squirrel-obsolete') app.quit();
@@ -199,7 +275,7 @@ if (squirrelEvent) {
   void app.whenReady().then(runBridge).catch((error) => { process.stderr.write(String(error) + '\n'); app.exit(1); });
 } else if (!app.requestSingleInstanceLock()) app.quit();
 else {
-  app.on('second-instance', show);
+  app.on('second-instance', (_event, argv) => { if (argv.includes('--uninstall')) void serialized(uninstall).catch(error => dialog.showErrorBox('Could not uninstall', String(error))); else show(); });
   app.on('activate', show);
   app.on('before-quit', (event) => {
     if (stopped || !worker) return;
@@ -215,5 +291,8 @@ else {
       worker.postMessage({ type: 'shutdown' });
     }
   });
-  void app.whenReady().then(start).catch((error) => { dialog.showErrorBox('Workflow Canvas could not start', String(error) + '\nIf another canvas is using the port, stop it or set WFC_PORT to a free port.'); stopped = true; app.quit(); });
+  void app.whenReady().then(async () => {
+    if (process.argv.includes('--uninstall')) { preferences = await readSettings(app.getPath('userData')); await uninstall(); if (!uninstalling) app.quit(); }
+    else await start();
+  }).catch((error) => { dialog.showErrorBox('Workflow Canvas could not start', String(error) + '\nIf another canvas is using the port, stop it or set WFC_PORT to a free port.'); stopped = true; app.quit(); });
 }

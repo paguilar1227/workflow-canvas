@@ -14,6 +14,10 @@ const runtime = await createApp({
 runtime.server.on('error', (error) => { process.parentPort?.postMessage({ type: 'error', error: error.message }); });
 runtime.server.listen(port, '127.0.0.1', () => process.parentPort?.postMessage({ type: 'ready', port }));
 process.parentPort?.on('message', async ({ data }: { data: { type: string; url?: string; id?: number; docId?: string; file?: string } }) => {
+  if (data.type === 'checkpoint' || data.type === 'resume') {
+    try { if (data.type === 'checkpoint') await runtime.checkpoint(); else runtime.resume(); process.parentPort?.postMessage({ id: data.id }); }
+    catch (error) { process.parentPort?.postMessage({ id: data.id, error: (error as Error).message }); }
+  }
   if (data.type === 'file' || data.type === 'save') {
     try {
       if (!data.docId || !runtime.store.has(data.docId)) throw new Error('Document not found.');

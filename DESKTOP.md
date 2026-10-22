@@ -82,10 +82,24 @@ Native Save attaches a chosen .excalidraw file to the server's autosaver, so
 changes from the desktop, phone, and MCP are written to the same file. Quitting
 flushes pending document and attached-file writes.
 
-To uninstall, quit the app, uninstall it using Windows Installed apps or remove
-the macOS application. Data is retained so reinstalling can recover it. Remove
-an exported plugin or installed skill from its agent separately if no longer
-needed. To remove phone access, disable only this app's route:
-`tailscale serve --https=<the configured port> off`. Do not reset all Serve
-configuration, because other apps may use it. Delete retained user data only
-after making any needed backup.
+To uninstall, open **Settings → General → Uninstall Workflow Canvas**. Windows
+**Installed apps → Workflow Canvas → Uninstall** opens the same flow after the
+app has been launched once. The standard installer handles a never-launched app.
+
+Choose **Keep canvases** to save and verify a backup in a new folder you select,
+or **Delete canvases** to remove the internal canvas data and unchanged external
+`.excalidraw` files the app created. Existing files you opened or overwrote remain
+yours. Canceling or failing the backup leaves the running app available.
+
+The uninstaller removes the application, data/settings/cache folders, login entry,
+owned skill/plugin files, and only Tailscale routes that this installation created
+and that still point at its recorded server. It preserves pre-existing skills,
+other Tailscale services, modified or newly added integration files, and explicit
+canvas backups. It never uninstalls Tailscale itself or searches your disk for
+untracked files. Ownership is recorded in `ownership.json` alongside preferences;
+old untracked installations cannot safely claim existing integrations.
+
+A temporary OS helper finishes removal after the app exits, verifies those paths
+are gone, then deletes itself. A cleanup failure leaves its diagnostic in the
+reported temporary folder instead of claiming success. Manual deletion of the
+Mac app bypasses this flow, so use **Uninstall Workflow Canvas** for full cleanup.

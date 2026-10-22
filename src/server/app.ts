@@ -72,7 +72,8 @@ export async function createApp(opts: AppOptions) {
     app.use(express.static(opts.webDir, { index: false, maxAge: '1h' }));
     app.use((req, res, next) => { if (req.method === 'GET' && req.accepts('html')) res.sendFile(path.join(opts.webDir!, 'index.html')); else next(); });
   }
-  async function close() {
+  function resume() { closing = false; hub.pause(false); }
+  async function checkpoint() {
     closing = true;
     hub.pause(true);
     try {
@@ -83,6 +84,9 @@ export async function createApp(opts: AppOptions) {
       hub.pause(false);
       throw error;
     }
+  }
+  async function close() {
+    await checkpoint();
     hub.close();
     await closeMcp();
     await new Promise<void>((resolve, reject) => {
@@ -90,6 +94,6 @@ export async function createApp(opts: AppOptions) {
       server.closeAllConnections();
     });
   }
-  return { app, server, store, hub, tools, files, close };
+  return { app, server, store, hub, tools, files, close, checkpoint, resume };
 }
 

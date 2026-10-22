@@ -1,6 +1,7 @@
 export interface DesktopPreferences { closeToTray: boolean; openAtLogin: boolean; port: number; shareUrl: string }
 export interface DesktopInfo { preferences: DesktopPreferences; dataDir: string; version: string; platform: string; localUrl: string; startupWarning?: string; tailscale: { available: boolean; connected: boolean; hostname: string; error?: string } }
 export interface DesktopBridge {
+  uninstall(): Promise<{ canceled: boolean }>;
   info(): Promise<DesktopInfo>;
   savePreferences(value: DesktopPreferences): Promise<DesktopInfo>;
   enableSharing(port: number): Promise<DesktopInfo>;

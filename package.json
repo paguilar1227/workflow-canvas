@@ -22,9 +22,10 @@
     "desktop": "npm run build:desktop && electron .",
     "desktop:package": "npm run build:desktop && electron-forge package",
     "desktop:make": "npm run build:desktop && electron-forge make",
-    "test:desktop": "tsx --test scripts/unit-tests/desktop.test.mts",
+    "test:desktop": "tsx --test scripts/unit-tests/desktop.test.mts scripts/unit-tests/uninstall.test.mts",
     "test:desktop:smoke": "node scripts/desktop-smoke.mjs",
-    "test:desktop:mcp": "node scripts/desktop-mcp-smoke.mjs"
+    "test:desktop:mcp": "node scripts/desktop-mcp-smoke.mjs",
+    "test:desktop:uninstall": "node scripts/desktop-uninstall-smoke.mjs"
   },
   "engines": {
     "node": ">=22"
